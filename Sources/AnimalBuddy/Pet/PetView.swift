@@ -3,8 +3,45 @@ import AppKit
 final class PetView: NSView {
     var state: PetState = .idle { didSet { needsDisplay = true } }
     var onStateChange: ((PetState) -> Void)?
+    var onMinimizeRequested: (() -> Void)?
     private(set) var pupilOffset = NSPoint.zero
+    private let minimizeButton = NSButton()
+    private var trackingArea: NSTrackingArea?
     override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        minimizeButton.image = NSImage(systemSymbolName: "minus.circle.fill", accessibilityDescription: "Minimize Animal Buddy")
+        minimizeButton.imageScaling = .scaleProportionallyUpOrDown
+        minimizeButton.isBordered = false
+        minimizeButton.contentTintColor = .white
+        minimizeButton.target = self
+        minimizeButton.action = #selector(minimizeButtonPressed)
+        minimizeButton.toolTip = "Minimize Animal Buddy"
+        minimizeButton.setAccessibilityLabel("Minimize Animal Buddy")
+        minimizeButton.isHidden = true
+        addSubview(minimizeButton)
+        updateTrackingAreas()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        minimizeButton.frame = NSRect(x: bounds.maxX - 34, y: 10, width: 24, height: 24)
+    }
+
+    override func updateTrackingAreas() {
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        trackingArea = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        if let trackingArea { addTrackingArea(trackingArea) }
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) { minimizeButton.isHidden = false }
+    override func mouseExited(with event: NSEvent) { minimizeButton.isHidden = true }
+
+    @objc private func minimizeButtonPressed() { onMinimizeRequested?() }
 
     func setPupilOffset(_ target: NSPoint, animated: Bool) {
         let bounded = Self.clampPupilOffset(target)

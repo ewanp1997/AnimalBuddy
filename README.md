@@ -30,7 +30,9 @@ The drop layer classifies input, asks `ActionRegistry` for the binding matching 
 
 ## Current functionality
 
-Supports file/directory/image drops, URL text drops, drag feedback, modifier-aware bindings, Store, Copy path, Reveal, Trash, PNG conversion, JPEG optimisation, a URL opener, safe collision names, and persisted settings model defaults.
+Supports file/directory/image drops, URL text drops, drag feedback, modifier-aware bindings, Store, Copy path, Reveal, Trash, PNG conversion, JPEG optimisation, a URL opener, safe collision names, persisted settings, nearby mouse-tracking eyes, a hover-only minimize control, a menu-bar status item, Dock/menu-bar minimize destinations, and top/bottom-center drag dismissal.
+
+Hover over the pet to reveal the minimize button. The status-item menu controls whether minimizing goes to the Dock or hides the pet while leaving the Animal Buddy logo in the menu bar. Dragging the pet to the horizontal center near the top or bottom edge of its current screen closes/hides it; use “Show Animal Buddy” from the status-item menu to bring it back.
 
 ## Limitations and roadmap
 

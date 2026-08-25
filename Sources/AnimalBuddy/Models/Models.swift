@@ -33,6 +33,15 @@ public struct ModifierCombination: OptionSet, Hashable, Sendable {
 
 public enum PetState: String, Sendable { case idle, sleeping, noticingDrag, dragAccepted, dragRejected, waitingForDrop, processing, success, failure }
 
+public enum MinimizeDestination: String, Codable, CaseIterable, Sendable {
+    case dock
+    case menubar
+
+    public var displayName: String {
+        switch self { case .dock: "Dock"; case .menubar: "Menu Bar" }
+    }
+}
+
 public struct ActionContext: Sendable {
     public let input: DropInput
     public let destinationFolder: URL?
@@ -64,6 +73,7 @@ public struct AppSettings: Codable, Sendable {
     public var alwaysOnTop = true
     public var petScale = 1.0
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
+    public var minimizeDestination: MinimizeDestination = .menubar
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -71,4 +81,17 @@ public struct AppSettings: Codable, Sendable {
         .init(category: .image, modifiers: .command, actionID: "compress-image"),
         .init(category: .file, modifiers: .shift, actionID: "reveal")
     ]
+
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, destinationFolderPath, minimizeDestination, bindings }
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        alwaysOnTop = try values.decodeIfPresent(Bool.self, forKey: .alwaysOnTop) ?? true
+        petScale = try values.decodeIfPresent(Double.self, forKey: .petScale) ?? 1.0
+        destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
+        minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
+        bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
+    }
 }

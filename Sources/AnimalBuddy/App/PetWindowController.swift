@@ -5,17 +5,41 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
     private static let trackingRadius: CGFloat = 300
     private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
     private let registry: ActionRegistry
-    private let settings: AppSettings
+    private var settings: AppSettings
     private var mouseTrackingTimer: Timer?
     private var closeObserver: NSObjectProtocol?
     init(settings: AppSettings, registry: ActionRegistry) {
         self.settings = settings; self.registry = registry
-        let window = NSPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
         super.init(window: window); window.contentView = petView; window.isMovableByWindowBackground = true
+        window.onDragToDismiss = { [weak self] in self?.closePet() }
+        petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         window.registerForDraggedTypes([.fileURL, .URL, .string])
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func update(settings: AppSettings) {
+        self.settings = settings
+        window?.level = settings.alwaysOnTop ? .floating : .normal
+    }
+    func minimizePet() {
+        guard let window else { return }
+        if settings.minimizeDestination == .dock {
+            NSApp.setActivationPolicy(.regular)
+            window.miniaturize(nil)
+        } else {
+            NSApp.setActivationPolicy(.accessory)
+            window.orderOut(nil)
+        }
+    }
+    func showPet() {
+        if settings.minimizeDestination == .dock { NSApp.setActivationPolicy(.regular) }
+        else { NSApp.setActivationPolicy(.accessory) }
+        showWindow(nil)
+        window?.deminiaturize(nil)
+        window?.orderFrontRegardless()
+    }
+    private func closePet() { window?.orderOut(nil) }
     override func windowDidLoad() {
         super.windowDidLoad()
         petView.setAccessibilityLabel("Animal Buddy desktop pet")

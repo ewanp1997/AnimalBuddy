@@ -1,13 +1,29 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindow: PetWindowController?
+    private var settings = AppSettings()
+    private let settingsStore = SettingsStore()
+    private var statusBar: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let settings = SettingsStore().load()
+        settings = settingsStore.load()
         let registry = ActionRegistry(settings: settings)
         petWindow = PetWindowController(settings: settings, registry: registry)
-        petWindow?.showWindow(nil)
+        statusBar = StatusBarController()
+        statusBar?.onShowPet = { [weak self] in self?.petWindow?.showPet() }
+        statusBar?.onMinimizeDestinationChanged = { [weak self] destination in self?.setMinimizeDestination(destination) }
+        statusBar?.onQuit = { NSApp.terminate(nil) }
+        statusBar?.update(destination: settings.minimizeDestination)
+        NSApp.setActivationPolicy(settings.minimizeDestination == .dock ? .regular : .accessory)
+        petWindow?.showPet()
+    }
+
+    private func setMinimizeDestination(_ destination: MinimizeDestination) {
+        settings.minimizeDestination = destination
+        try? settingsStore.save(settings)
+        statusBar?.update(destination: destination)
+        petWindow?.update(settings: settings)
     }
 }
 
