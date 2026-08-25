@@ -3,12 +3,14 @@ import AppKit
 @MainActor final class StatusBarController: NSObject {
     var onShowPet: (() -> Void)?
     var onMinimizeDestinationChanged: ((MinimizeDestination) -> Void)?
+    var onSnappingChanged: ((Bool) -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let destinationMenu = NSMenu(title: "Minimize To")
     private let dockItem = NSMenuItem(title: "Dock", action: #selector(selectDock), keyEquivalent: "")
     private let menubarItem = NSMenuItem(title: "Menu Bar", action: #selector(selectMenubar), keyEquivalent: "")
+    private let snappingItem = NSMenuItem(title: "Snap to Screen Edges", action: #selector(toggleSnapping), keyEquivalent: "")
 
     override init() {
         super.init()
@@ -29,6 +31,8 @@ import AppKit
         let destinationItem = NSMenuItem(title: "Minimize To", action: nil, keyEquivalent: "")
         destinationItem.submenu = destinationMenu
         menu.addItem(destinationItem)
+        snappingItem.target = self
+        menu.addItem(snappingItem)
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "q")
@@ -42,9 +46,12 @@ import AppKit
         menubarItem.state = destination == .menubar ? .on : .off
     }
 
+    func update(snappingEnabled: Bool) { snappingItem.state = snappingEnabled ? .on : .off }
+
     @objc private func showPet() { onShowPet?() }
     @objc private func selectDock() { onMinimizeDestinationChanged?(.dock) }
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
+    @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {

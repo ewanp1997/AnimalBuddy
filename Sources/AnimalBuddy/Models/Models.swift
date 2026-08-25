@@ -72,6 +72,7 @@ public struct ModifierBinding: Codable, Hashable, Sendable {
 public struct AppSettings: Codable, Sendable {
     public var alwaysOnTop = true
     public var petScale = 1.0
+    public var snappingEnabled = false
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
     public var minimizeDestination: MinimizeDestination = .menubar
     public var bindings: [ModifierBinding] = [
@@ -82,7 +83,7 @@ public struct AppSettings: Codable, Sendable {
         .init(category: .file, modifiers: .shift, actionID: "reveal")
     ]
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, destinationFolderPath, minimizeDestination, bindings }
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, destinationFolderPath, minimizeDestination, bindings }
 
     public init() {}
 
@@ -90,6 +91,7 @@ public struct AppSettings: Codable, Sendable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         alwaysOnTop = try values.decodeIfPresent(Bool.self, forKey: .alwaysOnTop) ?? true
         petScale = try values.decodeIfPresent(Double.self, forKey: .petScale) ?? 1.0
+        snappingEnabled = try values.decodeIfPresent(Bool.self, forKey: .snappingEnabled) ?? false
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []

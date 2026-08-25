@@ -33,7 +33,9 @@ The drop layer classifies input, asks `ActionRegistry` for the binding matching 
 
 Supports file/directory/image drops, URL text drops, drag feedback, modifier-aware bindings, Store, Copy path, Reveal, Trash, PNG conversion, JPEG optimisation, a URL opener, safe collision names, persisted settings, nearby mouse-tracking eyes, a hover-only minimize control, a menu-bar status item, Dock/menu-bar minimize destinations, and top/bottom-center drag dismissal.
 
-Hover over the pet to reveal the minimize button. The status-item menu controls whether minimizing goes to the Dock or hides the pet while leaving the Animal Buddy logo in the menu bar. Animal Buddy remains a regular macOS application so it is available in Force Quit Applications. Dragging the pet to the horizontal center near the top or bottom edge of its current screen closes/hides it; use “Show Animal Buddy” from the status-item menu to bring it back.
+Hover over the pet to reveal the minimize button. The status-item menu controls whether minimizing goes to the Dock or hides the pet while leaving the Animal Buddy logo in the menu bar. Animal Buddy remains a regular macOS application so it is available in Force Quit Applications. Dragging the pet to the horizontal center near the top or bottom edge of its current screen and releasing within the close target hides it; releasing outside the target leaves the pet where it was dropped. “Snap to Screen Edges” is opt-in from the status-item menu. Use “Show Animal Buddy” to bring the pet back after hiding it.
+
+The placeholder creature includes lightweight native charm animations: gentle breathing/bobbing, occasional blinking, rosy cheeks, a smile, mouse-following eyes, and success sparkles. These are code-drawn so pet packs can replace them later without coupling animation to the automation engine.
 
 ## Limitations and roadmap
 

@@ -13,8 +13,10 @@ import AppKit
         statusBar = StatusBarController()
         statusBar?.onShowPet = { [weak self] in self?.petWindow?.showPet() }
         statusBar?.onMinimizeDestinationChanged = { [weak self] destination in self?.setMinimizeDestination(destination) }
+        statusBar?.onSnappingChanged = { [weak self] enabled in self?.setSnapping(enabled) }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
+        statusBar?.update(snappingEnabled: settings.snappingEnabled)
         // Keep a regular application presence so Animal Buddy is available in
         // Force Quit Applications even when its pet window is minimized.
         NSApp.setActivationPolicy(.regular)
@@ -30,6 +32,13 @@ import AppKit
         settings.minimizeDestination = destination
         try? settingsStore.save(settings)
         statusBar?.update(destination: destination)
+        petWindow?.update(settings: settings)
+    }
+
+    private func setSnapping(_ enabled: Bool) {
+        settings.snappingEnabled = enabled
+        try? settingsStore.save(settings)
+        statusBar?.update(snappingEnabled: enabled)
         petWindow?.update(settings: settings)
     }
 }

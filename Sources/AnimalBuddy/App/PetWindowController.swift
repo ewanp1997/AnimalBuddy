@@ -77,15 +77,35 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         let distance = hypot(endFrame.midX - target.x, endFrame.midY - target.y)
         guard distance <= Self.dismissRadius else {
             window.alphaValue = 1
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.2
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                window.animator().setFrame(startFrame, display: true)
-            }
+            if settings.snappingEnabled { snapWindow(window, frame: endFrame, on: screen.visibleFrame) }
             return
         }
         closePet()
         window.alphaValue = 1
+    }
+
+    private func snapWindow(_ window: NSWindow, frame: NSRect, on screenFrame: NSRect) {
+        var target = frame
+        let distances = [
+            ("left", abs(frame.minX - screenFrame.minX)),
+            ("right", abs(screenFrame.maxX - frame.maxX)),
+            ("top", abs(screenFrame.maxY - frame.maxY)),
+            ("bottom", abs(frame.minY - screenFrame.minY))
+        ]
+        switch distances.min(by: { $0.1 < $1.1 })?.0 {
+        case "left": target.origin.x = screenFrame.minX
+        case "right": target.origin.x = screenFrame.maxX - frame.width
+        case "top": target.origin.y = screenFrame.maxY - frame.height
+        case "bottom": target.origin.y = screenFrame.minY
+        default: break
+        }
+        target.origin.x = min(max(target.origin.x, screenFrame.minX), screenFrame.maxX - target.width)
+        target.origin.y = min(max(target.origin.y, screenFrame.minY), screenFrame.maxY - target.height)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().setFrame(target, display: true)
+        }
     }
 
     private func updateDragFade(for screenPoint: NSPoint) {
