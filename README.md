@@ -35,14 +35,20 @@ The drop layer classifies input, asks `ActionRegistry` for the binding matching 
 
 ## Current functionality
 
-Supports file/directory/image drops, URL text drops, drag feedback, modifier-aware bindings, Store, Copy path, Reveal, Trash, PNG conversion, JPEG optimisation, a URL opener, safe collision names, persisted settings, nearby mouse-tracking eyes, a hover-only minimize control, a menu-bar status item, Dock/menu-bar minimize destinations, and top/bottom-center drag dismissal.
+The first release includes:
 
-Hover over the pet to reveal the minimize button. The status-item menu controls whether minimizing goes to the Dock or hides the pet while leaving the Animal Buddy logo in the menu bar. Animal Buddy remains a regular macOS application so it is available in Force Quit Applications. Dragging the pet to the horizontal center near the top or bottom edge of its current screen and releasing within the close target hides it; releasing outside the target leaves the pet where it was dropped. “Snap to Screen Edges” is opt-in from the status-item menu. Use “Show Animal Buddy” to bring the pet back after hiding it.
+- File, directory, image, URL, and text drops with visual drag feedback.
+- Modifier-aware actions: Store in folder, Copy path, Reveal in Finder, Move to Trash, Convert to PNG, Optimise image, and Open URL.
+- Safe collision handling for file writes and JSON-backed settings stored in `~/Library/Application Support/AnimalBuddy/settings.json`.
+- A blue, icon-matched desktop buddy with breathing, bobbing, independent wing flaps, blinking, rosy cheeks, eye highlights, success sparkles, and nearby mouse-tracking eyes.
+- A non-activating floating window that remains available across Spaces and does not take keyboard focus from the app being used. The regular app presence keeps Animal Buddy visible in the Dock and Force Quit Applications.
+- A hover-only minimize button and menu-bar controls for minimizing to the Dock or hiding while retaining the Animal Buddy menu-bar logo. The minimize animation respects reduced-motion preferences.
+- Free placement after dragging, with optional “Snap to Screen Edges” behavior.
+- A PiP-style top/bottom close target. Dragging the buddy near the horizontal center of a screen shows the target; releasing within it hides the buddy, while releasing outside it restores the buddy at the dropped location.
+- User-defined left and right blush macros built from ordered Scratch-like blocks: shell commands, installed applications, URLs, Apple Shortcuts, and nested blush macros. The editor discovers applications and Shortcuts where macOS makes them available, and rejects nested macro cycles.
 
-The creature includes lightweight native charm animations: gentle breathing/bobbing, occasional blinking, rosy cheeks, a smile, mouse-following eyes, and success sparkles. These are code-drawn so pet packs can replace them later without coupling animation to the automation engine.
-
-The two blushes are user-defined macro buttons. Use the status-item menu’s “Configure Blush Macros…” workshop to give the left and right blushes names and build ordered Scratch-like blocks: shell commands, opening applications, opening URLs, running Apple Shortcuts selected from `shortcuts list`, or running another blush macro. Clicking a configured blush runs the saved blocks in order and reports processing, success, or failure through the pet state. Existing single-command settings migrate as shell blocks; nested macro cycles are rejected. Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.
+Hover over the pet to reveal the minimize button. Use “Show Animal Buddy” from the status-item menu to bring it back after hiding it. Existing single-command macro settings migrate as shell blocks; Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.
 
 ## Limitations and roadmap
 
-The creature is intentionally a drawn placeholder. Settings UI, user-editable bindings, pasteboard monitoring, Shortcuts invocation, sandbox entitlement decisions, reduced-motion animation, multi-pet packages, and script/plugin actions remain future work. The current settings model is JSON-backed in `~/Library/Application Support/AnimalBuddy/settings.json`; no extra permissions are requested. Destructive behaviour uses macOS Trash, while file writes avoid overwrites.
+User-editable input bindings, pasteboard monitoring, sandbox entitlement and signing decisions, multi-pet packages, and script/plugin action extensions remain future work. Shortcut discovery depends on the macOS Shortcuts helper service. No extra Accessibility or Input Monitoring permissions are requested; destructive behavior uses macOS Trash, while file writes avoid overwrites.
