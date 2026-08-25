@@ -1,6 +1,10 @@
-# Animal Buddy
+<div align="center">
+  <img src="App/AnimalBuddyIcon.png" alt="Animal Buddy logo" width="220">
+  <h1>Animal Buddy</h1>
+  <p>A tiny, cheerful macOS companion for useful drag-and-drop actions.</p>
+</div>
 
-Animal Buddy is a native macOS desktop pet that acts as a calm, physical-feeling drag-and-drop target for useful file actions. The MVP uses a placeholder creature, stays above normal windows, understands dropped files/URLs, maps modifier keys to actions, and communicates progress through visual states.
+Animal Buddy is a native macOS desktop pet that acts as a calm, physical-feeling drag-and-drop target for useful file actions. It stays above normal windows, understands dropped files and URLs, maps modifier keys to actions, and communicates progress through visual states.
 
 ## Build and run
 
@@ -21,7 +25,7 @@ On the current machine, `swift build -c release` succeeds. `swift test` is confi
 - `Models`: input categories, modifier bindings, pet states, action context, and settings.
 - `Services`: UTType/resource-value classification and JSON settings persistence.
 - `Actions`: protocol-based actions and registry, independent of UI.
-- `Pet`: state-driven placeholder creature rendering.
+- `Pet`: state-driven creature rendering, eye tracking, and charm animations.
 - `App`: AppKit application lifecycle and non-activating floating window/drop target.
 
 `App/Info.plist` contains the minimal bundle metadata needed to package the SwiftPM executable as a local `.app` for desktop launching.
@@ -35,7 +39,7 @@ Supports file/directory/image drops, URL text drops, drag feedback, modifier-awa
 
 Hover over the pet to reveal the minimize button. The status-item menu controls whether minimizing goes to the Dock or hides the pet while leaving the Animal Buddy logo in the menu bar. Animal Buddy remains a regular macOS application so it is available in Force Quit Applications. Dragging the pet to the horizontal center near the top or bottom edge of its current screen and releasing within the close target hides it; releasing outside the target leaves the pet where it was dropped. “Snap to Screen Edges” is opt-in from the status-item menu. Use “Show Animal Buddy” to bring the pet back after hiding it.
 
-The placeholder creature includes lightweight native charm animations: gentle breathing/bobbing, occasional blinking, rosy cheeks, a smile, mouse-following eyes, and success sparkles. These are code-drawn so pet packs can replace them later without coupling animation to the automation engine.
+The creature includes lightweight native charm animations: gentle breathing/bobbing, occasional blinking, rosy cheeks, a smile, mouse-following eyes, and success sparkles. These are code-drawn so pet packs can replace them later without coupling animation to the automation engine.
 
 The two blushes are user-defined macro buttons. Use the status-item menu’s “Configure Blush Macros…” workshop to give the left and right blushes names and build ordered Scratch-like blocks: shell commands, opening applications, opening URLs, running Apple Shortcuts selected from `shortcuts list`, or running another blush macro. Clicking a configured blush runs the saved blocks in order and reports processing, success, or failure through the pet state. Existing single-command settings migrate as shell blocks; nested macro cycles are rejected. Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.
 
