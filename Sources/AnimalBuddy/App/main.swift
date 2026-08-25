@@ -21,6 +21,11 @@ import AppKit
         petWindow?.showPet()
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        petWindow?.showPet()
+        return true
+    }
+
     private func setMinimizeDestination(_ destination: MinimizeDestination) {
         settings.minimizeDestination = destination
         try? settingsStore.save(settings)
