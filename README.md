@@ -1,3 +1,9 @@
+Please note that this AI-assisted project is in preliminary stages, and that there has been limited human oversight of the README and associated explanatory files. Closer to stable release dates, this information will be updated and human oversight will become more present.
+
+If you have any concerns, feel free to raise them, and I will do my best to address them as quickly as possible.
+
+Thank you for your interest in the project, and I hope your own projects bring you as much joy as Animal Buddy has brought me in creating it.
+
 <div align="center">
   <img src="App/AnimalBuddyIcon.png" alt="Animal Buddy logo" width="220">
   <h1>Animal Buddy</h1>
