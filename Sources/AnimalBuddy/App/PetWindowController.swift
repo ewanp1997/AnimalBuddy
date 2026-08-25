@@ -9,12 +9,16 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
     private var mouseTrackingTimer: Timer?
     private var closeObserver: NSObjectProtocol?
     private var isMinimizing = false
+    private let dragTargetOverlay = DragTargetOverlayController()
     init(settings: AppSettings, registry: ActionRegistry) {
         self.settings = settings; self.registry = registry
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
         super.init(window: window); window.contentView = petView; window.isMovableByWindowBackground = true
         window.onDragToDismiss = { [weak self] in self?.closePet() }
+        window.onDragBegan = { [weak self] in self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0) }
+        window.onDragChanged = { [weak self] point, velocity in self?.dragTargetOverlay.show(at: point, redness: velocity) }
+        window.onDragEnded = { [weak self] in self?.dragTargetOverlay.hide() }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
