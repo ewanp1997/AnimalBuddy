@@ -44,11 +44,36 @@ public enum MinimizeDestination: String, Codable, CaseIterable, Sendable {
 
 public enum BlushSlot: String, Codable, Sendable { case left, right }
 
+public enum MacroStepKind: String, Codable, CaseIterable, Sendable {
+    case shell, openApplication, openURL, runShortcut
+    public var displayName: String {
+        switch self { case .shell: "Run Shell Command"; case .openApplication: "Open Application"; case .openURL: "Open URL"; case .runShortcut: "Run Apple Shortcut" }
+    }
+    public var placeholder: String {
+        switch self { case .shell: "e.g. say 'Hello from Animal Buddy'"; case .openApplication: "e.g. Calendar"; case .openURL: "e.g. https://example.com"; case .runShortcut: "e.g. My Shortcut" }
+    }
+}
+
+public struct MacroStep: Codable, Sendable, Equatable {
+    public var kind: MacroStepKind
+    public var value: String
+    public init(kind: MacroStepKind, value: String = "") { self.kind = kind; self.value = value }
+}
+
 public struct UserMacro: Codable, Sendable, Equatable {
     public var name: String
     public var command: String
-    public init(name: String = "", command: String = "") { self.name = name; self.command = command }
-    public var isConfigured: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    public var steps: [MacroStep]
+    public init(name: String = "", command: String = "", steps: [MacroStep] = []) { self.name = name; self.command = command; self.steps = steps }
+    public var effectiveSteps: [MacroStep] { steps.isEmpty && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [MacroStep(kind: .shell, value: command)] : steps }
+    public var isConfigured: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !effectiveSteps.isEmpty }
+    private enum CodingKeys: String, CodingKey { case name, command, steps }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decodeIfPresent(String.self, forKey: .name) ?? ""
+        command = try values.decodeIfPresent(String.self, forKey: .command) ?? ""
+        steps = try values.decodeIfPresent([MacroStep].self, forKey: .steps) ?? []
+    }
 }
 
 public struct ActionContext: Sendable {

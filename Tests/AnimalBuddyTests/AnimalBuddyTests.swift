@@ -15,4 +15,6 @@ final class AnimalBuddyTests: XCTestCase {
     func testCrosshairUsesTopOrBottomBasedOnScreenHalf() { let screen = NSRect(x: 0, y: 0, width: 1000, height: 800); XCTAssertEqual(DragTargetOverlayController.targetCenterY(for: 700, in: screen), 764); XCTAssertEqual(DragTargetOverlayController.targetCenterY(for: 100, in: screen), 36) }
     func testCrosshairTargetStaysHorizontallyCentered() { let screen = NSRect(x: 0, y: 0, width: 1000, height: 800); let target = DragTargetOverlayController.targetCenter(for: NSPoint(x: 300, y: 700), in: screen); XCTAssertEqual(target.x, 500); XCTAssertEqual(target.y, 764) }
     func testDismissRadiusSeparatesCloseFromRestore() { let target = NSPoint(x: 500, y: 764); XCTAssertLessThan(hypot(500 - target.x, 764 - target.y), 100); XCTAssertGreaterThan(hypot(300 - target.x, 764 - target.y), 100) }
+    func testLegacyMacroCommandBecomesShellStep() { let macro = UserMacro(name: "Say hi", command: "say hi"); XCTAssertEqual(macro.effectiveSteps, [MacroStep(kind: .shell, value: "say hi")]) }
+    func testShortcutMacroStepIsRepresented() { let step = MacroStep(kind: .runShortcut, value: "Morning Routine"); XCTAssertEqual(step.kind, .runShortcut); XCTAssertEqual(step.value, "Morning Routine") }
 }
