@@ -13,6 +13,8 @@ final class PetView: NSView {
     private var animationTimer: Timer?
     private let animationStart = Date()
     private var bobOffset: CGFloat = 0
+    private var leftWingFlap: CGFloat = 0
+    private var rightWingFlap: CGFloat = 0
     private var eyesAreOpen = true
     private var nextBlink = Date().addingTimeInterval(2.8)
     private var blinkEnds = Date.distantPast
@@ -80,7 +82,11 @@ final class PetView: NSView {
 
     private func tickAnimation() {
         let now = Date()
-        bobOffset = CGFloat(sin(now.timeIntervalSince(animationStart) * 1.8)) * 1.6
+        let elapsed = now.timeIntervalSince(animationStart)
+        bobOffset = CGFloat(sin(elapsed * 1.8)) * 1.6
+        // The wings flap independently, like two tiny enthusiastic greetings.
+        leftWingFlap = CGFloat(sin(elapsed * 5.1)) * 8
+        rightWingFlap = CGFloat(sin(elapsed * 4.4 + 1.7)) * 8
         if now >= nextBlink {
             blinkEnds = now.addingTimeInterval(0.12)
             nextBlink = now.addingTimeInterval(2.8 + Double.random(in: 0...2.8))
@@ -122,7 +128,7 @@ final class PetView: NSView {
         let transform = NSAffineTransform()
         transform.translateX(by: 0, yBy: bobOffset)
         transform.concat()
-        let bodyColor: NSColor = switch state { case .idle, .sleeping: NSColor(calibratedRed: 0.36, green: 0.64, blue: 0.98, alpha: 1); case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
+        let bodyColor: NSColor = switch state { case .idle, .sleeping: NSColor(calibratedRed: 0.31, green: 0.57, blue: 0.93, alpha: 1); case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
         let cream = NSColor(calibratedRed: 0.98, green: 0.97, blue: 0.93, alpha: 1)
         let blueHighlight = bodyColor.blended(withFraction: 0.20, of: .white) ?? bodyColor
 
@@ -130,8 +136,8 @@ final class PetView: NSView {
         bodyColor.setFill()
         NSBezierPath(roundedRect: NSRect(x: 17, y: 23, width: 116, height: 113), xRadius: 45, yRadius: 45).fill()
         blueHighlight.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 5, y: 73, width: 34, height: 53)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 111, y: 73, width: 34, height: 53)).fill()
+        drawWing(in: NSRect(x: 5 + leftWingFlap * 0.22, y: 73, width: 34, height: 53), angle: leftWingFlap)
+        drawWing(in: NSRect(x: 111 + rightWingFlap * 0.22, y: 73, width: 34, height: 53), angle: -rightWingFlap)
         NSBezierPath(ovalIn: NSRect(x: 43, y: 3, width: 27, height: 27)).fill()
         NSBezierPath(ovalIn: NSRect(x: 61, y: 0, width: 29, height: 34)).fill()
         NSBezierPath(ovalIn: NSRect(x: 81, y: 4, width: 27, height: 27)).fill()
@@ -152,10 +158,12 @@ final class PetView: NSView {
             NSBezierPath(ovalIn: NSRect(x: 38 + pupilOffset.x, y: 63 + pupilOffset.y, width: 21, height: 14)).fill()
             NSBezierPath(ovalIn: NSRect(x: 91 + pupilOffset.x, y: 63 + pupilOffset.y, width: 21, height: 14)).fill()
             NSColor.white.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 41 + pupilOffset.x, y: 49 + pupilOffset.y, width: 9, height: 10)).fill()
-            NSBezierPath(ovalIn: NSRect(x: 94 + pupilOffset.x, y: 49 + pupilOffset.y, width: 9, height: 10)).fill()
-            NSBezierPath(ovalIn: NSRect(x: 53 + pupilOffset.x, y: 63 + pupilOffset.y, width: 4, height: 5)).fill()
-            NSBezierPath(ovalIn: NSRect(x: 106 + pupilOffset.x, y: 63 + pupilOffset.y, width: 4, height: 5)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 40 + pupilOffset.x, y: 48 + pupilOffset.y, width: 11, height: 13)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 93 + pupilOffset.x, y: 48 + pupilOffset.y, width: 11, height: 13)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 53 + pupilOffset.x, y: 64 + pupilOffset.y, width: 5, height: 6)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 106 + pupilOffset.x, y: 64 + pupilOffset.y, width: 5, height: 6)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 39 + pupilOffset.x, y: 65 + pupilOffset.y, width: 3, height: 4)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 92 + pupilOffset.x, y: 65 + pupilOffset.y, width: 3, height: 4)).fill()
         } else {
             NSColor(calibratedRed: 0.12, green: 0.20, blue: 0.55, alpha: 1).setStroke()
             let blink = NSBezierPath(); blink.lineWidth = 3; blink.lineCapStyle = .round
@@ -195,5 +203,18 @@ final class PetView: NSView {
         let sparkle = NSBezierPath(); sparkle.lineWidth = 2; sparkle.lineCapStyle = .round
         sparkle.move(to: NSPoint(x: point.x, y: point.y - 6)); sparkle.line(to: NSPoint(x: point.x, y: point.y + 6))
         sparkle.move(to: NSPoint(x: point.x - 6, y: point.y)); sparkle.line(to: NSPoint(x: point.x + 6, y: point.y)); sparkle.stroke()
+    }
+
+    private func drawWing(in frame: NSRect, angle: CGFloat) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+        let center = NSPoint(x: frame.midX, y: frame.midY)
+        let transform = NSAffineTransform()
+        transform.translateX(by: center.x, yBy: center.y)
+        transform.rotate(byDegrees: angle)
+        transform.translateX(by: -center.x, yBy: -center.y)
+        transform.concat()
+        NSBezierPath(ovalIn: frame).fill()
+        context.restoreGraphicsState()
     }
 }
