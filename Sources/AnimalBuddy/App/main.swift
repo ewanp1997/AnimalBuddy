@@ -15,7 +15,9 @@ import AppKit
         statusBar?.onMinimizeDestinationChanged = { [weak self] destination in self?.setMinimizeDestination(destination) }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
-        NSApp.setActivationPolicy(settings.minimizeDestination == .dock ? .regular : .accessory)
+        // Keep a regular application presence so Animal Buddy is available in
+        // Force Quit Applications even when its pet window is minimized.
+        NSApp.setActivationPolicy(.regular)
         petWindow?.showPet()
     }
 

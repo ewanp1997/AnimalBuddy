@@ -28,13 +28,13 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
             NSApp.setActivationPolicy(.regular)
             window.miniaturize(nil)
         } else {
-            NSApp.setActivationPolicy(.accessory)
+            NSApp.setActivationPolicy(.regular)
             window.orderOut(nil)
         }
     }
     func showPet() {
         if settings.minimizeDestination == .dock { NSApp.setActivationPolicy(.regular) }
-        else { NSApp.setActivationPolicy(.accessory) }
+        else { NSApp.setActivationPolicy(.regular) }
         showWindow(nil)
         window?.deminiaturize(nil)
         window?.orderFrontRegardless()
