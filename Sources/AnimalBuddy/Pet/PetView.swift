@@ -122,25 +122,66 @@ final class PetView: NSView {
         let transform = NSAffineTransform()
         transform.translateX(by: 0, yBy: bobOffset)
         transform.concat()
-        let color: NSColor = switch state { case .idle, .sleeping: .systemBlue; case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
-        color.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 10, dy: 10), xRadius: 28, yRadius: 28).fill()
-        NSColor.systemPink.withAlphaComponent(0.55).setFill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 48, y: 70, width: 16, height: 9)).fill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX + 32, y: 70, width: 16, height: 9)).fill()
+        let bodyColor: NSColor = switch state { case .idle, .sleeping: NSColor(calibratedRed: 0.36, green: 0.64, blue: 0.98, alpha: 1); case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
+        let cream = NSColor(calibratedRed: 0.98, green: 0.97, blue: 0.93, alpha: 1)
+        let blueHighlight = bodyColor.blended(withFraction: 0.20, of: .white) ?? bodyColor
+
+        // Rounded body, soft wings, and the three-feather tuft mirror the app icon.
+        bodyColor.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 17, y: 23, width: 116, height: 113), xRadius: 45, yRadius: 45).fill()
+        blueHighlight.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 5, y: 73, width: 34, height: 53)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 111, y: 73, width: 34, height: 53)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 43, y: 3, width: 27, height: 27)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 61, y: 0, width: 29, height: 34)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 81, y: 4, width: 27, height: 27)).fill()
+
+        // Cream face and belly.
+        cream.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 19, y: 29, width: 112, height: 83)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 42, y: 88, width: 66, height: 47)).fill()
+
         if eyesAreOpen {
-            NSColor.white.setFill(); NSBezierPath(ovalIn: NSRect(x: bounds.midX - 24, y: 38, width: 16, height: 20)).fill(); NSBezierPath(ovalIn: NSRect(x: bounds.midX + 8, y: 38, width: 16, height: 20)).fill()
-            NSColor.black.setFill()
-            NSBezierPath(ovalIn: NSRect(x: bounds.midX - 19 + pupilOffset.x, y: 45 + pupilOffset.y, width: 7, height: 9)).fill()
-            NSBezierPath(ovalIn: NSRect(x: bounds.midX + 13 + pupilOffset.x, y: 45 + pupilOffset.y, width: 7, height: 9)).fill()
+            NSColor(calibratedWhite: 1, alpha: 1).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 29, y: 38, width: 39, height: 45)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 82, y: 38, width: 39, height: 45)).fill()
+            NSColor(calibratedRed: 0.03, green: 0.12, blue: 0.38, alpha: 1).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 36 + pupilOffset.x, y: 46 + pupilOffset.y, width: 25, height: 31)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 89 + pupilOffset.x, y: 46 + pupilOffset.y, width: 25, height: 31)).fill()
+            NSColor(calibratedRed: 0.04, green: 0.50, blue: 0.90, alpha: 1).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 38 + pupilOffset.x, y: 63 + pupilOffset.y, width: 21, height: 14)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 91 + pupilOffset.x, y: 63 + pupilOffset.y, width: 21, height: 14)).fill()
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 41 + pupilOffset.x, y: 49 + pupilOffset.y, width: 9, height: 10)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 94 + pupilOffset.x, y: 49 + pupilOffset.y, width: 9, height: 10)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 53 + pupilOffset.x, y: 63 + pupilOffset.y, width: 4, height: 5)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 106 + pupilOffset.x, y: 63 + pupilOffset.y, width: 4, height: 5)).fill()
         } else {
-            NSColor.white.setStroke()
+            NSColor(calibratedRed: 0.12, green: 0.20, blue: 0.55, alpha: 1).setStroke()
             let blink = NSBezierPath(); blink.lineWidth = 3; blink.lineCapStyle = .round
-            blink.move(to: NSPoint(x: bounds.midX - 23, y: 48)); blink.line(to: NSPoint(x: bounds.midX - 9, y: 48))
-            blink.move(to: NSPoint(x: bounds.midX + 9, y: 48)); blink.line(to: NSPoint(x: bounds.midX + 23, y: 48)); blink.stroke()
+            blink.move(to: NSPoint(x: 36, y: 59)); blink.line(to: NSPoint(x: 61, y: 59)); blink.move(to: NSPoint(x: 89, y: 59)); blink.line(to: NSPoint(x: 114, y: 59)); blink.stroke()
         }
-        NSColor.white.withAlphaComponent(0.9).setStroke()
-        let smile = NSBezierPath(); smile.lineWidth = 2; smile.lineCapStyle = .round
-        smile.move(to: NSPoint(x: bounds.midX - 7, y: 75)); smile.curve(to: NSPoint(x: bounds.midX + 7, y: 75), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); smile.stroke()
+
+        // Tiny brows, a happy beak, and the open smile from the icon.
+        NSColor(calibratedRed: 0.10, green: 0.28, blue: 0.72, alpha: 1).setStroke()
+        let brows = NSBezierPath(); brows.lineWidth = 3.5; brows.lineCapStyle = .round
+        brows.move(to: NSPoint(x: 38, y: 31)); brows.curve(to: NSPoint(x: 53, y: 29), controlPoint1: NSPoint(x: 42, y: 27), controlPoint2: NSPoint(x: 49, y: 27))
+        brows.move(to: NSPoint(x: 97, y: 29)); brows.curve(to: NSPoint(x: 112, y: 31), controlPoint1: NSPoint(x: 101, y: 27), controlPoint2: NSPoint(x: 108, y: 27)); brows.stroke()
+
+        NSColor.systemPink.withAlphaComponent(0.58).setFill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 49, y: 71, width: 18, height: 10)).fill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX + 31, y: 71, width: 18, height: 10)).fill()
+
+        NSColor(calibratedRed: 1, green: 0.68, blue: 0.16, alpha: 1).setFill()
+        let beak = NSBezierPath(); beak.move(to: NSPoint(x: bounds.midX, y: 68)); beak.curve(to: NSPoint(x: bounds.midX + 11, y: 76), controlPoint1: NSPoint(x: bounds.midX + 7, y: 68), controlPoint2: NSPoint(x: bounds.midX + 11, y: 72)); beak.curve(to: NSPoint(x: bounds.midX, y: 82), controlPoint1: NSPoint(x: bounds.midX + 7, y: 80), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); beak.curve(to: NSPoint(x: bounds.midX - 11, y: 76), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX - 7, y: 80)); beak.close(); beak.fill()
+        NSColor(calibratedRed: 0.72, green: 0.20, blue: 0.25, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 5, y: 76, width: 10, height: 7)).fill()
+
+        NSColor(calibratedRed: 1, green: 0.68, blue: 0.16, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 30, y: 123, width: 22, height: 15)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 44, y: 123, width: 22, height: 15)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 84, y: 123, width: 22, height: 15)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 98, y: 123, width: 22, height: 15)).fill()
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
         if state != .idle {
             let title = state.rawValue.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).capitalized
