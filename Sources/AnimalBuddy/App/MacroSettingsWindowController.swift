@@ -45,9 +45,10 @@ import AppKit
         nameField.placeholderString = "Macro name"
         nameField.translatesAutoresizingMaskIntoConstraints = false
         let nameLabel = NSTextField(labelWithString: "Name")
-        let stack = NSStackView(views: [label, nameLabel, nameField, builder]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 8; stack.edgeInsets = NSEdgeInsets(top: 18, left: 18, bottom: 18, right: 18)
+        let stack = NSStackView(views: [label, nameLabel, nameField, builder]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12; stack.edgeInsets = NSEdgeInsets(top: 22, left: 22, bottom: 22, right: 22)
         stack.wantsLayer = true; stack.layer?.cornerRadius = 12; stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        nameField.widthAnchor.constraint(equalToConstant: 270).isActive = true
+        nameField.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true
+        builder.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true
         return stack
     }
 
@@ -64,10 +65,10 @@ import AppKit
 
     init(steps: [MacroStep]) {
         self.steps = steps; super.init(frame: .zero)
-        rows.orientation = .vertical; rows.alignment = .leading; rows.spacing = 8; emptyLabel.textColor = .tertiaryLabelColor
+        rows.orientation = .vertical; rows.alignment = .leading; rows.spacing = 10; emptyLabel.textColor = .tertiaryLabelColor
         let add = NSButton(title: "+ Add block", target: self, action: #selector(addStep))
         let stack = NSStackView(views: [rows, emptyLabel, add]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10; stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor), stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor), widthAnchor.constraint(equalToConstant: 300)])
+        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor), stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor), rows.widthAnchor.constraint(equalTo: stack.widthAnchor)])
         rebuildRows()
     }
 
@@ -87,9 +88,11 @@ import AppKit
         for option in MacroStepKind.allCases { kind.addItem(withTitle: option.displayName) }; kind.selectItem(withTitle: step.kind.displayName); value.stringValue = step.value; value.placeholderString = step.kind.placeholder
         kind.target = self; kind.action = #selector(kindChanged); value.target = self; value.action = #selector(valueChanged); choicePicker.target = self; choicePicker.action = #selector(choiceChanged)
         let remove = NSButton(title: "−", target: self, action: #selector(removePressed)); remove.bezelStyle = .texturedRounded; remove.toolTip = "Remove block"
-        let stack = NSStackView(views: [kind, value, choicePicker, remove]); stack.orientation = .horizontal; stack.spacing = 6; stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
+        let stack = NSStackView(views: [kind, value, choicePicker, remove]); stack.orientation = .horizontal; stack.spacing = 8; stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
+        value.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         choicePicker.isHidden = true
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor), stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor), kind.widthAnchor.constraint(equalToConstant: 150), value.widthAnchor.constraint(equalToConstant: 145), choicePicker.widthAnchor.constraint(equalToConstant: 145)])
+        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor), stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor), kind.widthAnchor.constraint(equalToConstant: 140), choicePicker.widthAnchor.constraint(equalToConstant: 190), remove.widthAnchor.constraint(equalToConstant: 28)])
         configureSelection(for: step.kind, currentValue: step.value, notify: false)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
