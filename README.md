@@ -1,3 +1,9 @@
+Please note that this AI assisted project is in preliminary stages, and that there is little human oversight to the README.md and associated explanatory files. Closer to stable release dates this information will be updated and human oversight will become more present.
+
+If you have any concerns feel free to raise them, and I will do my best to get to them as quickly as I can.
+
+Thank you for your interest in my project, and I hope that your own projects bring you as much joy as AnimalBuddy has brought me in creating!
+
 # Animal Buddy
 
 Animal Buddy is a native macOS desktop pet that acts as a calm, physical-feeling drag-and-drop target for useful file actions. The MVP uses a placeholder creature, stays above normal windows, understands dropped files/URLs, maps modifier keys to actions, and communicates progress through visual states.
