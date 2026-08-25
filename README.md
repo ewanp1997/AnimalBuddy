@@ -24,6 +24,8 @@ On the current machine, `swift build -c release` succeeds. `swift test` is confi
 - `Pet`: state-driven placeholder creature rendering.
 - `App`: AppKit application lifecycle and non-activating floating window/drop target.
 
+`App/Info.plist` contains the minimal bundle metadata needed to package the SwiftPM executable as a local `.app` for desktop launching.
+
 The drop layer classifies input, asks `ActionRegistry` for the binding matching `InputCategory + ModifierCombination`, then executes an action with an `ActionContext`. Pet assets can later be introduced behind the state model without changing automation code.
 
 ## Current functionality
