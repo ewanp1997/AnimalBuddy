@@ -14,6 +14,8 @@ swift run AnimalBuddy
 
 `swift run` launches an accessory app with a transparent floating pet window. Full Xcode is not required for the SwiftPM build; an Xcode project can be added later for signing and distribution.
 
+On the current machine, `swift build -c release` succeeds. `swift test` is configured with XCTest but cannot run with the installed Command Line Tools alone because the XCTest module is supplied by the full Xcode installation; run it after installing/selecting Xcode.
+
 ## Architecture
 
 - `Models`: input categories, modifier bindings, pet states, action context, and settings.
