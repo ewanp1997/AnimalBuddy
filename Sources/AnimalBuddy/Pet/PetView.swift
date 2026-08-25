@@ -59,6 +59,11 @@ final class PetView: NSView {
         clampPupilOffset(NSPoint(x: point.x - eyeCenter.x, y: point.y - eyeCenter.y), maximum: maximum)
     }
 
+    /// Converts a screen-space target into the view's flipped drawing space.
+    static func pupilOffset(towardScreenPoint point: NSPoint, fromScreenEyeCenter eyeCenter: NSPoint, maximum: CGFloat = 5) -> NSPoint {
+        clampPupilOffset(NSPoint(x: point.x - eyeCenter.x, y: eyeCenter.y - point.y), maximum: maximum)
+    }
+
     static func clampPupilOffset(_ offset: NSPoint, maximum: CGFloat = 5) -> NSPoint {
         let length = hypot(offset.x, offset.y)
         guard length > maximum, length > 0 else { return offset }

@@ -113,7 +113,7 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         let leftEyeCenter = NSPoint(x: petView.bounds.midX - 16, y: 48)
         let eyeInWindow = petView.convert(leftEyeCenter, to: nil)
         let eyeOnScreen = window.convertPoint(toScreen: eyeInWindow)
-        let targetOffset = PetView.pupilOffset(toward: mouseLocation, from: eyeOnScreen)
+        let targetOffset = PetView.pupilOffset(towardScreenPoint: mouseLocation, fromScreenEyeCenter: eyeOnScreen)
         petView.setPupilOffset(targetOffset, animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
