@@ -8,6 +8,10 @@ import AppKit
     private var macroSettingsWindow: MacroSettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let iconURL = Bundle.main.url(forResource: "AnimalBuddyIcon", withExtension: "png"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApp.applicationIconImage = icon
+        }
         settings = settingsStore.load()
         let registry = ActionRegistry(settings: settings)
         petWindow = PetWindowController(settings: settings, registry: registry)

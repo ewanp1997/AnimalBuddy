@@ -18,6 +18,8 @@
 	<string>1</string>
 	<key>CFBundleIconFile</key>
 	<string>AnimalBuddy</string>
+	<key>CFBundleIconName</key>
+	<string>AnimalBuddy</string>
 	<key>LSUIElement</key>
 	<false/>
 	<key>NSHighResolutionCapable</key>
