@@ -1,11 +1,12 @@
 import AppKit
 
 @MainActor final class DragTargetOverlayController {
+    private static let targetSize: CGFloat = 48
     private let overlayWindow: NSPanel
-    private let crosshairView = DragTargetCrosshairView(frame: NSRect(x: 0, y: 0, width: 72, height: 72))
+    private let crosshairView = DragTargetCrosshairView(frame: NSRect(x: 0, y: 0, width: 48, height: 48))
 
     init() {
-        overlayWindow = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 72, height: 72), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        overlayWindow = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 48, height: 48), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         overlayWindow.isOpaque = false
         overlayWindow.backgroundColor = .clear
         overlayWindow.ignoresMouseEvents = true
@@ -20,7 +21,7 @@ import AppKit
         let visibleFrame = screen.visibleFrame
         let targetY = Self.targetCenterY(for: screenPoint.y, in: visibleFrame)
         let center = NSPoint(x: visibleFrame.midX, y: targetY)
-        overlayWindow.setFrameOrigin(NSPoint(x: center.x - 36, y: center.y - 36))
+        overlayWindow.setFrameOrigin(NSPoint(x: center.x - Self.targetSize / 2, y: center.y - Self.targetSize / 2))
         crosshairView.redness = min(max(redness, 0), 1)
         overlayWindow.orderFrontRegardless()
     }
@@ -36,14 +37,19 @@ import AppKit
     var redness: CGFloat = 0 { didSet { needsDisplay = true } }
 
     override func draw(_ dirtyRect: NSRect) {
-        let color = NSColor(calibratedRed: 0.25 + redness * 0.75, green: 0.85 - redness * 0.75, blue: 0.85 - redness * 0.75, alpha: 0.9)
-        color.setStroke()
+        let circleRect = bounds.insetBy(dx: 3, dy: 3)
+        NSColor.black.withAlphaComponent(0.22).setFill()
+        NSBezierPath(ovalIn: circleRect.offsetBy(dx: 0, dy: -2)).fill()
+        let fillColor = NSColor(calibratedRed: 0.12 + redness * 0.72, green: 0.14 - redness * 0.10, blue: 0.16 - redness * 0.10, alpha: 0.92)
+        fillColor.setFill()
+        NSBezierPath(ovalIn: circleRect).fill()
+
+        NSColor.white.withAlphaComponent(0.95).setStroke()
         let path = NSBezierPath()
-        path.lineWidth = 4
-        path.move(to: NSPoint(x: bounds.midX, y: 10)); path.line(to: NSPoint(x: bounds.midX, y: bounds.maxY - 10))
-        path.move(to: NSPoint(x: 10, y: bounds.midY)); path.line(to: NSPoint(x: bounds.maxX - 10, y: bounds.midY))
+        path.lineWidth = 3.5
+        path.lineCapStyle = .round
+        path.move(to: NSPoint(x: 17, y: 17)); path.line(to: NSPoint(x: 31, y: 31))
+        path.move(to: NSPoint(x: 31, y: 17)); path.line(to: NSPoint(x: 17, y: 31))
         path.stroke()
-        NSColor.white.withAlphaComponent(0.8).setStroke()
-        let inner = NSBezierPath(ovalIn: bounds.insetBy(dx: 22, dy: 22)); inner.lineWidth = 2; inner.stroke()
     }
 }
