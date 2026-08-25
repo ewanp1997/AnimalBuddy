@@ -45,12 +45,12 @@ public enum MinimizeDestination: String, Codable, CaseIterable, Sendable {
 public enum BlushSlot: String, Codable, Sendable { case left, right }
 
 public enum MacroStepKind: String, Codable, CaseIterable, Sendable {
-    case shell, openApplication, openURL, runShortcut
+    case shell, openApplication, openURL, runShortcut, runBlushMacro
     public var displayName: String {
-        switch self { case .shell: "Run Shell Command"; case .openApplication: "Open Application"; case .openURL: "Open URL"; case .runShortcut: "Run Apple Shortcut" }
+        switch self { case .shell: "Run Shell Command"; case .openApplication: "Open Application"; case .openURL: "Open URL"; case .runShortcut: "Run Apple Shortcut"; case .runBlushMacro: "Run Another Blush Macro" }
     }
     public var placeholder: String {
-        switch self { case .shell: "e.g. say 'Hello from Animal Buddy'"; case .openApplication: "e.g. Calendar"; case .openURL: "e.g. https://example.com"; case .runShortcut: "e.g. My Shortcut" }
+        switch self { case .shell: "e.g. say 'Hello from Animal Buddy'"; case .openApplication: "e.g. Calendar"; case .openURL: "e.g. https://example.com"; case .runShortcut: "Choose a Shortcut"; case .runBlushMacro: "Choose another blush macro" }
     }
 }
 

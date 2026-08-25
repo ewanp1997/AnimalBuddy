@@ -37,7 +37,7 @@ Hover over the pet to reveal the minimize button. The status-item menu controls 
 
 The placeholder creature includes lightweight native charm animations: gentle breathing/bobbing, occasional blinking, rosy cheeks, a smile, mouse-following eyes, and success sparkles. These are code-drawn so pet packs can replace them later without coupling animation to the automation engine.
 
-The two blushes are user-defined macro buttons. Use the status-item menu’s “Configure Blush Macros…” workshop to give the left and right blushes names and build ordered Scratch-like blocks: shell commands, opening applications, opening URLs, or running Apple Shortcuts by exact name. Clicking a configured blush runs the saved blocks in order and reports processing, success, or failure through the pet state. Existing single-command settings migrate as shell blocks.
+The two blushes are user-defined macro buttons. Use the status-item menu’s “Configure Blush Macros…” workshop to give the left and right blushes names and build ordered Scratch-like blocks: shell commands, opening applications, opening URLs, running Apple Shortcuts selected from `shortcuts list`, or running another blush macro. Clicking a configured blush runs the saved blocks in order and reports processing, success, or failure through the pet state. Existing single-command settings migrate as shell blocks; nested macro cycles are rejected. Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.
 
 ## Limitations and roadmap
 

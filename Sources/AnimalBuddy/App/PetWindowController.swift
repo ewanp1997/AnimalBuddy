@@ -76,10 +76,11 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
     private func runMacro(for slot: BlushSlot) {
         let macro = slot == .left ? settings.leftBlushMacro : settings.rightBlushMacro
         guard macro.isConfigured else { return }
+        let currentSettings = settings
         petView.state = .processing
         Task.detached {
             do {
-                try MacroExecutor.run(macro)
+                try MacroExecutor.run(macro, settings: currentSettings)
                 await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
             } catch {
                 await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }
