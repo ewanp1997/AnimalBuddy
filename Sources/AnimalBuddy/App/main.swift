@@ -11,6 +11,7 @@ import AppKit
         if let iconURL = Bundle.main.url(forResource: "AnimalBuddyIcon", withExtension: "png"),
            let icon = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = icon
+            NSApp.dockTile.display()
         }
         settings = settingsStore.load()
         let registry = ActionRegistry(settings: settings)

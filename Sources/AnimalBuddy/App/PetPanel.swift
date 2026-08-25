@@ -8,6 +8,11 @@ final class PetPanel: NSPanel {
     private var lastDragTimestamp: TimeInterval?
     private var dragStartFrame: NSRect?
 
+    // The buddy should float above windows without becoming the active app or
+    // taking keyboard focus away from the app the user is working in.
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+
     override func mouseDown(with event: NSEvent) {
         lastDragPoint = NSEvent.mouseLocation
         lastDragTimestamp = event.timestamp
