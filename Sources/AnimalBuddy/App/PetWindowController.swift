@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 final class PetWindowController: NSWindowController, NSDraggingDestination {
     private static let trackingRadius: CGFloat = 300
+    private static let dismissRadius: CGFloat = 100
     private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
     private let registry: ActionRegistry
     private var settings: AppSettings
@@ -15,7 +16,6 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
         super.init(window: window); window.contentView = petView; window.isMovableByWindowBackground = true
-        window.onDragToDismiss = { [weak self] in self?.closePet() }
         window.onDragBegan = { [weak self] in
             self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
             self?.updateDragFade(for: NSEvent.mouseLocation)
@@ -24,9 +24,8 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
             self?.dragTargetOverlay.show(at: point, redness: velocity)
             self?.updateDragFade(for: point)
         }
-        window.onDragEnded = { [weak self] in
-            self?.dragTargetOverlay.hide()
-            self?.window?.alphaValue = 1
+        window.onDragEnded = { [weak self] point, startFrame, endFrame in
+            self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame)
         }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         window.registerForDraggedTypes([.fileURL, .URL, .string])
@@ -70,6 +69,24 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window?.orderFrontRegardless()
     }
     private func closePet() { window?.orderOut(nil) }
+
+    private func finishPetDrag(at screenPoint: NSPoint, startFrame: NSRect, endFrame: NSRect) {
+        dragTargetOverlay.hide()
+        guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else { window?.alphaValue = 1; return }
+        let target = DragTargetOverlayController.targetCenter(for: screenPoint, in: screen.visibleFrame)
+        let distance = hypot(endFrame.midX - target.x, endFrame.midY - target.y)
+        guard distance <= Self.dismissRadius else {
+            window.alphaValue = 1
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                window.animator().setFrame(startFrame, display: true)
+            }
+            return
+        }
+        closePet()
+        window.alphaValue = 1
+    }
 
     private func updateDragFade(for screenPoint: NSPoint) {
         guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else { return }

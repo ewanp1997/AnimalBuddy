@@ -1,16 +1,17 @@
 import AppKit
 
 final class PetPanel: NSPanel {
-    var onDragToDismiss: (() -> Void)?
     var onDragBegan: (() -> Void)?
     var onDragChanged: ((_ screenPoint: NSPoint, _ velocity: CGFloat) -> Void)?
-    var onDragEnded: (() -> Void)?
+    var onDragEnded: ((_ screenPoint: NSPoint, _ startFrame: NSRect, _ endFrame: NSRect) -> Void)?
     private var lastDragPoint: NSPoint?
     private var lastDragTimestamp: TimeInterval?
+    private var dragStartFrame: NSRect?
 
     override func mouseDown(with event: NSEvent) {
         lastDragPoint = NSEvent.mouseLocation
         lastDragTimestamp = event.timestamp
+        dragStartFrame = frame
         onDragBegan?()
         super.mouseDown(with: event)
     }
@@ -24,15 +25,15 @@ final class PetPanel: NSPanel {
         lastDragPoint = currentPoint
         lastDragTimestamp = event.timestamp
         onDragChanged?(currentPoint, min(velocity / 1000, 1))
-        guard let screen = screen ?? NSScreen.screens.first(where: { $0.visibleFrame.intersects(frame) }) else { return }
-        if Self.shouldDismiss(frame: frame, on: screen.visibleFrame) { onDragToDismiss?() }
     }
 
     override func mouseUp(with event: NSEvent) {
         super.mouseUp(with: event)
+        let currentPoint = NSEvent.mouseLocation
+        onDragEnded?(currentPoint, dragStartFrame ?? frame, frame)
         lastDragPoint = nil
         lastDragTimestamp = nil
-        onDragEnded?()
+        dragStartFrame = nil
     }
 
     static func shouldDismiss(frame: NSRect, on screenFrame: NSRect, horizontalTolerance: CGFloat = 140, verticalThreshold: CGFloat = 70) -> Bool {
