@@ -42,6 +42,15 @@ public enum MinimizeDestination: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum BlushSlot: String, Codable, Sendable { case left, right }
+
+public struct UserMacro: Codable, Sendable, Equatable {
+    public var name: String
+    public var command: String
+    public init(name: String = "", command: String = "") { self.name = name; self.command = command }
+    public var isConfigured: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+}
+
 public struct ActionContext: Sendable {
     public let input: DropInput
     public let destinationFolder: URL?
@@ -73,6 +82,8 @@ public struct AppSettings: Codable, Sendable {
     public var alwaysOnTop = true
     public var petScale = 1.0
     public var snappingEnabled = false
+    public var leftBlushMacro = UserMacro()
+    public var rightBlushMacro = UserMacro()
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
     public var minimizeDestination: MinimizeDestination = .menubar
     public var bindings: [ModifierBinding] = [
@@ -83,7 +94,7 @@ public struct AppSettings: Codable, Sendable {
         .init(category: .file, modifiers: .shift, actionID: "reveal")
     ]
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, destinationFolderPath, minimizeDestination, bindings }
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, leftBlushMacro, rightBlushMacro, destinationFolderPath, minimizeDestination, bindings }
 
     public init() {}
 
@@ -92,6 +103,8 @@ public struct AppSettings: Codable, Sendable {
         alwaysOnTop = try values.decodeIfPresent(Bool.self, forKey: .alwaysOnTop) ?? true
         petScale = try values.decodeIfPresent(Double.self, forKey: .petScale) ?? 1.0
         snappingEnabled = try values.decodeIfPresent(Bool.self, forKey: .snappingEnabled) ?? false
+        leftBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .leftBlushMacro) ?? UserMacro()
+        rightBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .rightBlushMacro) ?? UserMacro()
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []

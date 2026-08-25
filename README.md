@@ -37,6 +37,8 @@ Hover over the pet to reveal the minimize button. The status-item menu controls 
 
 The placeholder creature includes lightweight native charm animations: gentle breathing/bobbing, occasional blinking, rosy cheeks, a smile, mouse-following eyes, and success sparkles. These are code-drawn so pet packs can replace them later without coupling animation to the automation engine.
 
+The two blushes are user-defined macro buttons. Use the status-item menu’s “Configure Blush Macros…” window to give the left and right blushes a name and shell command. Clicking a configured blush runs only the command explicitly saved by the user and reports processing, success, or failure through the pet state.
+
 ## Limitations and roadmap
 
 The creature is intentionally a drawn placeholder. Settings UI, user-editable bindings, pasteboard monitoring, Shortcuts invocation, sandbox entitlement decisions, reduced-motion animation, multi-pet packages, and script/plugin actions remain future work. The current settings model is JSON-backed in `~/Library/Application Support/AnimalBuddy/settings.json`; no extra permissions are requested. Destructive behaviour uses macOS Trash, while file writes avoid overwrites.

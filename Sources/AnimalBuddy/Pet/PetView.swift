@@ -4,8 +4,11 @@ final class PetView: NSView {
     var state: PetState = .idle { didSet { needsDisplay = true } }
     var onStateChange: ((PetState) -> Void)?
     var onMinimizeRequested: (() -> Void)?
+    var onBlushTapped: ((BlushSlot) -> Void)?
     private(set) var pupilOffset = NSPoint.zero
     private let minimizeButton = NSButton()
+    private let leftBlushButton = NSButton()
+    private let rightBlushButton = NSButton()
     private var trackingArea: NSTrackingArea?
     private var animationTimer: Timer?
     private let animationStart = Date()
@@ -27,6 +30,10 @@ final class PetView: NSView {
         minimizeButton.setAccessibilityLabel("Minimize Animal Buddy")
         minimizeButton.isHidden = true
         addSubview(minimizeButton)
+        configureBlushButton(leftBlushButton, slot: .left)
+        configureBlushButton(rightBlushButton, slot: .right)
+        addSubview(leftBlushButton)
+        addSubview(rightBlushButton)
         updateTrackingAreas()
         animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tickAnimation() }
@@ -39,6 +46,8 @@ final class PetView: NSView {
     override func layout() {
         super.layout()
         minimizeButton.frame = NSRect(x: bounds.maxX - 34, y: 10, width: 24, height: 24)
+        leftBlushButton.frame = NSRect(x: bounds.midX - 52, y: 63, width: 24, height: 22)
+        rightBlushButton.frame = NSRect(x: bounds.midX + 28, y: 63, width: 24, height: 22)
     }
 
     override func updateTrackingAreas() {
@@ -52,6 +61,22 @@ final class PetView: NSView {
     override func mouseExited(with event: NSEvent) { minimizeButton.isHidden = true }
 
     @objc private func minimizeButtonPressed() { onMinimizeRequested?() }
+    @objc private func leftBlushPressed() { onBlushTapped?(.left) }
+    @objc private func rightBlushPressed() { onBlushTapped?(.right) }
+
+    private func configureBlushButton(_ button: NSButton, slot: BlushSlot) {
+        button.isBordered = false
+        button.isTransparent = true
+        button.alphaValue = 0.02
+        button.target = self
+        button.action = slot == .left ? #selector(leftBlushPressed) : #selector(rightBlushPressed)
+        button.setAccessibilityLabel("\(slot == .left ? "Left" : "Right") blush macro")
+    }
+
+    func updateBlushMacroLabels(_ settings: AppSettings) {
+        leftBlushButton.toolTip = settings.leftBlushMacro.isConfigured ? settings.leftBlushMacro.name : "Configure left blush macro"
+        rightBlushButton.toolTip = settings.rightBlushMacro.isConfigured ? settings.rightBlushMacro.name : "Configure right blush macro"
+    }
 
     private func tickAnimation() {
         let now = Date()
@@ -117,8 +142,10 @@ final class PetView: NSView {
         let smile = NSBezierPath(); smile.lineWidth = 2; smile.lineCapStyle = .round
         smile.move(to: NSPoint(x: bounds.midX - 7, y: 75)); smile.curve(to: NSPoint(x: bounds.midX + 7, y: 75), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); smile.stroke()
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
-        let title = state.rawValue.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).capitalized
-        title.draw(at: NSPoint(x: 12, y: bounds.height - 28), withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white])
+        if state != .idle {
+            let title = state.rawValue.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).capitalized
+            title.draw(at: NSPoint(x: 12, y: bounds.height - 28), withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white])
+        }
         NSGraphicsContext.current?.restoreGraphicsState()
     }
 

@@ -28,6 +28,8 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
             self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame)
         }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
+        petView.onBlushTapped = { [weak self] slot in self?.runMacro(for: slot) }
+        petView.updateBlushMacroLabels(settings)
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
     }
@@ -35,6 +37,7 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
     func update(settings: AppSettings) {
         self.settings = settings
         window?.level = settings.alwaysOnTop ? .floating : .normal
+        petView.updateBlushMacroLabels(settings)
     }
     func minimizePet() {
         guard let window, !isMinimizing else { return }
@@ -69,6 +72,20 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window?.orderFrontRegardless()
     }
     private func closePet() { window?.orderOut(nil) }
+
+    private func runMacro(for slot: BlushSlot) {
+        let macro = slot == .left ? settings.leftBlushMacro : settings.rightBlushMacro
+        guard macro.isConfigured else { return }
+        petView.state = .processing
+        Task.detached {
+            do {
+                try MacroExecutor.run(macro)
+                await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
+            } catch {
+                await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }
+            }
+        }
+    }
 
     private func finishPetDrag(at screenPoint: NSPoint, startFrame: NSRect, endFrame: NSRect) {
         dragTargetOverlay.hide()

@@ -4,6 +4,7 @@ import AppKit
     var onShowPet: (() -> Void)?
     var onMinimizeDestinationChanged: ((MinimizeDestination) -> Void)?
     var onSnappingChanged: ((Bool) -> Void)?
+    var onConfigureMacros: (() -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -33,6 +34,9 @@ import AppKit
         menu.addItem(destinationItem)
         snappingItem.target = self
         menu.addItem(snappingItem)
+        let macroItem = NSMenuItem(title: "Configure Blush Macros…", action: #selector(configureMacros), keyEquivalent: "")
+        macroItem.target = self
+        menu.addItem(macroItem)
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "q")
@@ -52,6 +56,7 @@ import AppKit
     @objc private func selectDock() { onMinimizeDestinationChanged?(.dock) }
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
     @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
+    @objc private func configureMacros() { onConfigureMacros?() }
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {
