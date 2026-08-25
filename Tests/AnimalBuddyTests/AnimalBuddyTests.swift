@@ -12,4 +12,5 @@ final class AnimalBuddyTests: XCTestCase {
     func testDistanceToRectIsZeroInsideAndMeasuredOutside() { let rect = NSRect(x: 10, y: 10, width: 20, height: 20); XCTAssertEqual(PetWindowController.distance(from: NSPoint(x: 20, y: 20), to: rect), 0); XCTAssertEqual(PetWindowController.distance(from: NSPoint(x: 40, y: 20), to: rect), 10) }
     func testDragDismissZoneRequiresCenteredTopOrBottom() { let screen = NSRect(x: 0, y: 0, width: 1000, height: 800); XCTAssertTrue(PetPanel.shouldDismiss(frame: NSRect(x: 450, y: 740, width: 100, height: 100), on: screen)); XCTAssertTrue(PetPanel.shouldDismiss(frame: NSRect(x: 450, y: -40, width: 100, height: 100), on: screen)); XCTAssertFalse(PetPanel.shouldDismiss(frame: NSRect(x: 50, y: 740, width: 100, height: 100), on: screen)) }
     func testDragVelocityIsCappedToUnitRange() { XCTAssertEqual(min(2500 / 1000, 1), 1) }
+    func testCrosshairUsesTopOrBottomBasedOnScreenHalf() { let screen = NSRect(x: 0, y: 0, width: 1000, height: 800); XCTAssertEqual(DragTargetOverlayController.targetCenterY(for: 700, in: screen), 764); XCTAssertEqual(DragTargetOverlayController.targetCenterY(for: 100, in: screen), 36) }
 }

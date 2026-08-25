@@ -17,13 +17,19 @@ import AppKit
     func show(at screenPoint: NSPoint, redness: CGFloat) {
         let screen = NSScreen.screens.first { $0.frame.contains(screenPoint) } ?? NSScreen.main
         guard let screen else { return }
-        let center = NSPoint(x: screen.visibleFrame.midX, y: screen.visibleFrame.midY)
+        let visibleFrame = screen.visibleFrame
+        let targetY = Self.targetCenterY(for: screenPoint.y, in: visibleFrame)
+        let center = NSPoint(x: visibleFrame.midX, y: targetY)
         overlayWindow.setFrameOrigin(NSPoint(x: center.x - 36, y: center.y - 36))
         crosshairView.redness = min(max(redness, 0), 1)
         overlayWindow.orderFrontRegardless()
     }
 
     func hide() { overlayWindow.orderOut(nil) }
+
+    static func targetCenterY(for screenPointY: CGFloat, in visibleFrame: NSRect, inset: CGFloat = 36) -> CGFloat {
+        screenPointY >= visibleFrame.midY ? visibleFrame.maxY - inset : visibleFrame.minY + inset
+    }
 }
 
 @MainActor final class DragTargetCrosshairView: NSView {
