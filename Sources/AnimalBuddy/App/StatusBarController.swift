@@ -60,6 +60,10 @@ import AppKit
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {
+        if let url = Bundle.main.url(forResource: "AnimalBuddyIcon", withExtension: "png"), let image = NSImage(contentsOf: url) {
+            image.size = NSSize(width: 18, height: 18)
+            return image
+        }
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
         NSColor.systemBlue.setFill()

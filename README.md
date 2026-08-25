@@ -25,7 +25,7 @@ On the current machine, `swift build -c release` succeeds. `swift test` is confi
 - `App`: AppKit application lifecycle and non-activating floating window/drop target.
 
 `App/Info.plist` contains the minimal bundle metadata needed to package the SwiftPM executable as a local `.app` for desktop launching.
-`Scripts/GenerateIcon.swift` renders the Animal Buddy logo used to create the native Dock icon, matching the menu-bar status-item branding.
+`App/AnimalBuddyIcon.png` and `App/AnimalBuddy.icns` contain the Animal Buddy app artwork used by both the Dock and menu-bar status item.
 
 The drop layer classifies input, asks `ActionRegistry` for the binding matching `InputCategory + ModifierCombination`, then executes an action with an `ActionContext`. Pet assets can later be introduced behind the state model without changing automation code.
 
