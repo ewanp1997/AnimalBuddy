@@ -19,14 +19,17 @@ import AppKit
         let screen = NSScreen.screens.first { $0.frame.contains(screenPoint) } ?? NSScreen.main
         guard let screen else { return }
         let visibleFrame = screen.visibleFrame
-        let targetY = Self.targetCenterY(for: screenPoint.y, in: visibleFrame)
-        let center = NSPoint(x: visibleFrame.midX, y: targetY)
+        let center = Self.targetCenter(for: screenPoint, in: visibleFrame)
         overlayWindow.setFrameOrigin(NSPoint(x: center.x - Self.targetSize / 2, y: center.y - Self.targetSize / 2))
         crosshairView.redness = min(max(redness, 0), 1)
         overlayWindow.orderFrontRegardless()
     }
 
     func hide() { overlayWindow.orderOut(nil) }
+
+    static func targetCenter(for screenPoint: NSPoint, in visibleFrame: NSRect, inset: CGFloat = 36) -> NSPoint {
+        NSPoint(x: visibleFrame.midX, y: targetCenterY(for: screenPoint.y, in: visibleFrame, inset: inset))
+    }
 
     static func targetCenterY(for screenPointY: CGFloat, in visibleFrame: NSRect, inset: CGFloat = 36) -> CGFloat {
         screenPointY >= visibleFrame.midY ? visibleFrame.maxY - inset : visibleFrame.minY + inset

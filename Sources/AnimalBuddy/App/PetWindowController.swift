@@ -16,9 +16,18 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
         super.init(window: window); window.contentView = petView; window.isMovableByWindowBackground = true
         window.onDragToDismiss = { [weak self] in self?.closePet() }
-        window.onDragBegan = { [weak self] in self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0) }
-        window.onDragChanged = { [weak self] point, velocity in self?.dragTargetOverlay.show(at: point, redness: velocity) }
-        window.onDragEnded = { [weak self] in self?.dragTargetOverlay.hide() }
+        window.onDragBegan = { [weak self] in
+            self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
+            self?.updateDragFade(for: NSEvent.mouseLocation)
+        }
+        window.onDragChanged = { [weak self] point, velocity in
+            self?.dragTargetOverlay.show(at: point, redness: velocity)
+            self?.updateDragFade(for: point)
+        }
+        window.onDragEnded = { [weak self] in
+            self?.dragTargetOverlay.hide()
+            self?.window?.alphaValue = 1
+        }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
@@ -61,6 +70,16 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window?.orderFrontRegardless()
     }
     private func closePet() { window?.orderOut(nil) }
+
+    private func updateDragFade(for screenPoint: NSPoint) {
+        guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else { return }
+        let target = DragTargetOverlayController.targetCenter(for: screenPoint, in: screen.visibleFrame)
+        let distance = hypot(window.frame.midX - target.x, window.frame.midY - target.y)
+        let fadeStart: CGFloat = 260
+        let fadeEnd: CGFloat = 70
+        let progress = min(max((fadeStart - distance) / (fadeStart - fadeEnd), 0), 1)
+        window.alphaValue = 1 - progress * 0.88
+    }
     override func windowDidLoad() {
         super.windowDidLoad()
         petView.setAccessibilityLabel("Animal Buddy desktop pet")
