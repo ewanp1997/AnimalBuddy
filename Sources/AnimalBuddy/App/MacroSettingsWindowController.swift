@@ -104,20 +104,51 @@ import AppKit
 
     private var selectedChoiceValue: String {
         if selectedKind == .runBlushMacro { return choicePicker.indexOfSelectedItem == 1 ? BlushSlot.left.rawValue : BlushSlot.right.rawValue }
-        return choicePicker.titleOfSelectedItem == "No Shortcuts Found" ? "" : (choicePicker.titleOfSelectedItem ?? "")
+        let selectedTitle = choicePicker.titleOfSelectedItem ?? ""
+        return selectedTitle == "No Shortcuts Found" || selectedTitle == "No Applications Found" ? "" : selectedTitle
     }
 
     private func configureSelection(for selected: MacroStepKind, currentValue: String, notify: Bool) {
         value.placeholderString = selected.placeholder
-        let usesPicker = selected == .runShortcut || selected == .runBlushMacro
+        let usesPicker = selected == .openApplication || selected == .runShortcut || selected == .runBlushMacro
         value.isHidden = usesPicker; choicePicker.isHidden = !usesPicker
-        if selected == .runBlushMacro {
+        if selected == .openApplication {
+            loadApplications(selecting: currentValue)
+        } else if selected == .runBlushMacro {
             choicePicker.removeAllItems(); choicePicker.addItem(withTitle: "Right blush"); choicePicker.addItem(withTitle: "Left blush")
             choicePicker.selectItem(at: currentValue == BlushSlot.left.rawValue ? 1 : 0)
         } else if selected == .runShortcut {
             loadShortcuts(selecting: currentValue)
         }
         if notify { onChange(stepIndex, MacroStep(kind: selected, value: usesPicker ? selectedChoiceValue : value.stringValue)) }
+    }
+
+    private func loadApplications(selecting currentValue: String) {
+        let applicationDirectories = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            URL(fileURLWithPath: "/System/Applications", isDirectory: true),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
+        ]
+        let names = Set(applicationDirectories.flatMap { directory in
+            (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]))?
+                .filter { $0.pathExtension.caseInsensitiveCompare("app") == .orderedSame }
+                .map { $0.deletingPathExtension().lastPathComponent } ?? []
+        }).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+
+        choicePicker.removeAllItems()
+        if names.isEmpty {
+            choicePicker.addItem(withTitle: "No Applications Found")
+        } else {
+            names.forEach { choicePicker.addItem(withTitle: $0) }
+            if !currentValue.isEmpty {
+                if choicePicker.itemTitles.contains(currentValue) {
+                    choicePicker.selectItem(withTitle: currentValue)
+                } else {
+                    choicePicker.insertItem(withTitle: currentValue, at: 0)
+                    choicePicker.selectItem(at: 0)
+                }
+            }
+        }
     }
 
     private func loadShortcuts(selecting currentValue: String) {
