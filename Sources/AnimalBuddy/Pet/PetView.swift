@@ -177,8 +177,8 @@ final class PetView: NSView {
         brows.move(to: NSPoint(x: 97, y: 29)); brows.curve(to: NSPoint(x: 112, y: 31), controlPoint1: NSPoint(x: 101, y: 27), controlPoint2: NSPoint(x: 108, y: 27)); brows.stroke()
 
         NSColor.systemPink.withAlphaComponent(0.58).setFill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 49, y: 71, width: 18, height: 10)).fill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX + 31, y: 71, width: 18, height: 10)).fill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 49, y: 82, width: 18, height: 10)).fill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX + 31, y: 82, width: 18, height: 10)).fill()
 
         NSColor(calibratedRed: 1, green: 0.68, blue: 0.16, alpha: 1).setFill()
         let beak = NSBezierPath(); beak.move(to: NSPoint(x: bounds.midX, y: 68)); beak.curve(to: NSPoint(x: bounds.midX + 11, y: 76), controlPoint1: NSPoint(x: bounds.midX + 7, y: 68), controlPoint2: NSPoint(x: bounds.midX + 11, y: 72)); beak.curve(to: NSPoint(x: bounds.midX, y: 82), controlPoint1: NSPoint(x: bounds.midX + 7, y: 80), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); beak.curve(to: NSPoint(x: bounds.midX - 11, y: 76), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX - 7, y: 80)); beak.close(); beak.fill()
