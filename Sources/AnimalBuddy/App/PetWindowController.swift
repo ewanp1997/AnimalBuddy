@@ -8,6 +8,7 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
     private var settings: AppSettings
     private var mouseTrackingTimer: Timer?
     private var closeObserver: NSObjectProtocol?
+    private var isMinimizing = false
     init(settings: AppSettings, registry: ActionRegistry) {
         self.settings = settings; self.registry = registry
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -16,6 +17,7 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window.onDragToDismiss = { [weak self] in self?.closePet() }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         window.registerForDraggedTypes([.fileURL, .URL, .string])
+        startMouseTracking()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(settings: AppSettings) {
@@ -23,20 +25,35 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window?.level = settings.alwaysOnTop ? .floating : .normal
     }
     func minimizePet() {
-        guard let window else { return }
-        if settings.minimizeDestination == .dock {
-            NSApp.setActivationPolicy(.regular)
-            window.miniaturize(nil)
-        } else {
-            NSApp.setActivationPolicy(.regular)
-            window.orderOut(nil)
+        guard let window, !isMinimizing else { return }
+        NSApp.setActivationPolicy(.regular)
+        let originalFrame = window.frame
+        let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSScreen.main?.frame ?? originalFrame
+        let targetSize = NSSize(width: 18, height: 18)
+        let targetY = settings.minimizeDestination == .dock ? screenFrame.minY - 2 : screenFrame.maxY - targetSize.height + 2
+        let targetFrame = NSRect(x: screenFrame.midX - targetSize.width / 2, y: targetY, width: targetSize.width, height: targetSize.height)
+        isMinimizing = true
+
+        let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.12 : 0.48
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            window.animator().setFrame(targetFrame, display: true)
+            window.animator().alphaValue = 0.05
+        } completionHandler: { [weak self, weak window] in
+            Task { @MainActor in
+                window?.orderOut(nil)
+                window?.setFrame(originalFrame, display: false)
+                window?.alphaValue = 1
+                self?.isMinimizing = false
+            }
         }
     }
     func showPet() {
         if settings.minimizeDestination == .dock { NSApp.setActivationPolicy(.regular) }
         else { NSApp.setActivationPolicy(.regular) }
         showWindow(nil)
-        window?.deminiaturize(nil)
+        window?.alphaValue = 1
         window?.orderFrontRegardless()
     }
     private func closePet() { window?.orderOut(nil) }
@@ -49,7 +66,6 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
                 Task { @MainActor in self?.stopMouseTracking() }
             }
         }
-        startMouseTracking()
     }
     func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { petView.state = .noticingDrag; return .copy }
     func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { petView.state = .waitingForDrop; return .copy }
@@ -94,10 +110,10 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
             return
         }
 
-        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
-        let viewPoint = petView.convert(windowPoint, from: nil)
         let leftEyeCenter = NSPoint(x: petView.bounds.midX - 16, y: 48)
-        let targetOffset = PetView.pupilOffset(toward: viewPoint, from: leftEyeCenter)
+        let eyeInWindow = petView.convert(leftEyeCenter, to: nil)
+        let eyeOnScreen = window.convertPoint(toScreen: eyeInWindow)
+        let targetOffset = PetView.pupilOffset(toward: mouseLocation, from: eyeOnScreen)
         petView.setPupilOffset(targetOffset, animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
