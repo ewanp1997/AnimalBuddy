@@ -30,6 +30,11 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window.onDragEnded = { [weak self] point, startFrame, endFrame in
             self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame)
         }
+        window.onDraggingEntered = { [weak self] sender in self?.draggingEntered(sender) ?? [] }
+        window.onDraggingUpdated = { [weak self] sender in self?.draggingUpdated(sender) ?? [] }
+        window.onDraggingExited = { [weak self] sender in self?.draggingExited(sender) }
+        window.onPrepareForDragOperation = { [weak self] sender in self?.prepareForDragOperation(sender) ?? false }
+        window.onPerformDragOperation = { [weak self] sender in self?.performDragOperation(sender) ?? false }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         petView.onBlushTapped = { [weak self] slot in self?.runMacro(for: slot) }
         petView.updateBlushMacroLabels(settings)

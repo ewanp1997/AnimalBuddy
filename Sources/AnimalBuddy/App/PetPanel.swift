@@ -1,6 +1,11 @@
 import AppKit
 
 final class PetPanel: NSPanel {
+    var onDraggingEntered: ((NSDraggingInfo) -> NSDragOperation)?
+    var onDraggingUpdated: ((NSDraggingInfo) -> NSDragOperation)?
+    var onDraggingExited: ((NSDraggingInfo?) -> Void)?
+    var onPrepareForDragOperation: ((NSDraggingInfo) -> Bool)?
+    var onPerformDragOperation: ((NSDraggingInfo) -> Bool)?
     var onDragBegan: (() -> Void)?
     var onDragChanged: ((_ screenPoint: NSPoint, _ velocity: CGFloat) -> Void)?
     var onDragEnded: ((_ screenPoint: NSPoint, _ startFrame: NSRect, _ endFrame: NSRect) -> Void)?
@@ -12,6 +17,26 @@ final class PetPanel: NSPanel {
     // taking keyboard focus away from the app the user is working in.
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDraggingEntered?(sender) ?? []
+    }
+
+    func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDraggingUpdated?(sender) ?? []
+    }
+
+    func draggingExited(_ sender: NSDraggingInfo?) {
+        onDraggingExited?(sender)
+    }
+
+    func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        onPrepareForDragOperation?(sender) ?? false
+    }
+
+    func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        onPerformDragOperation?(sender) ?? false
+    }
 
     override func mouseDown(with event: NSEvent) {
         lastDragPoint = NSEvent.mouseLocation
