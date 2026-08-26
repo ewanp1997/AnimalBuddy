@@ -35,10 +35,16 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         window.onDraggingExited = { [weak self] sender in self?.draggingExited(sender) }
         window.onPrepareForDragOperation = { [weak self] sender in self?.prepareForDragOperation(sender) ?? false }
         window.onPerformDragOperation = { [weak self] sender in self?.performDragOperation(sender) ?? false }
+        petView.onDraggingEntered = { [weak self] sender in self?.draggingEntered(sender) ?? [] }
+        petView.onDraggingUpdated = { [weak self] sender in self?.draggingUpdated(sender) ?? [] }
+        petView.onDraggingExited = { [weak self] sender in self?.draggingExited(sender) }
+        petView.onPrepareForDragOperation = { [weak self] sender in self?.prepareForDragOperation(sender) ?? false }
+        petView.onPerformDragOperation = { [weak self] sender in self?.performDragOperation(sender) ?? false }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         petView.onBlushTapped = { [weak self] slot in self?.runMacro(for: slot) }
         petView.updateBlushMacroLabels(settings)
         window.registerForDraggedTypes([.fileURL, .URL, .string])
+        petView.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

@@ -1,6 +1,11 @@
 import AppKit
 
 final class PetView: NSView {
+    var onDraggingEntered: ((NSDraggingInfo) -> NSDragOperation)?
+    var onDraggingUpdated: ((NSDraggingInfo) -> NSDragOperation)?
+    var onDraggingExited: ((NSDraggingInfo?) -> Void)?
+    var onPrepareForDragOperation: ((NSDraggingInfo) -> Bool)?
+    var onPerformDragOperation: ((NSDraggingInfo) -> Bool)?
     var state: PetState = .idle { didSet { needsDisplay = true } }
     var onStateChange: ((PetState) -> Void)?
     var onMinimizeRequested: (() -> Void)?
@@ -45,6 +50,26 @@ final class PetView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDraggingEntered?(sender) ?? []
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDraggingUpdated?(sender) ?? []
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        onDraggingExited?(sender)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        onPrepareForDragOperation?(sender) ?? false
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        onPerformDragOperation?(sender) ?? false
+    }
 
     override func layout() {
         super.layout()
