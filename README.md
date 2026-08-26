@@ -16,7 +16,7 @@ Animal Buddy is a native macOS desktop pet that acts as a calm, physical-feeling
 
 See Animal Buddy’s theme settings in action:
 
-<video src="Media/animal-buddy-theme-showcase.mov" controls width="720"></video>
+[![Animal Buddy theme settings showcase](Media/animal-buddy-theme-showcase.gif)](Media/animal-buddy-theme-showcase.mov)
 
 [Download the theme showcase video](Media/animal-buddy-theme-showcase.mov)
 
