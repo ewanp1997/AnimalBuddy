@@ -26,9 +26,12 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
             self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
             self?.updateDragFade(for: NSEvent.mouseLocation)
         }
-        window.onDragChanged = { [weak self] point, velocity in
-            self?.dragTargetOverlay.show(at: point, redness: velocity)
-            self?.updateDragFade(for: point)
+        window.onDragChanged = { [weak self] point, _ in
+            guard let self, let draggedWindow = self.window, let screen = draggedWindow.screen ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
+            let target = DragTargetOverlayController.targetCenter(for: point, in: screen.visibleFrame)
+            let redness = DragTargetOverlayController.redness(for: draggedWindow.frame, target: target, boundaryRadius: Self.dismissRadius)
+            self.dragTargetOverlay.show(at: point, redness: redness)
+            self.updateDragFade(for: point)
         }
         window.onDragEnded = { [weak self] point, startFrame, endFrame in
             self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame)

@@ -34,6 +34,12 @@ import AppKit
     static func targetCenterY(for screenPointY: CGFloat, in visibleFrame: NSRect, inset: CGFloat = 36) -> CGFloat {
         screenPointY >= visibleFrame.midY ? visibleFrame.maxY - inset : visibleFrame.minY + inset
     }
+
+    static func redness(for frame: NSRect, target: NSPoint, boundaryRadius: CGFloat = 100, transitionDepth: CGFloat = 24) -> CGFloat {
+        let distance = hypot(frame.midX - target.x, frame.midY - target.y)
+        guard distance < boundaryRadius else { return 0 }
+        return min(max((boundaryRadius - distance) / transitionDepth, 0), 1)
+    }
 }
 
 @MainActor final class DragTargetCrosshairView: NSView {
