@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette) -> Void)?
 
     private var leftBuilder: MacroBuilderView
@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
     private var selectedAnimal: AnimalKind
     private var selectedTheme: PetThemePreset
     private var customPalette: PetThemePalette
+    private var hoverTranslucencyEnabled: Bool
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
     private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom"], trackingMode: .selectOne, target: nil, action: nil)
@@ -43,20 +44,19 @@ import UniformTypeIdentifiers
 
     private let triggerBannerTitle = NSTextField(labelWithString: "")
     private let triggerBannerSubtitle = NSTextField(wrappingLabelWithString: "")
-    private let leftCardTitleLabel = NSTextField(labelWithString: "")
-    private let leftCardSubtitleLabel = NSTextField(wrappingLabelWithString: "")
-    private let rightCardTitleLabel = NSTextField(labelWithString: "")
-    private let rightCardSubtitleLabel = NSTextField(wrappingLabelWithString: "")
+    private let leftCardTitleLabel = NSTextField(labelWithString: "👈 Left Blush Macro")
+    private let leftCardSubtitleLabel = NSTextField(wrappingLabelWithString: "Triggered by clicking the left cheek blush spot")
+    private let rightCardTitleLabel = NSTextField(labelWithString: "👉 Right Blush Macro")
+    private let rightCardSubtitleLabel = NSTextField(wrappingLabelWithString: "Triggered by clicking the right cheek blush spot")
 
     init(settings: AppSettings, initialTab: Int = 0) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 760),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 840, height: 690),
+            styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Animal Buddy Workshop"
-        window.minSize = NSSize(width: 720, height: 560)
+        window.title = "Animal Buddy Settings"
         window.isReleasedWhenClosed = false
         leftBuilder = MacroBuilderView(steps: settings.leftBlushMacro.effectiveSteps)
         rightBuilder = MacroBuilderView(steps: settings.rightBlushMacro.effectiveSteps)
@@ -64,6 +64,7 @@ import UniformTypeIdentifiers
         selectedAnimal = settings.animalKind
         selectedTheme = settings.themePreset
         customPalette = settings.customPalette
+        hoverTranslucencyEnabled = settings.hoverTranslucencyEnabled
 
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
@@ -172,6 +173,7 @@ import UniformTypeIdentifiers
         let themeCard = makeThemeCard()
         let customCard = makePersonalCustomizationCard()
         let previewCard = makePreviewCard()
+        let behaviorCard = makeBehaviorCard()
 
         let leftCol = NSStackView(views: [themeCard, customCard])
         leftCol.orientation = .vertical
@@ -184,7 +186,7 @@ import UniformTypeIdentifiers
         row.alignment = .top
         row.distribution = .fill
 
-        let mainStack = NSStackView(views: [heading, note, row])
+        let mainStack = NSStackView(views: [heading, note, row, behaviorCard])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -196,6 +198,7 @@ import UniformTypeIdentifiers
         previewCard.translatesAutoresizingMaskIntoConstraints = false
         themeCard.translatesAutoresizingMaskIntoConstraints = false
         customCard.translatesAutoresizingMaskIntoConstraints = false
+        behaviorCard.translatesAutoresizingMaskIntoConstraints = false
         row.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -209,6 +212,7 @@ import UniformTypeIdentifiers
             mainStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
 
             row.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            behaviorCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             leftCol.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.62),
             themeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
             customCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
@@ -372,6 +376,40 @@ import UniformTypeIdentifiers
             actions.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20)
         ])
         return stack
+    }
+
+    private func makeBehaviorCard() -> NSView {
+        let title = NSTextField(labelWithString: "Window Behavior & Transparency")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let toggle = NSButton(checkboxWithTitle: "Enable subtle translucency at rest (dims to 35% opacity when idle, 100% on hover)", target: self, action: #selector(toggleHoverTranslucency(_:)))
+        toggle.state = hoverTranslucencyEnabled ? .on : .off
+        toggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let desc = NSTextField(wrappingLabelWithString: "When enabled, Animal Buddy floats transparently over your windows and text editors so it never blocks your view, then instantly becomes solid the moment you move your mouse over it.")
+        desc.font = .systemFont(ofSize: 11)
+        desc.textColor = .secondaryLabelColor
+
+        let stack = NSStackView(views: [title, toggle, desc])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+        desc.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            toggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    @objc private func toggleHoverTranslucency(_ sender: NSButton) {
+        hoverTranslucencyEnabled = (sender.state == .on)
     }
 
     @objc private func togglePreviewFlap() {
@@ -773,7 +811,8 @@ import UniformTypeIdentifiers
             dragEditor.bindings,
             selectedAnimal,
             selectedTheme,
-            customPalette
+            customPalette,
+            hoverTranslucencyEnabled
         )
         close()
     }

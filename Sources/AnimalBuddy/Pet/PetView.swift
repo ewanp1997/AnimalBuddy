@@ -758,6 +758,18 @@ final class PetView: NSView {
         context.restoreGraphicsState()
     }
 
+    private func drawRimHighlight() {
+        NSColor.white.withAlphaComponent(0.12).setFill()
+        let highlight = NSBezierPath()
+        highlight.move(to: NSPoint(x: 42, y: 24))
+        highlight.curve(to: NSPoint(x: 108, y: 24), controlPoint1: NSPoint(x: 58, y: 17), controlPoint2: NSPoint(x: 92, y: 17))
+        highlight.curve(to: NSPoint(x: 116, y: 30), controlPoint1: NSPoint(x: 113, y: 26), controlPoint2: NSPoint(x: 115, y: 28))
+        highlight.curve(to: NSPoint(x: 34, y: 30), controlPoint1: NSPoint(x: 65, y: 34), controlPoint2: NSPoint(x: 46, y: 33))
+        highlight.curve(to: NSPoint(x: 42, y: 24), controlPoint1: NSPoint(x: 35, y: 28), controlPoint2: NSPoint(x: 38, y: 25))
+        highlight.close()
+        highlight.fill()
+    }
+
     private func drawBirdFeathers(color: NSColor) {
         color.setStroke()
         let feathers = NSBezierPath(); feathers.lineWidth = 1.4; feathers.lineCapStyle = .round

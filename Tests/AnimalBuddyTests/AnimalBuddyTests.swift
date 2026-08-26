@@ -126,14 +126,21 @@ import UniformTypeIdentifiers
     }
 
     func testAppSettingsRoundtrip() throws {
-        let defaultSettings = AppSettings()
+        var defaultSettings = AppSettings()
         XCTAssertEqual(defaultSettings.animalKind, .bird)
         XCTAssertTrue(defaultSettings.alwaysOnTop)
+        XCTAssertTrue(defaultSettings.hoverTranslucencyEnabled)
 
         let encoded = try JSONEncoder().encode(defaultSettings)
-        let decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
+        var decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
         XCTAssertEqual(decoded.animalKind, .bird)
         XCTAssertTrue(decoded.alwaysOnTop)
+        XCTAssertTrue(decoded.hoverTranslucencyEnabled)
+
+        defaultSettings.hoverTranslucencyEnabled = false
+        let disabledEncoded = try JSONEncoder().encode(defaultSettings)
+        decoded = try JSONDecoder().decode(AppSettings.self, from: disabledEncoded)
+        XCTAssertFalse(decoded.hoverTranslucencyEnabled)
     }
 }
 

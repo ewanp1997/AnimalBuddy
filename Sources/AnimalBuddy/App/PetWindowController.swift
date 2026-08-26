@@ -92,6 +92,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.animalKind = settings.animalKind
         petView.themePalette = settings.activePalette
         petView.updateBlushMacroLabels(settings)
+        updateHoverOpacity()
     }
     func minimizePet() {
         guard let window, !isMinimizing else { return }
@@ -253,7 +254,13 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
                             isAwaitingActionChoice ||
                             petView.state == .processing
 
-        let targetAlpha: CGFloat = isInteracting ? Self.activeAlpha : Self.restingAlpha
+        let targetAlpha: CGFloat
+        if settings.hoverTranslucencyEnabled {
+            targetAlpha = isInteracting ? Self.activeAlpha : Self.restingAlpha
+        } else {
+            targetAlpha = Self.activeAlpha
+        }
+
         if abs(window.alphaValue - targetAlpha) > 0.02 {
             let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.01 : 0.18
             NSAnimationContext.runAnimationGroup { context in

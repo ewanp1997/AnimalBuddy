@@ -960,6 +960,7 @@ public struct AppSettings: Codable, Sendable {
     public var minimizeDestination: MinimizeDestination = .menubar
     public var themePreset: PetThemePreset = .classic
     public var customPalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic)
+    public var hoverTranslucencyEnabled: Bool = true
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -972,7 +973,7 @@ public struct AppSettings: Codable, Sendable {
         themePreset == .custom ? customPalette : animalKind.defaultPalette(for: themePreset)
     }
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, bindings }
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, bindings }
 
     public init() {}
 
@@ -989,6 +990,7 @@ public struct AppSettings: Codable, Sendable {
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         themePreset = try values.decodeIfPresent(PetThemePreset.self, forKey: .themePreset) ?? .classic
         customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? AnimalKind.bird.defaultPalette(for: .classic)
+        hoverTranslucencyEnabled = try values.decodeIfPresent(Bool.self, forKey: .hoverTranslucencyEnabled) ?? true
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

@@ -70,7 +70,7 @@ import UniformTypeIdentifiers
 
     private func showSettings(initialTab: Int = 0) {
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -78,6 +78,7 @@ import UniformTypeIdentifiers
             self.settings.animalKind = animal
             self.settings.themePreset = themePreset
             self.settings.customPalette = customPalette
+            self.settings.hoverTranslucencyEnabled = hoverTranslucency
             try? self.settingsStore.save(self.settings)
             self.statusBar?.update(animal: animal, theme: themePreset)
             self.petWindow?.update(settings: self.settings)
