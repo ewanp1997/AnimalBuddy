@@ -137,7 +137,7 @@ public struct UserMacro: Codable, Sendable, Equatable {
     public var steps: [MacroStep]
     public init(name: String = "", command: String = "", steps: [MacroStep] = []) { self.name = name; self.command = command; self.steps = steps }
     public var effectiveSteps: [MacroStep] { steps.isEmpty && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [MacroStep(kind: .shell, value: command)] : steps }
-    public var isConfigured: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !effectiveSteps.isEmpty }
+    public var isConfigured: Bool { !effectiveSteps.isEmpty }
     private enum CodingKeys: String, CodingKey { case name, command, steps }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -154,6 +154,223 @@ public struct DragMacroBinding: Codable, Sendable, Equatable {
     public init(category: InputCategory, macro: UserMacro = UserMacro()) {
         self.category = category
         self.macro = macro
+    }
+}
+
+public struct MacroPreset: Sendable, Equatable {
+    public let title: String
+    public let macro: UserMacro
+
+    public init(title: String, name: String, steps: [MacroStep]) {
+        self.title = title
+        self.macro = UserMacro(name: name, steps: steps)
+    }
+}
+
+public enum MacroPresets {
+    public static let leftBlush: [MacroPreset] = [
+        MacroPreset(
+            title: "Friendly Greeting",
+            name: "Morning Greeting",
+            steps: [MacroStep(kind: .shell, value: "say 'Hello! Hope you are having a wonderful day!'")]
+        ),
+        MacroPreset(
+            title: "Open Calendar",
+            name: "Open Calendar",
+            steps: [MacroStep(kind: .openApplication, value: "Calendar")]
+        ),
+        MacroPreset(
+            title: "Mute & Sleep Screen",
+            name: "Step Away",
+            steps: [MacroStep(kind: .shell, value: "osascript -e 'set volume output muted true' && pmset displaysleepnow")]
+        ),
+        MacroPreset(
+            title: "Take Screenshot",
+            name: "Capture Screen",
+            steps: [MacroStep(kind: .shell, value: "screencapture -i ~/Desktop/Screenshot-$(date +%s).png")]
+        )
+    ]
+
+    public static let rightBlush: [MacroPreset] = [
+        MacroPreset(
+            title: "Quick Scratchpad",
+            name: "Quick Scratchpad",
+            steps: [MacroStep(kind: .shell, value: "open -a TextEdit")]
+        ),
+        MacroPreset(
+            title: "Open Music",
+            name: "Open Music",
+            steps: [MacroStep(kind: .openApplication, value: "Music")]
+        ),
+        MacroPreset(
+            title: "Lock Display",
+            name: "Lock Display",
+            steps: [MacroStep(kind: .shell, value: "pmset displaysleepnow")]
+        ),
+        MacroPreset(
+            title: "Empty Trash",
+            name: "Empty Trash",
+            steps: [MacroStep(kind: .shell, value: "osascript -e 'tell application \"Finder\" to empty trash'")]
+        )
+    ]
+
+    public static func presets(for category: InputCategory) -> [MacroPreset] {
+        switch category {
+        case .image:
+            return [
+                MacroPreset(
+                    title: "Set as Desktop Wallpaper",
+                    name: "Set Wallpaper",
+                    steps: [MacroStep(kind: .shell, value: "osascript -e 'tell application \"Finder\" to set desktop picture to POSIX file \"{{path}}\"'")]
+                ),
+                MacroPreset(
+                    title: "Convert to PNG",
+                    name: "Convert to PNG",
+                    steps: [MacroStep(kind: .shell, value: "sips -s format png \"{{path}}\" --out \"${{path}%.*}.png\"")]
+                ),
+                MacroPreset(
+                    title: "Convert to WebP",
+                    name: "Convert to WebP",
+                    steps: [MacroStep(kind: .shell, value: "sips -s format webp \"{{path}}\" --out \"${{path}%.*}.webp\"")]
+                ),
+                MacroPreset(
+                    title: "Open in Preview",
+                    name: "Open in Preview",
+                    steps: [MacroStep(kind: .openApplication, value: "Preview")]
+                )
+            ]
+        case .directory:
+            return [
+                MacroPreset(
+                    title: "Create Zip Archive",
+                    name: "Compress Folder",
+                    steps: [MacroStep(kind: .shell, value: "ditto -c -k --sequesterRsrc --keepParent \"{{path}}\" \"{{path}}.zip\"")]
+                ),
+                MacroPreset(
+                    title: "Open in Terminal",
+                    name: "Open in Terminal",
+                    steps: [MacroStep(kind: .shell, value: "open -a Terminal \"{{path}}\"")]
+                ),
+                MacroPreset(
+                    title: "Open in Visual Studio Code",
+                    name: "Open in VS Code",
+                    steps: [MacroStep(kind: .shell, value: "open -a \"Visual Studio Code\" \"{{path}}\"")]
+                ),
+                MacroPreset(
+                    title: "Clean .DS_Store Files",
+                    name: "Clean .DS_Store",
+                    steps: [MacroStep(kind: .shell, value: "find \"{{path}}\" -name \".DS_Store\" -delete")]
+                )
+            ]
+        case .application:
+            return [
+                MacroPreset(
+                    title: "Restart Application",
+                    name: "Restart App",
+                    steps: [MacroStep(kind: .shell, value: "killall \"$(basename \"{{path}}\" .app)\" 2>/dev/null; open \"{{path}}\"")]
+                ),
+                MacroPreset(
+                    title: "Reveal App in Finder",
+                    name: "Reveal in Finder",
+                    steps: [MacroStep(kind: .shell, value: "open -R \"{{path}}\"")]
+                ),
+                MacroPreset(
+                    title: "Show App Version Notification",
+                    name: "Show App Version",
+                    steps: [MacroStep(kind: .shell, value: "VER=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" \"{{path}}/Contents/Info.plist\" 2>/dev/null); osascript -e \"display notification \\\"Version: $VER\\\" with title \\\"$(basename \"{{path}}\")\\\"\"")]
+                )
+            ]
+        case .file:
+            return [
+                MacroPreset(
+                    title: "Reveal in Finder",
+                    name: "Reveal in Finder",
+                    steps: [MacroStep(kind: .shell, value: "open -R \"{{path}}\"")]
+                ),
+                MacroPreset(
+                    title: "Copy File Path to Clipboard",
+                    name: "Copy File Path",
+                    steps: [MacroStep(kind: .shell, value: "echo -n \"{{path}}\" | pbcopy")]
+                ),
+                MacroPreset(
+                    title: "Copy SHA-256 Checksum",
+                    name: "Copy SHA-256",
+                    steps: [MacroStep(kind: .shell, value: "shasum -a 256 \"{{path}}\" | awk '{print $1}' | tr -d '\\n' | pbcopy")]
+                ),
+                MacroPreset(
+                    title: "Quick Look Preview",
+                    name: "Quick Look Preview",
+                    steps: [MacroStep(kind: .shell, value: "qlmanage -p \"{{path}}\" >/dev/null 2>&1")]
+                )
+            ]
+        case .url:
+            return [
+                MacroPreset(
+                    title: "Open in Default Browser",
+                    name: "Open Link",
+                    steps: [MacroStep(kind: .openURL, value: "{{text}}")]
+                ),
+                MacroPreset(
+                    title: "Search Web with Google",
+                    name: "Search Google",
+                    steps: [MacroStep(kind: .openURL, value: "https://www.google.com/search?q={{text}}")]
+                ),
+                MacroPreset(
+                    title: "Download to ~/Downloads via curl",
+                    name: "Download File",
+                    steps: [MacroStep(kind: .shell, value: "cd ~/Downloads && curl -O \"{{text}}\"")]
+                )
+            ]
+        case .text:
+            return [
+                MacroPreset(
+                    title: "Read Aloud with Voice",
+                    name: "Speak Text",
+                    steps: [MacroStep(kind: .shell, value: "say \"{{text}}\"")]
+                ),
+                MacroPreset(
+                    title: "Append to Desktop Notes",
+                    name: "Add to Notes",
+                    steps: [MacroStep(kind: .shell, value: "echo \"- {{text}}\" >> ~/Desktop/Notes.txt")]
+                ),
+                MacroPreset(
+                    title: "Search Google",
+                    name: "Google Search",
+                    steps: [MacroStep(kind: .openURL, value: "https://www.google.com/search?q={{text}}")]
+                ),
+                MacroPreset(
+                    title: "Copy Uppercase Text",
+                    name: "Copy Uppercase",
+                    steps: [MacroStep(kind: .shell, value: "echo \"{{text}}\" | tr '[:lower:]' '[:upper:]' | pbcopy")]
+                )
+            ]
+        case .mixed:
+            return [
+                MacroPreset(
+                    title: "Bundle Items into New Folder",
+                    name: "Bundle into Folder",
+                    steps: [MacroStep(kind: .shell, value: "DIR=~/Desktop/\"Drop-$(date +%s)\"; mkdir -p \"$DIR\"; echo \"{{paths}}\" | while read -r p; do cp -r \"$p\" \"$DIR/\"; done; open \"$DIR\"")]
+                ),
+                MacroPreset(
+                    title: "Zip All Items into Archive",
+                    name: "Zip All Items",
+                    steps: [MacroStep(kind: .shell, value: "DIR=~/Desktop/\"Drop-$(date +%s)\"; mkdir -p \"$DIR\"; echo \"{{paths}}\" | while read -r p; do cp -r \"$p\" \"$DIR/\"; done; ditto -c -k \"$DIR\" \"$DIR.zip\"; rm -rf \"$DIR\"; open -R \"$DIR.zip\"")]
+                )
+            ]
+        case .unknown:
+            return [
+                MacroPreset(
+                    title: "Identify File Type",
+                    name: "Identify File Type",
+                    steps: [MacroStep(kind: .shell, value: "INFO=$(file -b \"{{path}}\"); osascript -e \"display notification \\\"$INFO\\\" with title \\\"File Info\\\"\"")]
+                ),
+                MacroPreset(
+                    title: "Open in TextEdit",
+                    name: "Open in TextEdit",
+                    steps: [MacroStep(kind: .openApplication, value: "TextEdit")]
+                )
+            ]
+        }
     }
 }
 

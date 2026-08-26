@@ -9,8 +9,14 @@ import AppKit
     private let rightName = NSTextField()
 
     init(settings: AppSettings) {
-        let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 920), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 750),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
         window.title = "Macros Workshop"
+        window.minSize = NSSize(width: 680, height: 500)
         window.isReleasedWhenClosed = false
         leftBuilder = MacroBuilderView(steps: settings.leftBlushMacro.effectiveSteps)
         rightBuilder = MacroBuilderView(steps: settings.rightBlushMacro.effectiveSteps)
@@ -25,32 +31,130 @@ import AppKit
 
     private func buildContent() {
         guard let content = window?.contentView else { return }
+        
+        let scrollView = NSScrollView(frame: content.bounds)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        
+        let documentView = NSView()
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = documentView
+        
         let heading = NSTextField(labelWithString: "Give Animal Buddy tiny superpowers")
-        heading.font = .systemFont(ofSize: 21, weight: .bold)
+        heading.font = .systemFont(ofSize: 20, weight: .bold)
         let note = NSTextField(wrappingLabelWithString: "Build a little Scratch-like sequence of blocks. Add an action, fill in its value, and the buddy will run the blocks from top to bottom.")
-        note.textColor = .secondaryLabelColor; note.maximumNumberOfLines = 3
-        let leftCard = makeCard(title: "Left blush", nameField: leftName, builder: leftBuilder)
-        let rightCard = makeCard(title: "Right blush", nameField: rightName, builder: rightBuilder)
-        let cards = NSStackView(views: [leftCard, rightCard]); cards.orientation = .horizontal; cards.spacing = 18; cards.distribution = .fillEqually
+        note.textColor = .secondaryLabelColor
+        note.maximumNumberOfLines = 3
+        
+        let leftCard = makeCard(title: "Left blush", slot: .left, nameField: leftName, builder: leftBuilder)
+        let rightCard = makeCard(title: "Right blush", slot: .right, nameField: rightName, builder: rightBuilder)
+        let cards = NSStackView(views: [leftCard, rightCard])
+        cards.orientation = .horizontal
+        cards.spacing = 16
+        cards.distribution = .fillEqually
+        
         let dragCard = makeDragCard()
-        let save = NSButton(title: "Save Macros", target: self, action: #selector(savePressed)); save.keyEquivalent = "\r"
+        
+        let mainStack = NSStackView(views: [heading, note, cards, dragCard])
+        mainStack.orientation = .vertical
+        mainStack.alignment = .leading
+        mainStack.spacing = 18
+        mainStack.edgeInsets = NSEdgeInsets(top: 24, left: 28, bottom: 24, right: 28)
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        documentView.addSubview(mainStack)
+        
+        let save = NSButton(title: "Save Macros", target: self, action: #selector(savePressed))
+        save.keyEquivalent = "\r"
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
-        let buttons = NSStackView(views: [NSView(), cancel, save]); buttons.orientation = .horizontal; buttons.spacing = 10
-        let stack = NSStackView(views: [heading, note, cards, dragCard, buttons]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18; stack.edgeInsets = NSEdgeInsets(top: 32, left: 36, bottom: 32, right: 36)
-        stack.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor), stack.topAnchor.constraint(equalTo: content.topAnchor), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor), cards.widthAnchor.constraint(equalTo: stack.widthAnchor), cards.heightAnchor.constraint(equalToConstant: 360), dragCard.widthAnchor.constraint(equalTo: stack.widthAnchor), dragCard.heightAnchor.constraint(equalToConstant: 340)])
+        let bottomBar = NSStackView(views: [NSView(), cancel, save])
+        bottomBar.orientation = .horizontal
+        bottomBar.spacing = 10
+        bottomBar.edgeInsets = NSEdgeInsets(top: 12, left: 28, bottom: 16, right: 28)
+        bottomBar.translatesAutoresizingMaskIntoConstraints = false
+        
+        content.addSubview(scrollView)
+        content.addSubview(bottomBar)
+        
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: content.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+            
+            bottomBar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            bottomBar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            bottomBar.heightAnchor.constraint(equalToConstant: 54),
+            
+            documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            documentView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            
+            mainStack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            mainStack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+            mainStack.topAnchor.constraint(equalTo: documentView.topAnchor),
+            mainStack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
+            
+            cards.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            dragCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56)
+        ])
     }
 
-    private func makeCard(title: String, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
-        let label = NSTextField(labelWithString: title); label.font = .systemFont(ofSize: 15, weight: .semibold)
+    private func makeCard(title: String, slot: BlushSlot, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 15, weight: .semibold)
+        
+        let presetPicker = NSPopUpButton()
+        presetPicker.addItem(withTitle: "💡 Suggestions…")
+        let presets = slot == .left ? MacroPresets.leftBlush : MacroPresets.rightBlush
+        presets.forEach { presetPicker.addItem(withTitle: $0.title) }
+        presetPicker.target = self
+        presetPicker.action = slot == .left ? #selector(leftPresetChanged(_:)) : #selector(rightPresetChanged(_:))
+        
+        let header = NSStackView(views: [label, NSView(), presetPicker])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        
         nameField.placeholderString = "Macro name"
-        nameField.translatesAutoresizingMaskIntoConstraints = false
         let nameLabel = NSTextField(labelWithString: "Name")
-        let stack = NSStackView(views: [label, nameLabel, nameField, builder]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12; stack.edgeInsets = NSEdgeInsets(top: 22, left: 22, bottom: 22, right: 22)
-        stack.wantsLayer = true; stack.layer?.cornerRadius = 12; stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        nameField.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true
-        builder.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true
+        nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        nameLabel.textColor = .secondaryLabelColor
+        let stack = NSStackView(views: [header, nameLabel, nameField, builder])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 18, left: 18, bottom: 18, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        header.translatesAutoresizingMaskIntoConstraints = false
+        nameField.translatesAutoresizingMaskIntoConstraints = false
+        builder.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            header.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            nameField.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            builder.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
         return stack
+    }
+
+    @objc private func leftPresetChanged(_ sender: NSPopUpButton) {
+        guard sender.indexOfSelectedItem > 0 else { return }
+        let preset = MacroPresets.leftBlush[sender.indexOfSelectedItem - 1]
+        leftName.stringValue = preset.macro.name
+        leftBuilder.loadSteps(preset.macro.effectiveSteps)
+        sender.selectItem(at: 0)
+    }
+
+    @objc private func rightPresetChanged(_ sender: NSPopUpButton) {
+        guard sender.indexOfSelectedItem > 0 else { return }
+        let preset = MacroPresets.rightBlush[sender.indexOfSelectedItem - 1]
+        rightName.stringValue = preset.macro.name
+        rightBuilder.loadSteps(preset.macro.effectiveSteps)
+        sender.selectItem(at: 0)
     }
 
     private func makeDragCard() -> NSView {
@@ -62,17 +166,21 @@ import AppKit
         let stack = NSStackView(views: [title, note, dragEditor])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 22, bottom: 20, right: 22)
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 18, left: 18, bottom: 18, right: 18)
         stack.wantsLayer = true
         stack.layer?.cornerRadius = 12
         stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        dragEditor.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true
+        dragEditor.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            dragEditor.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
         return stack
     }
 
     @objc private func savePressed() {
-        onSave?(UserMacro(name: leftName.stringValue, steps: leftBuilder.steps), UserMacro(name: rightName.stringValue, steps: rightBuilder.steps), dragEditor.bindings); close()
+        onSave?(UserMacro(name: leftName.stringValue, steps: leftBuilder.steps), UserMacro(name: rightName.stringValue, steps: rightBuilder.steps), dragEditor.bindings)
+        close()
     }
     @objc private func cancelPressed() { close() }
 }
@@ -83,19 +191,54 @@ import AppKit
     private let emptyLabel = NSTextField(labelWithString: "No blocks yet — add one below")
 
     init(steps: [MacroStep]) {
-        self.steps = steps; super.init(frame: .zero)
-        rows.orientation = .vertical; rows.alignment = .leading; rows.spacing = 10; emptyLabel.textColor = .tertiaryLabelColor
+        self.steps = steps
+        super.init(frame: .zero)
+        rows.orientation = .vertical
+        rows.alignment = .leading
+        rows.spacing = 10
+        emptyLabel.textColor = .tertiaryLabelColor
         let add = NSButton(title: "+ Add block", target: self, action: #selector(addStep))
-        let stack = NSStackView(views: [rows, emptyLabel, add]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10; stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor), stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor), rows.widthAnchor.constraint(equalTo: stack.widthAnchor)])
+        let stack = NSStackView(views: [rows, emptyLabel, add])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            rows.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        ])
         rebuildRows()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     @objc private func addStep() { steps.append(MacroStep(kind: .shell)); rebuildRows() }
+    func loadSteps(_ newSteps: [MacroStep]) {
+        self.steps = newSteps
+        rebuildRows()
+    }
     private func rebuildRows() {
-        rows.arrangedSubviews.forEach { rows.removeArrangedSubview($0); $0.removeFromSuperview() }; emptyLabel.isHidden = !steps.isEmpty
-        for index in steps.indices { rows.addArrangedSubview(MacroStepRow(step: steps[index], index: index) { [weak self] index, step in self?.steps[index] = step; self?.rebuildRows() } onRemove: { [weak self] index in self?.steps.remove(at: index); self?.rebuildRows() }) }
+        rows.arrangedSubviews.forEach { rows.removeArrangedSubview($0); $0.removeFromSuperview() }
+        emptyLabel.isHidden = !steps.isEmpty
+        for index in steps.indices {
+            rows.addArrangedSubview(
+                MacroStepRow(
+                    step: steps[index],
+                    index: index,
+                    onChange: { [weak self] index, step in
+                        self?.steps[index] = step
+                        self?.rebuildRows()
+                    },
+                    onRemove: { [weak self] index in
+                        self?.steps.remove(at: index)
+                        self?.rebuildRows()
+                    }
+                )
+            )
+        }
     }
 }
 
@@ -103,6 +246,7 @@ import AppKit
     private static let categories: [InputCategory] = [.image, .directory, .application, .file, .url, .text, .mixed, .unknown]
     private var macros: [InputCategory: UserMacro]
     private let categoryPicker = NSPopUpButton()
+    private let presetPicker = NSPopUpButton()
     private let categorySummary = NSTextField(labelWithString: "")
     private let nameField = NSTextField()
     private let builderHost = NSView()
@@ -116,29 +260,44 @@ import AppKit
         categoryPicker.target = self
         categoryPicker.action = #selector(categoryChanged)
         nameField.placeholderString = "Macro name (optional)"
-        nameField.target = self
-        let triggerLabel = NSTextField(labelWithString: "When I drop")
-        triggerLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        
+        let triggerLabel = NSTextField(labelWithString: "When I drop:")
+        triggerLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         categorySummary.font = .systemFont(ofSize: 12, weight: .medium)
         categorySummary.textColor = .secondaryLabelColor
+        
+        presetPicker.target = self
+        presetPicker.action = #selector(presetChanged)
+        
+        let pickerRow = NSStackView(views: [triggerLabel, categoryPicker, categorySummary, NSView(), presetPicker])
+        pickerRow.orientation = .horizontal
+        pickerRow.alignment = .centerY
+        pickerRow.spacing = 10
+        
         let nameLabel = NSTextField(labelWithString: "Macro name")
-        let stack = NSStackView(views: [triggerLabel, categoryPicker, categorySummary, nameLabel, nameField, builderHost])
+        nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        nameLabel.textColor = .secondaryLabelColor
+        
+        let stack = NSStackView(views: [pickerRow, nameLabel, nameField, builderHost])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 8
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        
+        pickerRow.translatesAutoresizingMaskIntoConstraints = false
         nameField.translatesAutoresizingMaskIntoConstraints = false
         builderHost.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            categoryPicker.widthAnchor.constraint(equalToConstant: 220),
+            pickerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            categoryPicker.widthAnchor.constraint(greaterThanOrEqualToConstant: 160),
             nameField.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            builderHost.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            builderHost.heightAnchor.constraint(equalToConstant: 225)
+            builderHost.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
         loadSelectedMacro()
     }
@@ -155,15 +314,37 @@ import AppKit
 
     @objc private func categoryChanged() {
         saveSelectedMacro()
-        selectedCategory = Self.categories[min(max(categoryPicker.indexOfSelectedItem, 0), Self.categories.count - 1)]
+        let newIndex = min(max(categoryPicker.indexOfSelectedItem, 0), Self.categories.count - 1)
+        selectedCategory = Self.categories[newIndex]
         loadSelectedMacro()
     }
 
+    private func updatePresetsMenu() {
+        presetPicker.removeAllItems()
+        presetPicker.addItem(withTitle: "💡 Suggestions…")
+        let categoryPresets = MacroPresets.presets(for: selectedCategory)
+        categoryPresets.forEach { presetPicker.addItem(withTitle: $0.title) }
+    }
+
+    @objc private func presetChanged() {
+        guard presetPicker.indexOfSelectedItem > 0 else { return }
+        let categoryPresets = MacroPresets.presets(for: selectedCategory)
+        let presetIndex = presetPicker.indexOfSelectedItem - 1
+        guard categoryPresets.indices.contains(presetIndex) else { return }
+        let preset = categoryPresets[presetIndex]
+        nameField.stringValue = preset.macro.name
+        builder?.loadSteps(preset.macro.effectiveSteps)
+        presetPicker.selectItem(at: 0)
+    }
+
     private func loadSelectedMacro() {
-        categoryPicker.selectItem(at: Self.categories.firstIndex(of: selectedCategory) ?? 0)
+        if let idx = Self.categories.firstIndex(of: selectedCategory) {
+            categoryPicker.selectItem(at: idx)
+        }
         let macro = macros[selectedCategory] ?? UserMacro()
         categorySummary.stringValue = "Editing: \(Self.displayName(for: selectedCategory))"
         nameField.stringValue = macro.name
+        updatePresetsMenu()
         builder?.removeFromSuperview()
         let newBuilder = MacroBuilderView(steps: macro.effectiveSteps)
         newBuilder.translatesAutoresizingMaskIntoConstraints = false
