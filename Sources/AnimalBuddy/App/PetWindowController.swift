@@ -1,7 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 
-final class PetWindowController: NSWindowController, NSDraggingDestination {
+final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggingDestination {
     private static let trackingRadius: CGFloat = 300
     private static let dismissRadius: CGFloat = 100
     private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
@@ -18,7 +18,7 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
         self.settings = settings; self.registry = registry
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
-        super.init(window: window); window.contentView = petView; window.isMovableByWindowBackground = true
+        super.init(window: window); window.delegate = self; window.contentView = petView; window.isMovableByWindowBackground = true
         window.onDragBegan = { [weak self] in
             self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
             self?.updateDragFade(for: NSEvent.mouseLocation)
