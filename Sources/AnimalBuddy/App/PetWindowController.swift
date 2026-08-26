@@ -25,18 +25,20 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
         super.init(window: window); window.delegate = self; window.contentView = petView; petView.autoresizingMask = [.width, .height]; window.isMovableByWindowBackground = true
         window.onDragBegan = { [weak self] in
+            self?.petView.setFlying(true)
             self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
             self?.updateDragFade(for: NSEvent.mouseLocation)
         }
-        window.onDragChanged = { [weak self] point, _ in
+        window.onDragChanged = { [weak self] point, velocity, deltaX in
             guard let self, let draggedWindow = self.window, let screen = draggedWindow.screen ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
+            self.petView.updateFlightMovement(velocity: velocity, deltaX: deltaX)
             let target = DragTargetOverlayController.targetCenter(for: point, in: screen.visibleFrame)
             let redness = DragTargetOverlayController.redness(for: draggedWindow.frame, target: target, boundaryRadius: Self.dismissRadius)
             self.dragTargetOverlay.show(at: point, redness: redness)
             self.updateDragFade(for: point)
         }
-        window.onDragEnded = { [weak self] point, startFrame, endFrame in
-            self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame)
+        window.onDragEnded = { [weak self] point, startFrame, endFrame, velocity in
+            self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame, velocity: velocity)
         }
         window.onDraggingEntered = { [weak self] sender in self?.draggingEntered(sender) ?? [] }
         window.onDraggingUpdated = { [weak self] sender in self?.draggingUpdated(sender) ?? [] }
@@ -51,6 +53,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
         petView.onBlushTapped = { [weak self] slot in self?.runMacro(for: slot) }
         petView.updateBlushMacroLabels(settings)
+        petView.themePalette = settings.activePalette
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
@@ -60,6 +63,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     func update(settings: AppSettings) {
         self.settings = settings
         window?.level = settings.alwaysOnTop ? .floating : .normal
+        petView.themePalette = settings.activePalette
         petView.updateBlushMacroLabels(settings)
     }
     func minimizePet() {
@@ -153,18 +157,75 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         }
     }
 
-    private func finishPetDrag(at screenPoint: NSPoint, startFrame: NSRect, endFrame: NSRect) {
+    private func finishPetDrag(at screenPoint: NSPoint, startFrame: NSRect, endFrame: NSRect, velocity: CGVector) {
         dragTargetOverlay.hide()
-        guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else { window?.alphaValue = 1; return }
+        guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else {
+            window?.alphaValue = 1
+            petView.setFlying(false)
+            return
+        }
         let target = DragTargetOverlayController.targetCenter(for: screenPoint, in: screen.visibleFrame)
         let distance = hypot(endFrame.midX - target.x, endFrame.midY - target.y)
         guard distance <= Self.dismissRadius else {
             window.alphaValue = 1
-            if settings.snappingEnabled { snapWindow(window, frame: endFrame, on: screen.visibleFrame) }
+            let speed = hypot(velocity.dx, velocity.dy)
+            if speed > 60 {
+                // Apply a very small, subtle inertia in the direction of the flick
+                let inertiaFactor: CGFloat = 0.08
+                let flingDistance = min(speed * inertiaFactor, 110.0)
+                let flingDx = (velocity.dx / speed) * flingDistance
+                let flingDy = (velocity.dy / speed) * flingDistance
+                
+                var targetFrame = endFrame.offsetBy(dx: flingDx, dy: flingDy)
+                targetFrame.origin.x = min(max(targetFrame.origin.x, screen.visibleFrame.minX), screen.visibleFrame.maxX - targetFrame.width)
+                targetFrame.origin.y = min(max(targetFrame.origin.y, screen.visibleFrame.minY), screen.visibleFrame.maxY - targetFrame.height)
+                
+                if settings.snappingEnabled {
+                    let edgeDistances: [(String, CGFloat)] = [
+                        ("left", abs(targetFrame.minX - screen.visibleFrame.minX)),
+                        ("right", abs(screen.visibleFrame.maxX - targetFrame.maxX)),
+                        ("top", abs(screen.visibleFrame.maxY - targetFrame.maxY)),
+                        ("bottom", abs(targetFrame.minY - screen.visibleFrame.minY))
+                    ]
+                    if let closest = edgeDistances.min(by: { $0.1 < $1.1 }), closest.1 < 80 {
+                        switch closest.0 {
+                        case "left": targetFrame.origin.x = screen.visibleFrame.minX
+                        case "right": targetFrame.origin.x = screen.visibleFrame.maxX - targetFrame.width
+                        case "top": targetFrame.origin.y = screen.visibleFrame.maxY - targetFrame.height
+                        case "bottom": targetFrame.origin.y = screen.visibleFrame.minY
+                        default: break
+                        }
+                    }
+                    targetFrame.origin.x = min(max(targetFrame.origin.x, screen.visibleFrame.minX), screen.visibleFrame.maxX - targetFrame.width)
+                    targetFrame.origin.y = min(max(targetFrame.origin.y, screen.visibleFrame.minY), screen.visibleFrame.maxY - targetFrame.height)
+                }
+                
+                let totalDx = targetFrame.origin.x - endFrame.origin.x
+                petView.setFlying(true)
+                petView.updateFlightMovement(velocity: min(speed / 600, 1.0), deltaX: totalDx > 0 ? 12 : (totalDx < 0 ? -12 : 0))
+                
+                let glideDuration: TimeInterval = min(max(Double(speed) / 1200.0, 0.22), 0.38)
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = glideDuration
+                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
+                    window.animator().setFrame(targetFrame, display: true)
+                } completionHandler: { [weak self] in
+                    MainActor.assumeIsolated {
+                        self?.petView.setFlying(false)
+                    }
+                }
+            } else {
+                if settings.snappingEnabled {
+                    snapWindow(window, frame: endFrame, on: screen.visibleFrame)
+                } else {
+                    petView.setFlying(false)
+                }
+            }
             return
         }
         closePet()
         window.alphaValue = 1
+        petView.setFlying(false)
     }
 
     private func snapWindow(_ window: NSWindow, frame: NSRect, on screenFrame: NSRect) {
@@ -184,10 +245,23 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         }
         target.origin.x = min(max(target.origin.x, screenFrame.minX), screenFrame.maxX - target.width)
         target.origin.y = min(max(target.origin.y, screenFrame.minY), screenFrame.maxY - target.height)
+        
+        guard target != frame else {
+            petView.setFlying(false)
+            return
+        }
+        
+        let deltaX = target.origin.x - frame.origin.x
+        petView.setFlying(true)
+        petView.updateFlightMovement(velocity: 0.6, deltaX: deltaX > 0 ? 8 : (deltaX < 0 ? -8 : 0))
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.duration = 0.24
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
             window.animator().setFrame(target, display: true)
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                self?.petView.setFlying(false)
+            }
         }
     }
 

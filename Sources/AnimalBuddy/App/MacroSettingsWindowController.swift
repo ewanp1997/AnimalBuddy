@@ -1,123 +1,580 @@
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding]) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], PetThemePreset, PetThemePalette) -> Void)?
+    var onThemeChanged: ((PetThemePreset, PetThemePalette) -> Void)?
+
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
     private let dragEditor: DragMacroEditorView
     private let leftName = NSTextField()
     private let rightName = NSTextField()
 
-    init(settings: AppSettings) {
+    private var selectedTheme: PetThemePreset
+    private var customPalette: PetThemePalette
+    private let themeSegment = NSSegmentedControl(labels: [
+        "🔹 Classic Blue",
+        "🌑 Midnight Dark",
+        "☀️ Daylight Light",
+        "🎨 Custom"
+    ], trackingMode: .selectOne, target: nil, action: nil)
+    private let themeDescription = NSTextField(wrappingLabelWithString: "")
+
+    private let bodyColorWell = NSColorWell()
+    private let bellyColorWell = NSColorWell()
+    private let beakColorWell = NSColorWell()
+    private let blushColorWell = NSColorWell()
+    private let eyeHighlightColorWell = NSColorWell()
+    private var previewPetView: PetView!
+
+    private let tabSegment = NSSegmentedControl(labels: [
+        "🎨 Plumage & Themes",
+        "⚡️ Macros Workshop"
+    ], trackingMode: .selectOne, target: nil, action: nil)
+    private let tabContainer = NSView()
+    private var appearanceView: NSView!
+    private var macrosView: NSView!
+    private let macroFileStatusLabel = NSTextField(labelWithString: "")
+
+    init(settings: AppSettings, initialTab: Int = 0) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 780, height: 750),
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 760),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Macros Workshop"
-        window.minSize = NSSize(width: 680, height: 500)
+        window.title = "Animal Buddy Workshop"
+        window.minSize = NSSize(width: 720, height: 560)
         window.isReleasedWhenClosed = false
         leftBuilder = MacroBuilderView(steps: settings.leftBlushMacro.effectiveSteps)
         rightBuilder = MacroBuilderView(steps: settings.rightBlushMacro.effectiveSteps)
         dragEditor = DragMacroEditorView(bindings: settings.dragMacros)
+        selectedTheme = settings.themePreset
+        customPalette = settings.customPalette
+
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
         rightName.stringValue = settings.rightBlushMacro.name
-        buildContent()
+        buildContent(initialTab: initialTab)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private func buildContent() {
+    private func buildContent(initialTab: Int) {
         guard let content = window?.contentView else { return }
-        
-        let scrollView = NSScrollView(frame: content.bounds)
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Top Navigation Bar
+        tabSegment.selectedSegment = initialTab
+        tabSegment.target = self
+        tabSegment.action = #selector(tabChanged)
+        tabSegment.segmentStyle = .texturedRounded
+        tabSegment.translatesAutoresizingMaskIntoConstraints = false
+
+        let topBar = NSStackView(views: [tabSegment])
+        topBar.orientation = .horizontal
+        topBar.alignment = .centerY
+        topBar.distribution = .gravityAreas
+        topBar.edgeInsets = NSEdgeInsets(top: 14, left: 24, bottom: 8, right: 24)
+        topBar.translatesAutoresizingMaskIntoConstraints = false
+
+        tabContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        appearanceView = buildAppearanceTab()
+        macrosView = buildMacrosTab()
+
+        let save = NSButton(title: "Save Settings", target: self, action: #selector(savePressed))
+        save.keyEquivalent = "\r"
+        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
+        let bottomBar = NSStackView(views: [NSView(), cancel, save])
+        bottomBar.orientation = .horizontal
+        bottomBar.spacing = 10
+        bottomBar.edgeInsets = NSEdgeInsets(top: 10, left: 28, bottom: 16, right: 28)
+        bottomBar.translatesAutoresizingMaskIntoConstraints = false
+
+        content.addSubview(topBar)
+        content.addSubview(tabContainer)
+        content.addSubview(bottomBar)
+
+        NSLayoutConstraint.activate([
+            topBar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            topBar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            topBar.topAnchor.constraint(equalTo: content.topAnchor),
+            topBar.heightAnchor.constraint(equalToConstant: 46),
+
+            tabContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            tabContainer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            tabContainer.topAnchor.constraint(equalTo: topBar.bottomAnchor),
+            tabContainer.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+
+            bottomBar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            bottomBar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            bottomBar.heightAnchor.constraint(equalToConstant: 52)
+        ])
+
+        switchTab(to: initialTab)
+        updateColorWellsFromActivePalette()
+        updateThemeDescription()
+    }
+
+    @objc private func tabChanged() {
+        switchTab(to: tabSegment.selectedSegment)
+    }
+
+    private func switchTab(to index: Int) {
+        tabContainer.subviews.forEach { $0.removeFromSuperview() }
+        let targetView = index == 0 ? appearanceView! : macrosView!
+        targetView.translatesAutoresizingMaskIntoConstraints = false
+        tabContainer.addSubview(targetView)
+        NSLayoutConstraint.activate([
+            targetView.leadingAnchor.constraint(equalTo: tabContainer.leadingAnchor),
+            targetView.trailingAnchor.constraint(equalTo: tabContainer.trailingAnchor),
+            targetView.topAnchor.constraint(equalTo: tabContainer.topAnchor),
+            targetView.bottomAnchor.constraint(equalTo: tabContainer.bottomAnchor)
+        ])
+    }
+
+    // MARK: - Appearance Tab
+
+    private func buildAppearanceTab() -> NSView {
+        let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
-        
+
+        let doc = NSView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = doc
+
+        let heading = NSTextField(labelWithString: "Plumage & Appearance")
+        heading.font = .systemFont(ofSize: 20, weight: .bold)
+        let note = NSTextField(wrappingLabelWithString: "Choose a signature bird theme or personalize individual colors. Any custom color you pick updates Animal Buddy live!")
+        note.textColor = .secondaryLabelColor
+        note.maximumNumberOfLines = 3
+
+        let themeCard = makeThemeCard()
+        let customCard = makePersonalCustomizationCard()
+        let previewCard = makePreviewCard()
+
+        let leftCol = NSStackView(views: [themeCard, customCard])
+        leftCol.orientation = .vertical
+        leftCol.spacing = 16
+        leftCol.alignment = .leading
+
+        let row = NSStackView(views: [leftCol, previewCard])
+        row.orientation = .horizontal
+        row.spacing = 20
+        row.alignment = .top
+        row.distribution = .fill
+
+        let mainStack = NSStackView(views: [heading, note, row])
+        mainStack.orientation = .vertical
+        mainStack.alignment = .leading
+        mainStack.spacing = 16
+        mainStack.edgeInsets = NSEdgeInsets(top: 16, left: 28, bottom: 20, right: 28)
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(mainStack)
+
+        leftCol.translatesAutoresizingMaskIntoConstraints = false
+        previewCard.translatesAutoresizingMaskIntoConstraints = false
+        themeCard.translatesAutoresizingMaskIntoConstraints = false
+        customCard.translatesAutoresizingMaskIntoConstraints = false
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            doc.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            doc.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+
+            mainStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
+            mainStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            mainStack.topAnchor.constraint(equalTo: doc.topAnchor),
+            mainStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
+
+            row.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            leftCol.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.62),
+            themeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
+            customCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
+            previewCard.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.35)
+        ])
+
+        return scrollView
+    }
+
+    private func makeThemeCard() -> NSView {
+        let title = NSTextField(labelWithString: "Bird Theme")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        themeSegment.target = self
+        themeSegment.action = #selector(themeSegmentChanged)
+        themeSegment.segmentStyle = .texturedRounded
+        switch selectedTheme {
+        case .classic: themeSegment.selectedSegment = 0
+        case .dark: themeSegment.selectedSegment = 1
+        case .light: themeSegment.selectedSegment = 2
+        case .custom: themeSegment.selectedSegment = 3
+        }
+
+        themeDescription.font = .systemFont(ofSize: 12)
+        themeDescription.textColor = .secondaryLabelColor
+        themeDescription.maximumNumberOfLines = 3
+
+        let stack = NSStackView(views: [title, themeSegment, themeDescription])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        themeSegment.translatesAutoresizingMaskIntoConstraints = false
+        themeDescription.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            themeSegment.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            themeDescription.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    private let themeStatusLabel = NSTextField(wrappingLabelWithString: "")
+
+    private func makePersonalCustomizationCard() -> NSView {
+        let title = NSTextField(labelWithString: "Personal Customization")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let subtitle = NSTextField(wrappingLabelWithString: "Fine-tune individual colors, or import/export .json theme presets.")
+        subtitle.font = .systemFont(ofSize: 12)
+        subtitle.textColor = .secondaryLabelColor
+
+        let bodyRow = makeColorRow(label: "Body & Feathers", well: bodyColorWell)
+        let bellyRow = makeColorRow(label: "Belly & Face", well: bellyColorWell)
+        let beakRow = makeColorRow(label: "Beak & Feet", well: beakColorWell)
+        let blushRow = makeColorRow(label: "Blush Cheeks", well: blushColorWell)
+        let eyeRow = makeColorRow(label: "Eye Glow", well: eyeHighlightColorWell)
+
+        let importBtn = NSButton(title: "📥 Import JSON…", target: self, action: #selector(importThemePressed))
+        importBtn.bezelStyle = .accessoryBarAction
+        let exportBtn = NSButton(title: "📤 Export JSON…", target: self, action: #selector(exportThemePressed))
+        exportBtn.bezelStyle = .accessoryBarAction
+        let resetBtn = NSButton(title: "Reset", target: self, action: #selector(resetColorsPressed))
+        resetBtn.bezelStyle = .accessoryBarAction
+
+        let btnRow = NSStackView(views: [importBtn, exportBtn, resetBtn])
+        btnRow.orientation = .horizontal
+        btnRow.spacing = 8
+
+        themeStatusLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        themeStatusLabel.textColor = .secondaryLabelColor
+
+        let stack = NSStackView(views: [title, subtitle, bodyRow, bellyRow, beakRow, blushRow, eyeRow, btnRow, themeStatusLabel])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        bodyRow.translatesAutoresizingMaskIntoConstraints = false
+        bellyRow.translatesAutoresizingMaskIntoConstraints = false
+        beakRow.translatesAutoresizingMaskIntoConstraints = false
+        blushRow.translatesAutoresizingMaskIntoConstraints = false
+        eyeRow.translatesAutoresizingMaskIntoConstraints = false
+        btnRow.translatesAutoresizingMaskIntoConstraints = false
+        themeStatusLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            bodyRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            bellyRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            beakRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            blushRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            eyeRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            btnRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            themeStatusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    private func makeColorRow(label: String, well: NSColorWell) -> NSView {
+        let lbl = NSTextField(labelWithString: label)
+        lbl.font = .systemFont(ofSize: 13, weight: .medium)
+
+        well.target = self
+        well.action = #selector(colorWellChanged(_:))
+        well.translatesAutoresizingMaskIntoConstraints = false
+        well.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        well.widthAnchor.constraint(equalToConstant: 44).isActive = true
+
+        let row = NSStackView(views: [lbl, NSView(), well])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        return row
+    }
+
+    private func makePreviewCard() -> NSView {
+        let title = NSTextField(labelWithString: "Live Preview")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        previewPetView = PetView(frame: NSRect(x: 0, y: 0, width: 140, height: 140))
+        previewPetView.translatesAutoresizingMaskIntoConstraints = false
+        previewPetView.themePalette = currentPalette
+
+        let flapBtn = NSButton(title: "Flap Wings", target: self, action: #selector(togglePreviewFlap))
+        flapBtn.bezelStyle = .rounded
+        let happyBtn = NSButton(title: "Celebrate 🎉", target: self, action: #selector(triggerPreviewCelebrate))
+        happyBtn.bezelStyle = .rounded
+
+        let actions = NSStackView(views: [flapBtn, happyBtn])
+        actions.orientation = .horizontal
+        actions.spacing = 8
+        actions.distribution = .fillEqually
+
+        let stack = NSStackView(views: [title, previewPetView, actions])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 14
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        actions.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            previewPetView.widthAnchor.constraint(equalToConstant: 140),
+            previewPetView.heightAnchor.constraint(equalToConstant: 140),
+            actions.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20)
+        ])
+        return stack
+    }
+
+    @objc private func togglePreviewFlap() {
+        let isNowFlying = !previewPetView.isFlying
+        previewPetView.setFlying(isNowFlying)
+        if isNowFlying {
+            previewPetView.updateFlightMovement(velocity: 0.8, deltaX: 10)
+        }
+    }
+
+    @objc private func triggerPreviewCelebrate() {
+        previewPetView.state = .success
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
+            self?.previewPetView.state = .idle
+        }
+    }
+
+    @objc private func themeSegmentChanged() {
+        switch themeSegment.selectedSegment {
+        case 0:
+            selectedTheme = .classic
+        case 1:
+            selectedTheme = .dark
+        case 2:
+            selectedTheme = .light
+        case 3:
+            selectedTheme = .custom
+        default: break
+        }
+        updateColorWellsFromActivePalette()
+        updateThemeDescription()
+        previewPetView.themePalette = currentPalette
+        onThemeChanged?(selectedTheme, customPalette)
+    }
+
+    @objc private func colorWellChanged(_ sender: NSColorWell) {
+        selectedTheme = .custom
+        themeSegment.selectedSegment = 3
+        customPalette = PetThemePalette(
+            bodyColor: CodableColor(nsColor: bodyColorWell.color),
+            bellyColor: CodableColor(nsColor: bellyColorWell.color),
+            beakColor: CodableColor(nsColor: beakColorWell.color),
+            blushColor: CodableColor(nsColor: blushColorWell.color),
+            eyeHighlightColor: CodableColor(nsColor: eyeHighlightColorWell.color)
+        )
+        updateThemeDescription()
+        previewPetView.themePalette = customPalette
+        onThemeChanged?(selectedTheme, customPalette)
+    }
+
+    @objc private func resetColorsPressed() {
+        selectedTheme = .classic
+        themeSegment.selectedSegment = 0
+        customPalette = PetThemePreset.classic.palette
+        updateColorWellsFromActivePalette()
+        updateThemeDescription()
+        previewPetView.themePalette = currentPalette
+        themeStatusLabel.stringValue = "Restored classic colors"
+        themeStatusLabel.textColor = .secondaryLabelColor
+        onThemeChanged?(selectedTheme, customPalette)
+    }
+
+    @objc func exportThemePressed() {
+        guard let window else { return }
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Animal Buddy Theme"
+        savePanel.prompt = "Export"
+        savePanel.allowedContentTypes = [UTType.json]
+        let defaultFileName = "\(selectedTheme == .custom ? "custom" : selectedTheme.rawValue)-theme.json"
+        savePanel.nameFieldStringValue = defaultFileName
+
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = savePanel.url else { return }
+            do {
+                let themeName = self.selectedTheme == .custom ? "Custom Theme" : self.selectedTheme.displayName
+                let doc = ThemeDocument(name: themeName, version: 1, palette: self.currentPalette)
+                let data = try doc.exportJSONData()
+                try data.write(to: url)
+                self.themeStatusLabel.stringValue = "✅ Theme exported to \(url.lastPathComponent)"
+                self.themeStatusLabel.textColor = .systemGreen
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Failed to export theme"
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .warning
+                alert.beginSheetModal(for: window)
+            }
+        }
+    }
+
+    @objc func importThemePressed() {
+        guard let window else { return }
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Import Animal Buddy Theme"
+        openPanel.prompt = "Import"
+        openPanel.allowedContentTypes = [UTType.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = openPanel.url else { return }
+            do {
+                let data = try Data(contentsOf: url)
+                let (name, importedPalette) = try ThemeDocument.decode(from: data)
+                self.customPalette = importedPalette
+                self.selectedTheme = .custom
+                self.themeSegment.selectedSegment = 3
+                self.updateColorWellsFromActivePalette()
+                self.updateThemeDescription()
+                self.previewPetView.themePalette = importedPalette
+                self.onThemeChanged?(.custom, importedPalette)
+                self.themeStatusLabel.stringValue = "✅ Loaded theme: \(name)"
+                self.themeStatusLabel.textColor = .systemGreen
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Could not import theme"
+                alert.informativeText = "The file is not a valid Animal Buddy theme JSON: \(error.localizedDescription)"
+                alert.alertStyle = .warning
+                alert.beginSheetModal(for: window)
+            }
+        }
+    }
+
+    private var currentPalette: PetThemePalette {
+        selectedTheme == .custom ? customPalette : selectedTheme.palette
+    }
+
+    private func updateColorWellsFromActivePalette() {
+        let pal = currentPalette
+        bodyColorWell.color = pal.bodyColor.nsColor
+        bellyColorWell.color = pal.bellyColor.nsColor
+        beakColorWell.color = pal.beakColor.nsColor
+        blushColorWell.color = pal.blushColor.nsColor
+        eyeHighlightColorWell.color = pal.eyeHighlightColor.nsColor
+    }
+
+    private func updateThemeDescription() {
+        switch selectedTheme {
+        case .classic:
+            themeDescription.stringValue = "The iconic bright sky-blue bird with gentle cream cheeks and a joyful golden beak."
+        case .dark:
+            themeDescription.stringValue = "A sleek obsidian and midnight navy bird with shimmering silver chest and warm amber glow."
+        case .light:
+            themeDescription.stringValue = "A soft morning-sky and pure snowy white plumage with delicate rose blush."
+        case .custom:
+            themeDescription.stringValue = "Your custom crafted color palette, rendered uniquely for your buddy."
+        }
+    }
+
+    // MARK: - Macros Tab
+
+    private func buildMacrosTab() -> NSView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+
         let documentView = NSView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = documentView
-        
+
         let heading = NSTextField(labelWithString: "Give Animal Buddy tiny superpowers")
         heading.font = .systemFont(ofSize: 20, weight: .bold)
         let note = NSTextField(wrappingLabelWithString: "Build a little Scratch-like sequence of blocks. Add an action, fill in its value, and the buddy will run the blocks from top to bottom.")
         note.textColor = .secondaryLabelColor
         note.maximumNumberOfLines = 3
-        
+
         let leftCard = makeCard(title: "Left blush", slot: .left, nameField: leftName, builder: leftBuilder)
         let rightCard = makeCard(title: "Right blush", slot: .right, nameField: rightName, builder: rightBuilder)
         let cards = NSStackView(views: [leftCard, rightCard])
         cards.orientation = .horizontal
         cards.spacing = 16
         cards.distribution = .fillEqually
-        
+
         let dragCard = makeDragCard()
-        
-        let mainStack = NSStackView(views: [heading, note, cards, dragCard])
+
+        let importButton = NSButton(title: "📥 Import Macros JSON…", target: self, action: #selector(importMacrosPressed))
+        importButton.bezelStyle = .accessoryBarAction
+        let exportButton = NSButton(title: "📤 Export Macros JSON…", target: self, action: #selector(exportMacrosPressed))
+        exportButton.bezelStyle = .accessoryBarAction
+        macroFileStatusLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        macroFileStatusLabel.textColor = .secondaryLabelColor
+        let fileButtons = NSStackView(views: [importButton, exportButton, macroFileStatusLabel])
+        fileButtons.orientation = .horizontal
+        fileButtons.alignment = .centerY
+        fileButtons.spacing = 10
+
+        let mainStack = NSStackView(views: [heading, note, cards, dragCard, fileButtons])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 18
-        mainStack.edgeInsets = NSEdgeInsets(top: 24, left: 28, bottom: 24, right: 28)
+        mainStack.edgeInsets = NSEdgeInsets(top: 16, left: 28, bottom: 24, right: 28)
         mainStack.translatesAutoresizingMaskIntoConstraints = false
         documentView.addSubview(mainStack)
-        
-        let save = NSButton(title: "Save Macros", target: self, action: #selector(savePressed))
-        save.keyEquivalent = "\r"
-        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
-        let bottomBar = NSStackView(views: [NSView(), cancel, save])
-        bottomBar.orientation = .horizontal
-        bottomBar.spacing = 10
-        bottomBar.edgeInsets = NSEdgeInsets(top: 12, left: 28, bottom: 16, right: 28)
-        bottomBar.translatesAutoresizingMaskIntoConstraints = false
-        
-        content.addSubview(scrollView)
-        content.addSubview(bottomBar)
-        
+
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: content.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
-            
-            bottomBar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            bottomBar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            bottomBar.heightAnchor.constraint(equalToConstant: 54),
-            
             documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             documentView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
             documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
-            
+
             mainStack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
             mainStack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
             mainStack.topAnchor.constraint(equalTo: documentView.topAnchor),
             mainStack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
-            
+
             cards.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             dragCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56)
         ])
+
+        return scrollView
     }
 
     private func makeCard(title: String, slot: BlushSlot, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: 15, weight: .semibold)
-        
+
         let presetPicker = NSPopUpButton()
         presetPicker.addItem(withTitle: "💡 Suggestions…")
         let presets = slot == .left ? MacroPresets.leftBlush : MacroPresets.rightBlush
         presets.forEach { presetPicker.addItem(withTitle: $0.title) }
         presetPicker.target = self
         presetPicker.action = slot == .left ? #selector(leftPresetChanged(_:)) : #selector(rightPresetChanged(_:))
-        
+
         let header = NSStackView(views: [label, NSView(), presetPicker])
         header.orientation = .horizontal
         header.alignment = .centerY
-        
+
         nameField.placeholderString = "Macro name"
         let nameLabel = NSTextField(labelWithString: "Name")
         nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
@@ -179,10 +636,77 @@ import AppKit
     }
 
     @objc private func savePressed() {
-        onSave?(UserMacro(name: leftName.stringValue, steps: leftBuilder.steps), UserMacro(name: rightName.stringValue, steps: rightBuilder.steps), dragEditor.bindings)
+        onSave?(
+            UserMacro(name: leftName.stringValue, steps: leftBuilder.steps),
+            UserMacro(name: rightName.stringValue, steps: rightBuilder.steps),
+            dragEditor.bindings,
+            selectedTheme,
+            customPalette
+        )
         close()
     }
     @objc private func cancelPressed() { close() }
+
+    private func currentMacroDocument() -> MacroDocument {
+        MacroDocument(
+            left: UserMacro(name: leftName.stringValue, steps: leftBuilder.steps),
+            right: UserMacro(name: rightName.stringValue, steps: rightBuilder.steps),
+            dragMacros: dragEditor.bindings
+        )
+    }
+
+    @objc private func exportMacrosPressed() {
+        guard let window else { return }
+        let panel = NSSavePanel()
+        panel.title = "Export Animal Buddy Macros"
+        panel.prompt = "Export"
+        panel.allowedContentTypes = [UTType.json]
+        panel.nameFieldStringValue = "animal-buddy-macros.json"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            do {
+                try self.currentMacroDocument().exportJSONData().write(to: url, options: .atomic)
+                self.macroFileStatusLabel.stringValue = "✅ Exported (url.lastPathComponent)"
+                self.macroFileStatusLabel.textColor = .systemGreen
+            } catch {
+                self.showMacroFileError(title: "Could not export macros", error: error)
+            }
+        }
+    }
+
+    @objc private func importMacrosPressed() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Import Animal Buddy Macros"
+        panel.prompt = "Import"
+        panel.allowedContentTypes = [UTType.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            do {
+                let document = try MacroDocument.decode(from: Data(contentsOf: url))
+                self.leftName.stringValue = document.leftMacro.name
+                self.leftBuilder.loadSteps(document.leftMacro.effectiveSteps)
+                self.rightName.stringValue = document.rightMacro.name
+                self.rightBuilder.loadSteps(document.rightMacro.effectiveSteps)
+                self.dragEditor.load(bindings: document.dragMacros)
+                self.macroFileStatusLabel.stringValue = "✅ Loaded (url.lastPathComponent) — press Save Settings to apply"
+                self.macroFileStatusLabel.textColor = .systemGreen
+            } catch {
+                self.showMacroFileError(title: "Could not import macros", error: error)
+            }
+        }
+    }
+
+    private func showMacroFileError(title: String, error: Error) {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.beginSheetModal(for: window)
+    }
 }
 
 @MainActor final class MacroBuilderView: NSView {
@@ -310,6 +834,12 @@ import AppKit
             guard let macro = macros[category], macro.isConfigured else { return nil }
             return DragMacroBinding(category: category, macro: macro)
         }
+    }
+
+    func load(bindings: [DragMacroBinding]) {
+        saveSelectedMacro()
+        macros = Dictionary(uniqueKeysWithValues: bindings.map { ($0.category, $0.macro) })
+        loadSelectedMacro()
     }
 
     @objc private func categoryChanged() {

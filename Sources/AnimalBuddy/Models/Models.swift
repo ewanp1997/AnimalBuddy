@@ -1,5 +1,170 @@
 import Foundation
 import UniformTypeIdentifiers
+import AppKit
+
+public struct CodableColor: Codable, Sendable, Equatable {
+    public var red: Double
+    public var green: Double
+    public var blue: Double
+    public var alpha: Double
+
+    public init(red: Double, green: Double, blue: Double, alpha: Double = 1.0) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.alpha = alpha
+    }
+
+    public init(nsColor: NSColor) {
+        let converted = nsColor.usingColorSpace(.deviceRGB) ?? nsColor
+        self.red = Double(converted.redComponent)
+        self.green = Double(converted.greenComponent)
+        self.blue = Double(converted.blueComponent)
+        self.alpha = Double(converted.alphaComponent)
+    }
+
+    public init?(hex: String) {
+        var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if cleanHex.hasPrefix("#") { cleanHex.removeFirst() }
+        guard let hexValue = UInt64(cleanHex, radix: 16) else { return nil }
+        if cleanHex.count == 6 {
+            self.red = Double((hexValue >> 16) & 0xFF) / 255.0
+            self.green = Double((hexValue >> 8) & 0xFF) / 255.0
+            self.blue = Double(hexValue & 0xFF) / 255.0
+            self.alpha = 1.0
+        } else if cleanHex.count == 8 {
+            self.red = Double((hexValue >> 24) & 0xFF) / 255.0
+            self.green = Double((hexValue >> 16) & 0xFF) / 255.0
+            self.blue = Double((hexValue >> 8) & 0xFF) / 255.0
+            self.alpha = Double(hexValue & 0xFF) / 255.0
+        } else {
+            return nil
+        }
+    }
+
+    public var hexString: String {
+        let r = Int(round(red * 255))
+        let g = Int(round(green * 255))
+        let b = Int(round(blue * 255))
+        if alpha < 0.999 {
+            let a = Int(round(alpha * 255))
+            return String(format: "#%02X%02X%02X%02X", r, g, b, a)
+        }
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+
+    public var nsColor: NSColor {
+        NSColor(calibratedRed: CGFloat(red), green: CGFloat(green), blue: CGFloat(blue), alpha: CGFloat(alpha))
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let singleValue = try? decoder.singleValueContainer(), let hexStr = try? singleValue.decode(String.self), let parsed = CodableColor(hex: hexStr) {
+            self = parsed
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.red = try container.decode(Double.self, forKey: .red)
+        self.green = try container.decode(Double.self, forKey: .green)
+        self.blue = try container.decode(Double.self, forKey: .blue)
+        self.alpha = try container.decodeIfPresent(Double.self, forKey: .alpha) ?? 1.0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case red, green, blue, alpha
+    }
+}
+
+public struct PetThemePalette: Codable, Sendable, Equatable {
+    public var bodyColor: CodableColor
+    public var bellyColor: CodableColor
+    public var beakColor: CodableColor
+    public var blushColor: CodableColor
+    public var eyeHighlightColor: CodableColor
+
+    public init(bodyColor: CodableColor, bellyColor: CodableColor, beakColor: CodableColor, blushColor: CodableColor, eyeHighlightColor: CodableColor) {
+        self.bodyColor = bodyColor
+        self.bellyColor = bellyColor
+        self.beakColor = beakColor
+        self.blushColor = blushColor
+        self.eyeHighlightColor = eyeHighlightColor
+    }
+}
+
+public struct ThemeDocument: Codable, Sendable, Equatable {
+    public var name: String
+    public var version: Int
+    public var palette: PetThemePalette
+
+    public init(name: String = "Custom Theme", version: Int = 1, palette: PetThemePalette) {
+        self.name = name
+        self.version = version
+        self.palette = palette
+    }
+
+    public func exportJSONData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(self)
+    }
+
+    public static func decode(from data: Data) throws -> (name: String, palette: PetThemePalette) {
+        let decoder = JSONDecoder()
+        if let doc = try? decoder.decode(ThemeDocument.self, from: data) {
+            return (doc.name, doc.palette)
+        }
+        if let pal = try? decoder.decode(PetThemePalette.self, from: data) {
+            return ("Imported Theme", pal)
+        }
+        throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Invalid theme JSON format"))
+    }
+}
+
+public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
+    case classic = "classic"
+    case dark = "dark"
+    case light = "light"
+    case custom = "custom"
+
+    public var displayName: String {
+        switch self {
+        case .classic: "Classic Blue"
+        case .dark: "Midnight Dark"
+        case .light: "Daylight Light"
+        case .custom: "Custom Palette"
+        }
+    }
+
+    public var palette: PetThemePalette {
+        switch self {
+        case .classic:
+            return PetThemePalette(
+                bodyColor: CodableColor(red: 0.31, green: 0.57, blue: 0.93),
+                bellyColor: CodableColor(red: 0.98, green: 0.97, blue: 0.93),
+                beakColor: CodableColor(red: 1.0, green: 0.68, blue: 0.16),
+                blushColor: CodableColor(red: 1.0, green: 0.18, blue: 0.33, alpha: 0.58),
+                eyeHighlightColor: CodableColor(red: 0.04, green: 0.50, blue: 0.90)
+            )
+        case .dark:
+            return PetThemePalette(
+                bodyColor: CodableColor(red: 0.12, green: 0.15, blue: 0.22),
+                bellyColor: CodableColor(red: 0.85, green: 0.88, blue: 0.92),
+                beakColor: CodableColor(red: 0.96, green: 0.62, blue: 0.04),
+                blushColor: CodableColor(red: 0.65, green: 0.55, blue: 0.98, alpha: 0.60),
+                eyeHighlightColor: CodableColor(red: 0.22, green: 0.74, blue: 0.97)
+            )
+        case .light:
+            return PetThemePalette(
+                bodyColor: CodableColor(red: 0.88, green: 0.95, blue: 1.0),
+                bellyColor: CodableColor(red: 1.0, green: 1.0, blue: 1.0),
+                beakColor: CodableColor(red: 0.98, green: 0.75, blue: 0.14),
+                blushColor: CodableColor(red: 0.99, green: 0.64, blue: 0.69, alpha: 0.60),
+                eyeHighlightColor: CodableColor(red: 0.22, green: 0.74, blue: 0.97)
+            )
+        case .custom:
+            return Self.classic.palette
+        }
+    }
+}
 
 public enum InputCategory: String, Codable, CaseIterable, Sendable {
     case file, image, directory, application, url, text, mixed, unknown
@@ -155,6 +320,150 @@ public struct DragMacroBinding: Codable, Sendable, Equatable {
         self.category = category
         self.macro = macro
     }
+}
+
+public enum MacroDocumentError: LocalizedError, Sendable, Equatable {
+    case invalidFormat(String)
+    case unsupportedSchemaVersion(Int)
+    case missingMacros
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidFormat(let format): "This is not an Animal Buddy macro document (format: \(format))."
+        case .unsupportedSchemaVersion(let version): "This macro document uses schema version \(version), but this version of Animal Buddy supports version 1."
+        case .missingMacros: "The macro document is missing its macros section."
+        }
+    }
+}
+
+public struct MacroDefinition: Codable, Sendable, Equatable {
+    public var name: String
+    public var steps: [MacroStep]
+
+    public init(name: String = "", steps: [MacroStep] = []) {
+        self.name = name
+        self.steps = steps
+    }
+
+    public init(macro: UserMacro) {
+        self.init(name: macro.name, steps: macro.effectiveSteps)
+    }
+
+    public var userMacro: UserMacro { UserMacro(name: name, steps: steps) }
+}
+
+public struct MacroBlushDefinitions: Codable, Sendable, Equatable {
+    public var left: MacroDefinition
+    public var right: MacroDefinition
+
+    public init(left: MacroDefinition = MacroDefinition(), right: MacroDefinition = MacroDefinition()) {
+        self.left = left
+        self.right = right
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        left = try container.decodeIfPresent(MacroDefinition.self, forKey: .left) ?? MacroDefinition()
+        right = try container.decodeIfPresent(MacroDefinition.self, forKey: .right) ?? MacroDefinition()
+    }
+
+    private enum CodingKeys: String, CodingKey { case left, right }
+}
+
+public struct MacroDefinitions: Codable, Sendable, Equatable {
+    public var blush: MacroBlushDefinitions
+    public var drag: [InputCategory: MacroDefinition]
+
+    public init(blush: MacroBlushDefinitions = MacroBlushDefinitions(), drag: [InputCategory: MacroDefinition] = [:]) {
+        self.blush = blush
+        self.drag = drag
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        blush = try container.decodeIfPresent(MacroBlushDefinitions.self, forKey: .blush) ?? MacroBlushDefinitions()
+        guard container.contains(.drag) else {
+            drag = [:]
+            return
+        }
+        let dragContainer = try container.nestedContainer(keyedBy: DynamicCodingKey.self, forKey: .drag)
+        var decoded: [InputCategory: MacroDefinition] = [:]
+        for key in dragContainer.allKeys {
+            guard let category = InputCategory(rawValue: key.stringValue) else {
+                throw MacroDocumentError.invalidFormat("unknown drag category \(key.stringValue)")
+            }
+            decoded[category] = try dragContainer.decode(MacroDefinition.self, forKey: key)
+        }
+        drag = decoded
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(blush, forKey: .blush)
+        var dragContainer = container.nestedContainer(keyedBy: DynamicCodingKey.self, forKey: .drag)
+        for category in InputCategory.allCases {
+            if let definition = drag[category] {
+                try dragContainer.encode(definition, forKey: DynamicCodingKey(category.rawValue))
+            }
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case blush, drag }
+
+    private struct DynamicCodingKey: CodingKey {
+        let stringValue: String
+        init(_ string: String) { stringValue = string }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        var intValue: Int? { nil }
+        init?(intValue: Int) { nil }
+    }
+}
+
+public struct MacroDocument: Codable, Sendable, Equatable {
+    public static let formatIdentifier = "com.animalbuddy.macros"
+    public static let currentSchemaVersion = 1
+
+    public var format: String
+    public var schemaVersion: Int
+    public var macros: MacroDefinitions
+
+    public init(left: UserMacro = UserMacro(), right: UserMacro = UserMacro(), dragMacros: [DragMacroBinding] = []) {
+        self.format = Self.formatIdentifier
+        self.schemaVersion = Self.currentSchemaVersion
+        var drag = Dictionary(uniqueKeysWithValues: InputCategory.allCases.map { ($0, MacroDefinition()) })
+        for binding in dragMacros { drag[binding.category] = MacroDefinition(macro: binding.macro) }
+        self.macros = MacroDefinitions(blush: MacroBlushDefinitions(left: MacroDefinition(macro: left), right: MacroDefinition(macro: right)), drag: drag)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let format = try container.decode(String.self, forKey: .format)
+        guard format == Self.formatIdentifier else { throw MacroDocumentError.invalidFormat(format) }
+        let version = try container.decode(Int.self, forKey: .schemaVersion)
+        guard version == Self.currentSchemaVersion else { throw MacroDocumentError.unsupportedSchemaVersion(version) }
+        guard container.contains(.macros) else { throw MacroDocumentError.missingMacros }
+        self.format = format
+        self.schemaVersion = version
+        self.macros = try container.decode(MacroDefinitions.self, forKey: .macros)
+    }
+
+    public var leftMacro: UserMacro { macros.blush.left.userMacro }
+    public var rightMacro: UserMacro { macros.blush.right.userMacro }
+    public var dragMacros: [DragMacroBinding] {
+        macros.drag.keys.sorted { $0.rawValue < $1.rawValue }.map { DragMacroBinding(category: $0, macro: macros.drag[$0]!.userMacro) }
+    }
+
+    public func exportJSONData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(self)
+    }
+
+    public static func decode(from data: Data) throws -> MacroDocument {
+        try JSONDecoder().decode(Self.self, from: data)
+    }
+
+    private enum CodingKeys: String, CodingKey { case format, schemaVersion, macros }
 }
 
 public struct MacroPreset: Sendable, Equatable {
@@ -410,6 +719,8 @@ public struct AppSettings: Codable, Sendable {
     public var dragMacros: [DragMacroBinding] = []
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
     public var minimizeDestination: MinimizeDestination = .menubar
+    public var themePreset: PetThemePreset = .classic
+    public var customPalette: PetThemePalette = PetThemePreset.classic.palette
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -418,7 +729,11 @@ public struct AppSettings: Codable, Sendable {
         .init(category: .file, modifiers: .shift, actionID: "reveal")
     ]
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, bindings }
+    public var activePalette: PetThemePalette {
+        themePreset == .custom ? customPalette : themePreset.palette
+    }
+
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, bindings }
 
     public init() {}
 
@@ -432,6 +747,8 @@ public struct AppSettings: Codable, Sendable {
         dragMacros = try values.decodeIfPresent([DragMacroBinding].self, forKey: .dragMacros) ?? []
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
+        themePreset = try values.decodeIfPresent(PetThemePreset.self, forKey: .themePreset) ?? .classic
+        customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? PetThemePreset.classic.palette
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

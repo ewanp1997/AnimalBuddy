@@ -4,6 +4,10 @@ import AppKit
     var onShowPet: (() -> Void)?
     var onMinimizeDestinationChanged: ((MinimizeDestination) -> Void)?
     var onSnappingChanged: ((Bool) -> Void)?
+    var onThemePresetChanged: ((PetThemePreset) -> Void)?
+    var onImportThemeJSON: (() -> Void)?
+    var onExportThemeJSON: (() -> Void)?
+    var onOpenAppearanceSettings: (() -> Void)?
     var onConfigureMacros: (() -> Void)?
     var onQuit: (() -> Void)?
 
@@ -12,6 +16,12 @@ import AppKit
     private let dockItem = NSMenuItem(title: "Dock", action: #selector(selectDock), keyEquivalent: "")
     private let menubarItem = NSMenuItem(title: "Menu Bar", action: #selector(selectMenubar), keyEquivalent: "")
     private let snappingItem = NSMenuItem(title: "Snap to Screen Edges", action: #selector(toggleSnapping), keyEquivalent: "")
+
+    private let themeMenu = NSMenu(title: "Bird Theme")
+    private let classicThemeItem = NSMenuItem(title: "🔹 Classic Blue", action: #selector(selectClassicTheme), keyEquivalent: "")
+    private let darkThemeItem = NSMenuItem(title: "🌑 Midnight Dark", action: #selector(selectDarkTheme), keyEquivalent: "")
+    private let lightThemeItem = NSMenuItem(title: "☀️ Daylight Light", action: #selector(selectLightTheme), keyEquivalent: "")
+    private let customThemeItem = NSMenuItem(title: "🎨 Custom Palette", action: #selector(selectCustomTheme), keyEquivalent: "")
 
     override init() {
         super.init()
@@ -24,6 +34,31 @@ import AppKit
         showItem.target = self
         menu.addItem(showItem)
         menu.addItem(.separator())
+
+        classicThemeItem.target = self
+        darkThemeItem.target = self
+        lightThemeItem.target = self
+        customThemeItem.target = self
+
+        themeMenu.addItem(classicThemeItem)
+        themeMenu.addItem(darkThemeItem)
+        themeMenu.addItem(lightThemeItem)
+        themeMenu.addItem(customThemeItem)
+        themeMenu.addItem(.separator())
+        let importItem = NSMenuItem(title: "📥 Import Theme JSON…", action: #selector(importTheme), keyEquivalent: "")
+        importItem.target = self
+        themeMenu.addItem(importItem)
+        let exportItem = NSMenuItem(title: "📤 Export Theme JSON…", action: #selector(exportTheme), keyEquivalent: "")
+        exportItem.target = self
+        themeMenu.addItem(exportItem)
+        themeMenu.addItem(.separator())
+        let customColorsItem = NSMenuItem(title: "Customize Plumage Colors…", action: #selector(openAppearance), keyEquivalent: "")
+        customColorsItem.target = self
+        themeMenu.addItem(customColorsItem)
+
+        let themeItem = NSMenuItem(title: "Bird Theme", action: nil, keyEquivalent: "")
+        themeItem.submenu = themeMenu
+        menu.addItem(themeItem)
 
         dockItem.target = self
         menubarItem.target = self
@@ -52,7 +87,21 @@ import AppKit
 
     func update(snappingEnabled: Bool) { snappingItem.state = snappingEnabled ? .on : .off }
 
+    func update(theme: PetThemePreset) {
+        classicThemeItem.state = theme == .classic ? .on : .off
+        darkThemeItem.state = theme == .dark ? .on : .off
+        lightThemeItem.state = theme == .light ? .on : .off
+        customThemeItem.state = theme == .custom ? .on : .off
+    }
+
     @objc private func showPet() { onShowPet?() }
+    @objc private func selectClassicTheme() { onThemePresetChanged?(.classic) }
+    @objc private func selectDarkTheme() { onThemePresetChanged?(.dark) }
+    @objc private func selectLightTheme() { onThemePresetChanged?(.light) }
+    @objc private func selectCustomTheme() { onThemePresetChanged?(.custom) }
+    @objc private func importTheme() { onImportThemeJSON?() }
+    @objc private func exportTheme() { onExportThemeJSON?() }
+    @objc private func openAppearance() { onOpenAppearanceSettings?() }
     @objc private func selectDock() { onMinimizeDestinationChanged?(.dock) }
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
     @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }

@@ -7,10 +7,14 @@ final class PetPanel: NSPanel {
     var onPrepareForDragOperation: ((NSDraggingInfo) -> Bool)?
     var onPerformDragOperation: ((NSDraggingInfo) -> Bool)?
     var onDragBegan: (() -> Void)?
-    var onDragChanged: ((_ screenPoint: NSPoint, _ velocity: CGFloat) -> Void)?
-    var onDragEnded: ((_ screenPoint: NSPoint, _ startFrame: NSRect, _ endFrame: NSRect) -> Void)?
-    private var lastDragPoint: NSPoint?
-    private var lastDragTimestamp: TimeInterval?
+    var onDragChanged: ((_ screenPoint: NSPoint, _ velocity: CGFloat, _ deltaX: CGFloat) -> Void)?
+    var onDragEnded: ((_ screenPoint: NSPoint, _ startFrame: NSRect, _ endFrame: NSRect, _ velocity: CGVector) -> Void)?
+
+    private struct DragSample {
+        let point: NSPoint
+        let timestamp: TimeInterval
+    }
+    private var dragSamples: [DragSample] = []
     private var dragStartFrame: NSRect?
 
     // The buddy should float above windows without becoming the active app or
@@ -39,8 +43,8 @@ final class PetPanel: NSPanel {
     }
 
     override func mouseDown(with event: NSEvent) {
-        lastDragPoint = NSEvent.mouseLocation
-        lastDragTimestamp = event.timestamp
+        let loc = NSEvent.mouseLocation
+        dragSamples = [DragSample(point: loc, timestamp: event.timestamp)]
         dragStartFrame = frame
         onDragBegan?()
         super.mouseDown(with: event)
@@ -49,20 +53,38 @@ final class PetPanel: NSPanel {
     override func mouseDragged(with event: NSEvent) {
         super.mouseDragged(with: event)
         let currentPoint = NSEvent.mouseLocation
-        let elapsed = max(event.timestamp - (lastDragTimestamp ?? event.timestamp), 0.001)
-        let previousPoint = lastDragPoint ?? currentPoint
-        let velocity = hypot(currentPoint.x - previousPoint.x, currentPoint.y - previousPoint.y) / elapsed
-        lastDragPoint = currentPoint
-        lastDragTimestamp = event.timestamp
-        onDragChanged?(currentPoint, min(velocity / 1000, 1))
+        let now = event.timestamp
+        let prevPoint = dragSamples.last?.point ?? currentPoint
+        let deltaX = currentPoint.x - prevPoint.x
+        let deltaY = currentPoint.y - prevPoint.y
+        let dt = max(now - (dragSamples.last?.timestamp ?? now), 0.001)
+        let speed = hypot(deltaX, deltaY) / CGFloat(dt)
+        
+        dragSamples.append(DragSample(point: currentPoint, timestamp: now))
+        if dragSamples.count > 12 {
+            dragSamples.removeFirst(dragSamples.count - 12)
+        }
+        onDragChanged?(currentPoint, min(speed / 1000, 1), deltaX)
     }
 
     override func mouseUp(with event: NSEvent) {
         super.mouseUp(with: event)
         let currentPoint = NSEvent.mouseLocation
-        onDragEnded?(currentPoint, dragStartFrame ?? frame, frame)
-        lastDragPoint = nil
-        lastDragTimestamp = nil
+        let now = event.timestamp
+        
+        var computedVelocity = CGVector.zero
+        let recent = dragSamples.filter { now - $0.timestamp <= 0.12 }
+        if recent.count >= 2, let first = recent.first, let last = recent.last {
+            let totalDt = CGFloat(max(last.timestamp - first.timestamp, 0.01))
+            let vx = (last.point.x - first.point.x) / totalDt
+            let vy = (last.point.y - first.point.y) / totalDt
+            if now - last.timestamp < 0.10 {
+                computedVelocity = CGVector(dx: vx, dy: vy)
+            }
+        }
+        
+        onDragEnded?(currentPoint, dragStartFrame ?? frame, frame, computedVelocity)
+        dragSamples.removeAll()
         dragStartFrame = nil
     }
 

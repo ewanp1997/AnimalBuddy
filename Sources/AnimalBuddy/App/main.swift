@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindow: PetWindowController?
@@ -20,10 +21,15 @@ import AppKit
         statusBar?.onShowPet = { [weak self] in self?.petWindow?.showPet() }
         statusBar?.onMinimizeDestinationChanged = { [weak self] destination in self?.setMinimizeDestination(destination) }
         statusBar?.onSnappingChanged = { [weak self] enabled in self?.setSnapping(enabled) }
-        statusBar?.onConfigureMacros = { [weak self] in self?.showMacroSettings() }
+        statusBar?.onThemePresetChanged = { [weak self] theme in self?.setThemePreset(theme) }
+        statusBar?.onImportThemeJSON = { [weak self] in self?.importThemeFromMenu() }
+        statusBar?.onExportThemeJSON = { [weak self] in self?.exportThemeFromMenu() }
+        statusBar?.onOpenAppearanceSettings = { [weak self] in self?.showSettings(initialTab: 0) }
+        statusBar?.onConfigureMacros = { [weak self] in self?.showSettings(initialTab: 1) }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
         statusBar?.update(snappingEnabled: settings.snappingEnabled)
+        statusBar?.update(theme: settings.themePreset)
         // Keep a regular application presence so Animal Buddy is available in
         // Force Quit Applications even when its pet window is minimized.
         NSApp.setActivationPolicy(.regular)
@@ -49,14 +55,32 @@ import AppKit
         petWindow?.update(settings: settings)
     }
 
-    private func showMacroSettings() {
-        let controller = MacroSettingsWindowController(settings: settings)
-        controller.onSave = { [weak self] left, right, dragMacros in
+    private func setThemePreset(_ theme: PetThemePreset) {
+        settings.themePreset = theme
+        try? settingsStore.save(settings)
+        statusBar?.update(theme: theme)
+        petWindow?.update(settings: settings)
+    }
+
+    private func showSettings(initialTab: Int = 0) {
+        let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
+        controller.onSave = { [weak self] left, right, dragMacros, themePreset, customPalette in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
             self.settings.dragMacros = dragMacros
+            self.settings.themePreset = themePreset
+            self.settings.customPalette = customPalette
             try? self.settingsStore.save(self.settings)
+            self.statusBar?.update(theme: themePreset)
+            self.petWindow?.update(settings: self.settings)
+        }
+        controller.onThemeChanged = { [weak self] themePreset, customPalette in
+            guard let self else { return }
+            self.settings.themePreset = themePreset
+            self.settings.customPalette = customPalette
+            try? self.settingsStore.save(self.settings)
+            self.statusBar?.update(theme: themePreset)
             self.petWindow?.update(settings: self.settings)
         }
         macroSettingsWindow = controller
@@ -64,6 +88,53 @@ import AppKit
         controller.window?.center()
         controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func importThemeFromMenu() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Import Animal Buddy Theme"
+        openPanel.prompt = "Import"
+        openPanel.allowedContentTypes = [UTType.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        if openPanel.runModal() == .OK, let url = openPanel.url {
+            do {
+                let data = try Data(contentsOf: url)
+                let (_, palette) = try ThemeDocument.decode(from: data)
+                self.settings.themePreset = .custom
+                self.settings.customPalette = palette
+                try? self.settingsStore.save(self.settings)
+                self.statusBar?.update(theme: .custom)
+                self.petWindow?.update(settings: self.settings)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Could not import theme"
+                alert.informativeText = "Invalid theme JSON: \(error.localizedDescription)"
+                alert.runModal()
+            }
+        }
+    }
+
+    private func exportThemeFromMenu() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Animal Buddy Theme"
+        savePanel.prompt = "Export"
+        savePanel.allowedContentTypes = [UTType.json]
+        let defaultFileName = "\(settings.themePreset == .custom ? "custom" : settings.themePreset.rawValue)-theme.json"
+        savePanel.nameFieldStringValue = defaultFileName
+        if savePanel.runModal() == .OK, let url = savePanel.url {
+            do {
+                let name = settings.themePreset == .custom ? "Custom Theme" : settings.themePreset.displayName
+                let doc = ThemeDocument(name: name, version: 1, palette: settings.activePalette)
+                let data = try doc.exportJSONData()
+                try data.write(to: url)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Failed to export theme"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
+        }
     }
 }
 

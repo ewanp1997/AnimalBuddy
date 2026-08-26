@@ -10,6 +10,9 @@ final class PetView: NSView {
     var onStateChange: ((PetState) -> Void)?
     var onMinimizeRequested: (() -> Void)?
     var onBlushTapped: ((BlushSlot) -> Void)?
+    var themePalette: PetThemePalette = PetThemePreset.classic.palette {
+        didSet { needsDisplay = true }
+    }
     private var dragPresentation: DragPresentation?
     private var isDragHovering = false
     private(set) var pupilOffset = NSPoint.zero
@@ -25,6 +28,16 @@ final class PetView: NSView {
     private var eyesAreOpen = true
     private var nextBlink = Date().addingTimeInterval(2.8)
     private var blinkEnds = Date.distantPast
+    private(set) var isFlying = false
+    private var flightIntensity: CGFloat = 0
+    private var flightTiltAngle: CGFloat = 0
+    private var targetFlightTilt: CGFloat = 0
+    private var lastMovementTime = Date()
+    private var lastTickTime = Date()
+    private var wingPhase: Double = 0
+    private var idleLeftWingPhase: Double = 0
+    private var idleRightWingPhase: Double = 1.7
+    private var bobPhase: Double = 0
     override var isFlipped: Bool { true }
 
     override init(frame frameRect: NSRect) {
@@ -44,7 +57,7 @@ final class PetView: NSView {
         addSubview(leftBlushButton)
         addSubview(rightBlushButton)
         updateTrackingAreas()
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tickAnimation() }
         }
         if let animationTimer { RunLoop.main.add(animationTimer, forMode: .common) }
@@ -117,13 +130,62 @@ final class PetView: NSView {
         needsDisplay = true
     }
 
+    func setFlying(_ flying: Bool) {
+        isFlying = flying
+        if !flying {
+            targetFlightTilt = 0
+        }
+        needsDisplay = true
+    }
+
+    func updateFlightMovement(velocity: CGFloat, deltaX: CGFloat) {
+        isFlying = true
+        let tilt = max(min(deltaX * 1.8, 22), -22)
+        targetFlightTilt = tilt
+        lastMovementTime = Date()
+        needsDisplay = true
+    }
+
     private func tickAnimation() {
         let now = Date()
-        let elapsed = now.timeIntervalSince(animationStart)
-        bobOffset = CGFloat(sin(elapsed * 1.8)) * 1.6
-        // The wings flap independently, like two tiny enthusiastic greetings.
-        leftWingFlap = CGFloat(sin(elapsed * 5.1)) * 8
-        rightWingFlap = CGFloat(sin(elapsed * 4.4 + 1.7)) * 8
+        let dt = min(max(now.timeIntervalSince(lastTickTime), 0.001), 0.05)
+        lastTickTime = now
+        
+        let targetIntensity: CGFloat = isFlying ? 1.0 : 0.0
+        let intensitySmoothing: CGFloat = isFlying ? 0.22 : 0.08
+        flightIntensity += (targetIntensity - flightIntensity) * intensitySmoothing
+        
+        flightTiltAngle += (targetFlightTilt - flightTiltAngle) * 0.18
+        
+        let flightFlapSpeed: Double = 18.0 + Double(flightIntensity) * 6.0
+        wingPhase += dt * flightFlapSpeed
+        idleLeftWingPhase += dt * 5.1
+        idleRightWingPhase += dt * 4.4
+        bobPhase += dt * 1.8
+        
+        if flightIntensity > 0.01 {
+            let flapAmplitude: CGFloat = 34.0 * flightIntensity + 8.0 * (1.0 - flightIntensity)
+            let wingCycle = CGFloat(sin(wingPhase))
+            let idleLeft = CGFloat(sin(idleLeftWingPhase)) * 8
+            let idleRight = CGFloat(sin(idleRightWingPhase)) * 8
+            
+            leftWingFlap = wingCycle * flapAmplitude * flightIntensity + idleLeft * (1.0 - flightIntensity)
+            rightWingFlap = wingCycle * flapAmplitude * flightIntensity + idleRight * (1.0 - flightIntensity)
+            
+            let flightBob = CGFloat(sin(wingPhase)) * 3.5 * flightIntensity
+            let idleBob = CGFloat(sin(bobPhase)) * 1.6 * (1.0 - flightIntensity)
+            bobOffset = idleBob + flightBob
+            
+            if isFlying && now.timeIntervalSince(lastMovementTime) > 0.12 {
+                targetFlightTilt *= 0.88
+            }
+        } else {
+            bobOffset = CGFloat(sin(bobPhase)) * 1.6
+            leftWingFlap = CGFloat(sin(idleLeftWingPhase)) * 8
+            rightWingFlap = CGFloat(sin(idleRightWingPhase)) * 8
+            flightTiltAngle = 0
+        }
+        
         if now >= nextBlink {
             blinkEnds = now.addingTimeInterval(0.12)
             nextBlink = now.addingTimeInterval(2.8 + Double.random(in: 0...2.8))
@@ -181,17 +243,23 @@ final class PetView: NSView {
         transform.scaleX(by: scale, yBy: scale)
         transform.translateX(by: -designSize / 2, yBy: -designSize / 2)
         transform.translateX(by: 0, yBy: bobOffset)
+        if abs(flightTiltAngle) > 0.1 {
+            transform.translateX(by: designSize / 2, yBy: designSize / 2)
+            transform.rotate(byDegrees: flightTiltAngle)
+            transform.translateX(by: -designSize / 2, yBy: -designSize / 2)
+        }
         transform.concat()
-        let bodyColor: NSColor = switch state { case .idle, .sleeping: NSColor(calibratedRed: 0.31, green: 0.57, blue: 0.93, alpha: 1); case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
-        let cream = NSColor(calibratedRed: 0.98, green: 0.97, blue: 0.93, alpha: 1)
+        let defaultBodyColor = themePalette.bodyColor.nsColor
+        let bodyColor: NSColor = switch state { case .idle, .sleeping: defaultBodyColor; case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
+        let cream = themePalette.bellyColor.nsColor
         let blueHighlight = bodyColor.blended(withFraction: 0.20, of: .white) ?? bodyColor
 
         // Rounded body, soft wings, and the three-feather tuft mirror the app icon.
         bodyColor.setFill()
         NSBezierPath(roundedRect: NSRect(x: 17, y: 23, width: 116, height: 113), xRadius: 45, yRadius: 45).fill()
         blueHighlight.setFill()
-        drawWing(in: NSRect(x: 5 + leftWingFlap * 0.22, y: 73, width: 34, height: 53), angle: leftWingFlap)
-        drawWing(in: NSRect(x: 111 + rightWingFlap * 0.22, y: 73, width: 34, height: 53), angle: -rightWingFlap)
+        drawWing(in: NSRect(x: 5 + leftWingFlap * 0.22, y: 73, width: 34, height: 53), angle: leftWingFlap, isLeft: true)
+        drawWing(in: NSRect(x: 111 - rightWingFlap * 0.22, y: 73, width: 34, height: 53), angle: -rightWingFlap, isLeft: false)
         NSBezierPath(ovalIn: NSRect(x: 43, y: 3, width: 27, height: 27)).fill()
         NSBezierPath(ovalIn: NSRect(x: 61, y: 0, width: 29, height: 34)).fill()
         NSBezierPath(ovalIn: NSRect(x: 81, y: 4, width: 27, height: 27)).fill()
@@ -208,7 +276,7 @@ final class PetView: NSView {
             NSColor(calibratedRed: 0.03, green: 0.12, blue: 0.38, alpha: 1).setFill()
             NSBezierPath(ovalIn: NSRect(x: 36 + pupilOffset.x, y: 46 + pupilOffset.y, width: 25, height: 31)).fill()
             NSBezierPath(ovalIn: NSRect(x: 89 + pupilOffset.x, y: 46 + pupilOffset.y, width: 25, height: 31)).fill()
-            NSColor(calibratedRed: 0.04, green: 0.50, blue: 0.90, alpha: 1).setFill()
+            themePalette.eyeHighlightColor.nsColor.setFill()
             NSBezierPath(ovalIn: NSRect(x: 38 + pupilOffset.x, y: 63 + pupilOffset.y, width: 21, height: 14)).fill()
             NSBezierPath(ovalIn: NSRect(x: 91 + pupilOffset.x, y: 63 + pupilOffset.y, width: 21, height: 14)).fill()
             NSColor.white.setFill()
@@ -230,20 +298,23 @@ final class PetView: NSView {
         brows.move(to: NSPoint(x: 38, y: 31)); brows.curve(to: NSPoint(x: 53, y: 29), controlPoint1: NSPoint(x: 42, y: 27), controlPoint2: NSPoint(x: 49, y: 27))
         brows.move(to: NSPoint(x: 97, y: 29)); brows.curve(to: NSPoint(x: 112, y: 31), controlPoint1: NSPoint(x: 101, y: 27), controlPoint2: NSPoint(x: 108, y: 27)); brows.stroke()
 
-        NSColor.systemPink.withAlphaComponent(0.58).setFill()
+        themePalette.blushColor.nsColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 49, y: 82, width: 18, height: 10)).fill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX + 31, y: 82, width: 18, height: 10)).fill()
 
-        NSColor(calibratedRed: 1, green: 0.68, blue: 0.16, alpha: 1).setFill()
+        themePalette.beakColor.nsColor.setFill()
         let beak = NSBezierPath(); beak.move(to: NSPoint(x: bounds.midX, y: 68)); beak.curve(to: NSPoint(x: bounds.midX + 11, y: 76), controlPoint1: NSPoint(x: bounds.midX + 7, y: 68), controlPoint2: NSPoint(x: bounds.midX + 11, y: 72)); beak.curve(to: NSPoint(x: bounds.midX, y: 82), controlPoint1: NSPoint(x: bounds.midX + 7, y: 80), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); beak.curve(to: NSPoint(x: bounds.midX - 11, y: 76), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX - 7, y: 80)); beak.close(); beak.fill()
         NSColor(calibratedRed: 0.72, green: 0.20, blue: 0.25, alpha: 1).setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 5, y: 76, width: 10, height: 7)).fill()
 
-        NSColor(calibratedRed: 1, green: 0.68, blue: 0.16, alpha: 1).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 30, y: 123, width: 22, height: 15)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 44, y: 123, width: 22, height: 15)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 84, y: 123, width: 22, height: 15)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 98, y: 123, width: 22, height: 15)).fill()
+        // Feet: tuck slightly in flight
+        themePalette.beakColor.nsColor.setFill()
+        let feetTuck = flightIntensity * 6.0
+        NSBezierPath(ovalIn: NSRect(x: 30, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 44, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 84, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 98, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
+        if flightIntensity > 0.25 { drawFlightBreeze(intensity: flightIntensity) }
         if let dragPresentation { drawDragPresentation(dragPresentation) }
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
         if state != .idle {
@@ -253,6 +324,19 @@ final class PetView: NSView {
         NSGraphicsContext.current?.restoreGraphicsState()
     }
 
+    private func drawFlightBreeze(intensity: CGFloat) {
+        let breezeColor = NSColor.white.withAlphaComponent(0.35 * intensity)
+        breezeColor.setStroke()
+        let breeze = NSBezierPath()
+        breeze.lineWidth = 2.0
+        breeze.lineCapStyle = .round
+        breeze.move(to: NSPoint(x: 14, y: 130))
+        breeze.curve(to: NSPoint(x: 28, y: 135), controlPoint1: NSPoint(x: 18, y: 134), controlPoint2: NSPoint(x: 23, y: 135))
+        breeze.move(to: NSPoint(x: 136, y: 130))
+        breeze.curve(to: NSPoint(x: 122, y: 135), controlPoint1: NSPoint(x: 132, y: 134), controlPoint2: NSPoint(x: 127, y: 135))
+        breeze.stroke()
+    }
+
     private func drawSparkle(at point: NSPoint) {
         NSColor.systemYellow.setStroke()
         let sparkle = NSBezierPath(); sparkle.lineWidth = 2; sparkle.lineCapStyle = .round
@@ -260,14 +344,14 @@ final class PetView: NSView {
         sparkle.move(to: NSPoint(x: point.x - 6, y: point.y)); sparkle.line(to: NSPoint(x: point.x + 6, y: point.y)); sparkle.stroke()
     }
 
-    private func drawWing(in frame: NSRect, angle: CGFloat) {
+    private func drawWing(in frame: NSRect, angle: CGFloat, isLeft: Bool) {
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
-        let center = NSPoint(x: frame.midX, y: frame.midY)
+        let anchor = isLeft ? NSPoint(x: frame.maxX - 4, y: frame.minY + 12) : NSPoint(x: frame.minX + 4, y: frame.minY + 12)
         let transform = NSAffineTransform()
-        transform.translateX(by: center.x, yBy: center.y)
+        transform.translateX(by: anchor.x, yBy: anchor.y)
         transform.rotate(byDegrees: angle)
-        transform.translateX(by: -center.x, yBy: -center.y)
+        transform.translateX(by: -anchor.x, yBy: -anchor.y)
         transform.concat()
         NSBezierPath(ovalIn: frame).fill()
         context.restoreGraphicsState()
