@@ -2,7 +2,7 @@ import Foundation
 import UniformTypeIdentifiers
 
 public enum InputCategory: String, Codable, CaseIterable, Sendable {
-    case file, image, directory, url, text
+    case file, image, directory, application, url, text, mixed, unknown
 }
 
 public struct DropInput: Sendable {
@@ -13,6 +13,77 @@ public struct DropInput: Sendable {
 
     public init(urls: [URL] = [], text: String? = nil, category: InputCategory, contentTypes: [UTType] = []) {
         self.urls = urls; self.text = text; self.category = category; self.contentTypes = contentTypes
+    }
+}
+
+public enum DropItemKind: String, Codable, CaseIterable, Sendable {
+    case application, directory, image, file, url, text, unknown
+}
+
+public struct DropItem: Sendable, Equatable {
+    public let url: URL?
+    public let kind: DropItemKind
+    public let contentTypes: [UTType]
+    public let displayName: String?
+
+    public init(url: URL? = nil, kind: DropItemKind, contentTypes: [UTType] = [], displayName: String? = nil) {
+        self.url = url
+        self.kind = kind
+        self.contentTypes = contentTypes
+        self.displayName = displayName
+    }
+}
+
+public enum DragPresentationKind: String, Sendable {
+    case cameraAndSDCard, envelopeAndLink, storageBox, document, questionMark
+}
+
+public struct DragPresentation: Sendable, Equatable {
+    public let prop: DragPresentationKind
+    public let actionID: String?
+    public let actionTitle: String?
+
+    public init(prop: DragPresentationKind, actionID: String? = nil, actionTitle: String? = nil) {
+        self.prop = prop
+        self.actionID = actionID
+        self.actionTitle = actionTitle
+    }
+}
+
+public struct DropContext: Sendable, Equatable {
+    public let items: [DropItem]
+    public let text: String?
+    public let category: InputCategory
+    public let contentTypes: [UTType]
+    public let modifiers: ModifierCombination
+    public let sourceApplicationName: String?
+    public let presentation: DragPresentation
+
+    public init(items: [DropItem], text: String? = nil, category: InputCategory, contentTypes: [UTType] = [], modifiers: ModifierCombination = .none, sourceApplicationName: String? = nil, presentation: DragPresentation? = nil) {
+        self.items = items
+        self.text = text
+        self.category = category
+        self.contentTypes = contentTypes
+        self.modifiers = modifiers
+        self.sourceApplicationName = sourceApplicationName
+        self.presentation = presentation ?? DragPresentation(prop: Self.presentationKind(for: category))
+    }
+
+    public var urls: [URL] { items.compactMap(\.url) }
+    public var input: DropInput { DropInput(urls: urls, text: text, category: category, contentTypes: contentTypes) }
+
+    public func withPresentation(_ presentation: DragPresentation) -> DropContext {
+        DropContext(items: items, text: text, category: category, contentTypes: contentTypes, modifiers: modifiers, sourceApplicationName: sourceApplicationName, presentation: presentation)
+    }
+
+    public static func presentationKind(for category: InputCategory) -> DragPresentationKind {
+        switch category {
+        case .image: .cameraAndSDCard
+        case .url: .envelopeAndLink
+        case .directory: .storageBox
+        case .file, .application: .document
+        case .text, .mixed, .unknown: .questionMark
+        }
     }
 }
 

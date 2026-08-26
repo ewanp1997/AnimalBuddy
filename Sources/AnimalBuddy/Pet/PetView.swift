@@ -5,6 +5,7 @@ final class PetView: NSView {
     var onStateChange: ((PetState) -> Void)?
     var onMinimizeRequested: (() -> Void)?
     var onBlushTapped: ((BlushSlot) -> Void)?
+    private var dragPresentation: DragPresentation?
     private(set) var pupilOffset = NSPoint.zero
     private let minimizeButton = NSButton()
     private let leftBlushButton = NSButton()
@@ -78,6 +79,11 @@ final class PetView: NSView {
     func updateBlushMacroLabels(_ settings: AppSettings) {
         leftBlushButton.toolTip = settings.leftBlushMacro.isConfigured ? settings.leftBlushMacro.name : "Configure left blush macro"
         rightBlushButton.toolTip = settings.rightBlushMacro.isConfigured ? settings.rightBlushMacro.name : "Configure right blush macro"
+    }
+
+    func updateDragPresentation(_ presentation: DragPresentation?) {
+        dragPresentation = presentation
+        needsDisplay = true
     }
 
     private func tickAnimation() {
@@ -190,6 +196,7 @@ final class PetView: NSView {
         NSBezierPath(ovalIn: NSRect(x: 44, y: 123, width: 22, height: 15)).fill()
         NSBezierPath(ovalIn: NSRect(x: 84, y: 123, width: 22, height: 15)).fill()
         NSBezierPath(ovalIn: NSRect(x: 98, y: 123, width: 22, height: 15)).fill()
+        if let dragPresentation { drawDragPresentation(dragPresentation) }
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
         if state != .idle {
             let title = state.rawValue.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).capitalized
@@ -216,5 +223,61 @@ final class PetView: NSView {
         transform.concat()
         NSBezierPath(ovalIn: frame).fill()
         context.restoreGraphicsState()
+    }
+
+    private func drawDragPresentation(_ presentation: DragPresentation) {
+        switch presentation.prop {
+        case .cameraAndSDCard:
+            NSColor(calibratedWhite: 0.18, alpha: 0.96).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 3, y: 94, width: 30, height: 21), xRadius: 5, yRadius: 5).fill()
+            NSColor(calibratedRed: 0.28, green: 0.67, blue: 0.95, alpha: 1).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 12, y: 99, width: 11, height: 11)).fill()
+            NSColor.white.withAlphaComponent(0.75).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 8, y: 96, width: 8, height: 3), xRadius: 1.5, yRadius: 1.5).fill()
+            NSColor(calibratedRed: 0.95, green: 0.72, blue: 0.18, alpha: 1).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 119, y: 96, width: 15, height: 24), xRadius: 2, yRadius: 2).fill()
+            NSColor(calibratedRed: 0.20, green: 0.36, blue: 0.66, alpha: 1).setFill()
+            for index in 0..<3 { NSBezierPath(rect: NSRect(x: 122 + CGFloat(index) * 3.5, y: 99, width: 2, height: 7)).fill() }
+        case .envelopeAndLink:
+            drawEnvelope(at: NSPoint(x: 3, y: 98))
+            NSColor(calibratedRed: 0.98, green: 0.78, blue: 0.22, alpha: 1).setStroke()
+            let link = NSBezierPath(); link.lineWidth = 3; link.lineCapStyle = .round
+            link.move(to: NSPoint(x: 117, y: 105)); link.curve(to: NSPoint(x: 130, y: 105), controlPoint1: NSPoint(x: 121, y: 99), controlPoint2: NSPoint(x: 127, y: 99)); link.stroke()
+        case .storageBox:
+            NSColor(calibratedRed: 0.76, green: 0.48, blue: 0.24, alpha: 1).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 2, y: 96, width: 30, height: 24), xRadius: 4, yRadius: 4).fill()
+            NSColor(calibratedRed: 0.94, green: 0.68, blue: 0.32, alpha: 1).setFill()
+            NSBezierPath(rect: NSRect(x: 2, y: 96, width: 30, height: 7)).fill()
+            NSColor(calibratedRed: 0.96, green: 0.80, blue: 0.42, alpha: 1).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 12, y: 99, width: 10, height: 3), xRadius: 1, yRadius: 1).fill()
+        case .document:
+            NSColor.white.withAlphaComponent(0.96).setFill()
+            let document = NSBezierPath(); document.move(to: NSPoint(x: 4, y: 96)); document.line(to: NSPoint(x: 25, y: 96)); document.line(to: NSPoint(x: 31, y: 102)); document.line(to: NSPoint(x: 31, y: 120)); document.line(to: NSPoint(x: 4, y: 120)); document.close(); document.fill()
+            NSColor(calibratedRed: 0.31, green: 0.57, blue: 0.93, alpha: 1).setStroke()
+            let lines = NSBezierPath(); lines.lineWidth = 2; lines.move(to: NSPoint(x: 9, y: 106)); lines.line(to: NSPoint(x: 25, y: 106)); lines.move(to: NSPoint(x: 9, y: 112)); lines.line(to: NSPoint(x: 22, y: 112)); lines.stroke()
+        case .questionMark:
+            NSColor(calibratedRed: 0.98, green: 0.78, blue: 0.20, alpha: 1).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 5, y: 97, width: 24, height: 24)).fill()
+            NSColor(calibratedRed: 0.26, green: 0.30, blue: 0.48, alpha: 1).setFill()
+            let question = "?" as NSString
+            question.draw(at: NSPoint(x: 12, y: 99), withAttributes: [.font: NSFont.systemFont(ofSize: 17, weight: .bold)])
+        }
+        drawActionAccent(presentation.actionTitle)
+    }
+
+    private func drawEnvelope(at origin: NSPoint) {
+        NSColor.white.withAlphaComponent(0.96).setFill()
+        NSBezierPath(roundedRect: NSRect(x: origin.x, y: origin.y, width: 31, height: 21), xRadius: 4, yRadius: 4).fill()
+        NSColor(calibratedRed: 0.31, green: 0.57, blue: 0.93, alpha: 1).setStroke()
+        let fold = NSBezierPath(); fold.lineWidth = 2; fold.move(to: NSPoint(x: origin.x + 3, y: origin.y + 18)); fold.line(to: NSPoint(x: origin.x + 15.5, y: origin.y + 8)); fold.line(to: NSPoint(x: origin.x + 28, y: origin.y + 18)); fold.stroke()
+    }
+
+    private func drawActionAccent(_ title: String?) {
+        guard let title, !title.isEmpty else { return }
+        let accent = NSColor.black.withAlphaComponent(0.48)
+        accent.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 44, y: 112, width: 62, height: 15), xRadius: 7, yRadius: 7).fill()
+        let shortTitle = String(title.prefix(11))
+        (shortTitle as NSString).draw(at: NSPoint(x: 49, y: 114), withAttributes: [.font: NSFont.systemFont(ofSize: 8, weight: .semibold), .foregroundColor: NSColor.white])
     }
 }

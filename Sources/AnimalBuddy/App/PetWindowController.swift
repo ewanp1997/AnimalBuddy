@@ -10,7 +10,10 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
     private var mouseTrackingTimer: Timer?
     private var closeObserver: NSObjectProtocol?
     private var isMinimizing = false
+    private var currentDragContext: DropContext?
+    private var isAwaitingActionChoice = false
     private let dragTargetOverlay = DragTargetOverlayController()
+    private let actionPopover = DropActionPopoverController()
     init(settings: AppSettings, registry: ActionRegistry) {
         self.settings = settings; self.registry = registry
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -145,23 +148,93 @@ final class PetWindowController: NSWindowController, NSDraggingDestination {
             }
         }
     }
-    func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { petView.state = .noticingDrag; return .copy }
-    func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { petView.state = .waitingForDrop; return .copy }
-    func draggingExited(_ sender: NSDraggingInfo?) { petView.state = .idle }
+    func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        _ = updateDragContext(from: sender)
+        petView.state = .noticingDrag
+        return .copy
+    }
+
+    func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        _ = updateDragContext(from: sender)
+        petView.state = .waitingForDrop
+        return .copy
+    }
+
+    func draggingExited(_ sender: NSDraggingInfo?) {
+        guard !isAwaitingActionChoice, petView.state != .processing else { return }
+        clearDragContext()
+        petView.state = .idle
+    }
+
     func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { true }
     func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let context = updateDragContext(from: sender)
+        let configuredActions = registry.configuredActions(for: context.input, modifiers: context.modifiers)
+        if let action = registry.action(for: context.input, modifiers: context.modifiers) ?? (configuredActions.count == 1 ? configuredActions.first : nil) {
+            isAwaitingActionChoice = false
+            clearDragContext()
+            execute(action, for: context)
+            return true
+        }
+        guard configuredActions.count > 1 else {
+            isAwaitingActionChoice = false
+            clearDragContext()
+            petView.state = .dragRejected
+            resetSoon()
+            return false
+        }
+        isAwaitingActionChoice = true
+        showActionChooser(for: context, actions: configuredActions)
+        return true
+    }
+
+    private func updateDragContext(from sender: NSDraggingInfo) -> DropContext {
         let pasteboard = sender.draggingPasteboard
         let urls = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
         let text = pasteboard.string(forType: .string)
-        let input = InputClassifier.classify(urls: urls, text: urls.isEmpty ? text : nil)
-        let flags = sender.draggingSourceOperationMask // preserve destination feedback; modifier flags read at drop
-        _ = flags
-        let modifiers = ModifierCombination(rawValue: currentModifierFlags())
-        guard let action = registry.action(for: input, modifiers: modifiers) else { petView.state = .dragRejected; return false }
+        // AppKit exposes the drag source object, but not a reliable source-app
+        // identity for every drag provider. Keep this metadata best-effort.
+        let base = InputClassifier.detect(urls: urls, text: urls.isEmpty ? text : nil, modifiers: ModifierCombination(rawValue: currentModifierFlags()), sourceApplicationName: nil)
+        let directAction = registry.action(for: base.input, modifiers: base.modifiers)
+        let alternatives = registry.configuredActions(for: base.input, modifiers: base.modifiers)
+        let proposedAction = directAction ?? (alternatives.count == 1 ? alternatives.first : nil)
+        let presentation = DragPresentation(prop: base.presentation.prop, actionID: proposedAction?.descriptor.identifier, actionTitle: proposedAction?.descriptor.displayName)
+        let context = base.withPresentation(presentation)
+        currentDragContext = context
+        petView.updateDragPresentation(presentation)
+        return context
+    }
+
+    private func showActionChooser(for context: DropContext, actions: [any Action]) {
+        actionPopover.show(actions: actions, context: context, relativeTo: petView) { [weak self] action in
+            guard let self else { return }
+            isAwaitingActionChoice = false
+            clearDragContext()
+            execute(action, for: context)
+        } onCancel: { [weak self] in
+            guard let self else { return }
+            isAwaitingActionChoice = false
+            clearDragContext()
+            petView.state = .idle
+        }
+    }
+
+    private func execute(_ action: any Action, for context: DropContext) {
         petView.state = .processing
         let destination = settings.destinationFolderPath.map { URL(fileURLWithPath: $0, isDirectory: true) }
-        Task { do { try await action.execute(context: ActionContext(input: input, destinationFolder: destination)); await MainActor.run { self.petView.state = .success; self.resetSoon() } } catch { await MainActor.run { self.petView.state = .failure; self.resetSoon() } } }
-        return true
+        Task {
+            do {
+                try await action.execute(context: ActionContext(input: context.input, destinationFolder: destination))
+                await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
+            } catch {
+                await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }
+            }
+        }
+    }
+
+    private func clearDragContext() {
+        currentDragContext = nil
+        petView.updateDragPresentation(nil)
     }
     private func currentModifierFlags() -> Int { let flags = NSEvent.modifierFlags; var value = 0; if flags.contains(.option) { value |= ModifierCombination.option.rawValue }; if flags.contains(.command) { value |= ModifierCombination.command.rawValue }; if flags.contains(.shift) { value |= ModifierCombination.shift.rawValue }; if flags.contains(.control) { value |= ModifierCombination.control.rawValue }; return value }
     private func resetSoon() { DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { self.petView.state = .idle } }

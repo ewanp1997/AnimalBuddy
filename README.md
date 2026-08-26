@@ -52,6 +52,7 @@ The first release includes:
 - Free placement after dragging, with optional “Snap to Screen Edges” behavior.
 - A PiP-style top/bottom close target. Dragging the buddy near the horizontal center of a screen shows the target; releasing within it hides the buddy, while releasing outside it restores the buddy at the dropped location.
 - User-defined left and right blush macros built from ordered Scratch-like blocks: shell commands, installed applications, URLs, Apple Shortcuts, and nested blush macros. The editor discovers applications and Shortcuts where macOS makes them available, and rejects nested macro cycles.
+- Context-aware drag previews that distinguish applications, directories, images, files, URLs, text, and mixed drops. The buddy holds a matching code-drawn prop such as a camera and SD card, envelope, storage box, document, or question mark; ambiguous configured actions can be chosen from a pet-attached popover after release.
 
 Hover over the pet to reveal the minimize button. Use “Show Animal Buddy” from the status-item menu to bring it back after hiding it. Existing single-command macro settings migrate as shell blocks; Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.
 

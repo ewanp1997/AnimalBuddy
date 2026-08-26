@@ -21,7 +21,7 @@ public enum SafeFileOperations {
 }
 
 struct StoreAction: Action {
-    let descriptor = ActionDescriptor(identifier: "store", displayName: "Store in folder", symbolName: "folder", acceptedCategories: [.file, .image, .directory])
+    let descriptor = ActionDescriptor(identifier: "store", displayName: "Store in folder", symbolName: "folder", acceptedCategories: [.file, .image, .directory, .application, .mixed])
     func execute(context: ActionContext) async throws {
         guard let folder = context.destinationFolder else { throw ActionError.noDestination }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -30,17 +30,17 @@ struct StoreAction: Action {
 }
 
 struct CopyPathAction: Action {
-    let descriptor = ActionDescriptor(identifier: "copy-path", displayName: "Copy path", symbolName: "doc.on.doc", acceptedCategories: [.file, .image, .directory])
+    let descriptor = ActionDescriptor(identifier: "copy-path", displayName: "Copy path", symbolName: "doc.on.doc", acceptedCategories: [.file, .image, .directory, .application, .mixed])
     func execute(context: ActionContext) async throws { guard let url = context.input.urls.first else { throw ActionError.noInput }; NSPasteboard.general.clearContents(); NSPasteboard.general.setString(url.path, forType: .string) }
 }
 
 struct RevealAction: Action {
-    let descriptor = ActionDescriptor(identifier: "reveal", displayName: "Reveal in Finder", symbolName: "magnifyingglass", acceptedCategories: [.file, .image, .directory])
+    let descriptor = ActionDescriptor(identifier: "reveal", displayName: "Reveal in Finder", symbolName: "magnifyingglass", acceptedCategories: [.file, .image, .directory, .application, .mixed])
     func execute(context: ActionContext) async throws { guard !context.input.urls.isEmpty else { throw ActionError.noInput }; NSWorkspace.shared.activateFileViewerSelecting(context.input.urls) }
 }
 
 struct TrashAction: Action {
-    let descriptor = ActionDescriptor(identifier: "trash", displayName: "Move to Trash", symbolName: "trash", acceptedCategories: [.file, .image, .directory])
+    let descriptor = ActionDescriptor(identifier: "trash", displayName: "Move to Trash", symbolName: "trash", acceptedCategories: [.file, .image, .directory, .application, .mixed])
     func execute(context: ActionContext) async throws { for url in context.input.urls { try FileManager.default.trashItem(at: url, resultingItemURL: nil) } }
 }
 
@@ -71,4 +71,14 @@ public final class ActionRegistry: @unchecked Sendable {
     }
     public func action(for input: DropInput, modifiers: ModifierCombination) -> (any Action)? { let binding = settings.bindings.first { $0.category == input.category && $0.modifiers == modifiers } ?? settings.bindings.first { $0.category == input.category && $0.modifiers == .none }; guard let binding, let action = actions[binding.actionID], action.descriptor.accepts(input) else { return nil }; return action }
     public func eligibleActions(for input: DropInput) -> [ActionDescriptor] { actions.values.filter { $0.descriptor.accepts(input) }.map(\.descriptor).sorted { $0.displayName < $1.displayName } }
+    public func configuredActions(for input: DropInput, modifiers: ModifierCombination) -> [any Action] {
+        let exact = settings.bindings.filter { $0.category == input.category && $0.modifiers == modifiers }
+        let configured = settings.bindings.filter { $0.category == input.category }
+        let ordered = exact + configured
+        var seen = Set<String>()
+        return ordered.compactMap { binding in
+            guard let action = actions[binding.actionID], action.descriptor.accepts(input), seen.insert(binding.actionID).inserted else { return nil }
+            return action
+        }
+    }
 }

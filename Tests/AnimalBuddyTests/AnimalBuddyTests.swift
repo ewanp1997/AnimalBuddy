@@ -17,4 +17,33 @@ final class AnimalBuddyTests: XCTestCase {
     func testDismissRadiusSeparatesCloseFromRestore() { let target = NSPoint(x: 500, y: 764); XCTAssertLessThan(hypot(500 - target.x, 764 - target.y), 100); XCTAssertGreaterThan(hypot(300 - target.x, 764 - target.y), 100) }
     func testLegacyMacroCommandBecomesShellStep() { let macro = UserMacro(name: "Say hi", command: "say hi"); XCTAssertEqual(macro.effectiveSteps, [MacroStep(kind: .shell, value: "say hi")]) }
     func testShortcutMacroStepIsRepresented() { let step = MacroStep(kind: .runShortcut, value: "Morning Routine"); XCTAssertEqual(step.kind, .runShortcut); XCTAssertEqual(step.value, "Morning Routine") }
+    func testApplicationClassification() { XCTAssertEqual(InputClassifier.detect(urls: [URL(fileURLWithPath: "/Applications/Calendar.app")]).category, .application) }
+    func testDirectoryClassification() throws {
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("animal-buddy-context-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        XCTAssertEqual(InputClassifier.detect(urls: [folder]).category, .directory)
+    }
+    func testMixedDropPreservesEveryItem() {
+        let context = InputClassifier.detect(urls: [URL(fileURLWithPath: "/tmp/photo.png"), URL(fileURLWithPath: "/tmp/readme.txt")])
+        XCTAssertEqual(context.category, .mixed)
+        XCTAssertEqual(context.items.count, 2)
+        XCTAssertEqual(context.input.urls.count, 2)
+    }
+    func testContextPresentationMatchesInputKind() {
+        XCTAssertEqual(InputClassifier.detect(urls: [URL(fileURLWithPath: "/tmp/photo.png")]).presentation.prop, .cameraAndSDCard)
+        XCTAssertEqual(InputClassifier.detect(urls: [], text: "https://example.com").presentation.prop, .envelopeAndLink)
+        XCTAssertEqual(InputClassifier.detect(urls: [], text: "plain text").presentation.prop, .questionMark)
+    }
+    func testConfiguredActionsIncludeCompatibleAlternatives() {
+        var settings = AppSettings()
+        settings.bindings = [
+            .init(category: .application, modifiers: .none, actionID: "store"),
+            .init(category: .application, modifiers: .option, actionID: "copy-path")
+        ]
+        let registry = ActionRegistry(settings: settings)
+        let input = InputClassifier.classify(urls: [URL(fileURLWithPath: "/Applications/Calendar.app")])
+        XCTAssertEqual(registry.action(for: input, modifiers: .none)?.descriptor.identifier, "store")
+        XCTAssertEqual(registry.configuredActions(for: input, modifiers: .none).map { $0.descriptor.identifier }, ["store", "copy-path"])
+    }
 }
