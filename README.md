@@ -12,6 +12,14 @@ Thank you for your interest in the project, and I hope your own projects bring y
 
 Animal Buddy is a native macOS desktop pet that acts as a calm, physical-feeling drag-and-drop target for useful file actions. It stays above normal windows, understands dropped files and URLs, maps modifier keys to actions, and communicates progress through visual states.
 
+## Theme showcase
+
+See Animal Buddy’s theme settings in action:
+
+<video src="Media/animal-buddy-theme-showcase.mov" controls width="720"></video>
+
+[Download the theme showcase video](Media/animal-buddy-theme-showcase.mov)
+
 ## Build and run
 
 Requires macOS 13+ and Swift 6 (Apple Silicon development target). With the Swift command-line tools installed:
