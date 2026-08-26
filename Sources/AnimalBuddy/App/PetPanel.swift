@@ -17,6 +17,9 @@ final class PetPanel: NSPanel {
     private var dragSamples: [DragSample] = []
     private var dragStartFrame: NSRect?
 
+    private var initialMouseLocation: NSPoint = .zero
+    private var initialWindowOrigin: NSPoint = .zero
+
     // The buddy should float above windows without becoming the active app or
     // taking keyboard focus away from the app the user is working in.
     override var canBecomeKey: Bool { false }
@@ -42,50 +45,63 @@ final class PetPanel: NSPanel {
         onPerformDragOperation?(sender) ?? false
     }
 
-    override func mouseDown(with event: NSEvent) {
-        let loc = NSEvent.mouseLocation
-        dragSamples = [DragSample(point: loc, timestamp: event.timestamp)]
+    func beginWindowDrag(at screenPoint: NSPoint, eventTimestamp: TimeInterval) {
+        dragSamples = [DragSample(point: screenPoint, timestamp: eventTimestamp)]
         dragStartFrame = frame
+        initialMouseLocation = screenPoint
+        initialWindowOrigin = frame.origin
         onDragBegan?()
-        super.mouseDown(with: event)
     }
 
-    override func mouseDragged(with event: NSEvent) {
-        super.mouseDragged(with: event)
-        let currentPoint = NSEvent.mouseLocation
-        let now = event.timestamp
-        let prevPoint = dragSamples.last?.point ?? currentPoint
-        let deltaX = currentPoint.x - prevPoint.x
-        let deltaY = currentPoint.y - prevPoint.y
-        let dt = max(now - (dragSamples.last?.timestamp ?? now), 0.001)
-        let speed = hypot(deltaX, deltaY) / CGFloat(dt)
-        
-        dragSamples.append(DragSample(point: currentPoint, timestamp: now))
+    func continueWindowDrag(at screenPoint: NSPoint, eventTimestamp: TimeInterval) {
+        let deltaX = screenPoint.x - initialMouseLocation.x
+        let deltaY = screenPoint.y - initialMouseLocation.y
+        let newOrigin = NSPoint(x: initialWindowOrigin.x + deltaX, y: initialWindowOrigin.y + deltaY)
+        setFrameOrigin(newOrigin)
+
+        let prevPoint = dragSamples.last?.point ?? screenPoint
+        let stepDeltaX = screenPoint.x - prevPoint.x
+        let stepDeltaY = screenPoint.y - prevPoint.y
+        let dt = max(eventTimestamp - (dragSamples.last?.timestamp ?? eventTimestamp), 0.001)
+        let speed = hypot(stepDeltaX, stepDeltaY) / CGFloat(dt)
+
+        dragSamples.append(DragSample(point: screenPoint, timestamp: eventTimestamp))
         if dragSamples.count > 12 {
             dragSamples.removeFirst(dragSamples.count - 12)
         }
-        onDragChanged?(currentPoint, min(speed / 1000, 1), deltaX)
+        onDragChanged?(screenPoint, min(speed / 1000, 1), stepDeltaX)
     }
 
-    override func mouseUp(with event: NSEvent) {
-        super.mouseUp(with: event)
-        let currentPoint = NSEvent.mouseLocation
-        let now = event.timestamp
-        
+    func endWindowDrag(at screenPoint: NSPoint, eventTimestamp: TimeInterval) {
         var computedVelocity = CGVector.zero
-        let recent = dragSamples.filter { now - $0.timestamp <= 0.12 }
+        let recent = dragSamples.filter { eventTimestamp - $0.timestamp <= 0.12 }
         if recent.count >= 2, let first = recent.first, let last = recent.last {
             let totalDt = CGFloat(max(last.timestamp - first.timestamp, 0.01))
             let vx = (last.point.x - first.point.x) / totalDt
             let vy = (last.point.y - first.point.y) / totalDt
-            if now - last.timestamp < 0.10 {
+            if eventTimestamp - last.timestamp < 0.10 {
                 computedVelocity = CGVector(dx: vx, dy: vy)
             }
         }
-        
-        onDragEnded?(currentPoint, dragStartFrame ?? frame, frame, computedVelocity)
+
+        onDragEnded?(screenPoint, dragStartFrame ?? frame, frame, computedVelocity)
         dragSamples.removeAll()
         dragStartFrame = nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        beginWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        super.mouseDown(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        continueWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        super.mouseDragged(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        endWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        super.mouseUp(with: event)
     }
 
     static func shouldDismiss(frame: NSRect, on screenFrame: NSRect, horizontalTolerance: CGFloat = 140, verticalThreshold: CGFloat = 70) -> Bool {

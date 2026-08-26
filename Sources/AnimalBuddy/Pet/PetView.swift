@@ -1,6 +1,10 @@
 import AppKit
 
 final class MacroBlushButton: NSButton {
+    private var isDragging = false
+    private var mouseDownLocation: NSPoint = .zero
+    private let dragThreshold: CGFloat = 3.0
+
     override func resetCursorRects() {
         super.resetCursorRects()
         addCursorRect(bounds, cursor: .pointingHand)
@@ -26,6 +30,37 @@ final class MacroBlushButton: NSButton {
     override func cursorUpdate(with event: NSEvent) {
         NSCursor.pointingHand.set()
     }
+
+    override func mouseDown(with event: NSEvent) {
+        isDragging = false
+        mouseDownLocation = NSEvent.mouseLocation
+        if let panel = window as? PetPanel {
+            panel.beginWindowDrag(at: mouseDownLocation, eventTimestamp: event.timestamp)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let currentLoc = NSEvent.mouseLocation
+        let distance = hypot(currentLoc.x - mouseDownLocation.x, currentLoc.y - mouseDownLocation.y)
+        if distance > dragThreshold {
+            isDragging = true
+        }
+        if let panel = window as? PetPanel {
+            panel.continueWindowDrag(at: currentLoc, eventTimestamp: event.timestamp)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if let panel = window as? PetPanel {
+            panel.endWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        }
+        if !isDragging {
+            if let target, let action {
+                NSApp.sendAction(action, to: target, from: self)
+            }
+        }
+        isDragging = false
+    }
 }
 
 final class PetView: NSView {
@@ -45,6 +80,9 @@ final class PetView: NSView {
         }
     }
     var themePalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic) {
+        didSet { needsDisplay = true }
+    }
+    var themePreset: PetThemePreset = .classic {
         didSet { needsDisplay = true }
     }
     private var dragPresentation: DragPresentation?
@@ -124,20 +162,23 @@ final class PetView: NSView {
         minimizeButton.frame = NSRect(x: bounds.maxX - 34, y: 10, width: 24, height: 24)
         switch animalKind {
         case .bird:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 52, y: 63, width: 24, height: 22)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 28, y: 63, width: 24, height: 22)
+            leftBlushButton.frame = NSRect(x: bounds.midX - 53, y: 42, width: 48, height: 44)
+            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 42, width: 48, height: 44)
         case .dog:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 52, y: 68, width: 24, height: 22)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 28, y: 68, width: 24, height: 22)
+            leftBlushButton.frame = NSRect(x: bounds.midX - 59, y: 38, width: 54, height: 50)
+            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 38, width: 54, height: 50)
         case .cat:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 52, y: 66, width: 24, height: 22)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 28, y: 66, width: 24, height: 22)
+            leftBlushButton.frame = NSRect(x: bounds.midX - 55, y: 38, width: 50, height: 48)
+            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 38, width: 50, height: 48)
         case .monkey:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 50, y: 64, width: 24, height: 22)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 26, y: 64, width: 24, height: 22)
+            leftBlushButton.frame = NSRect(x: bounds.midX - 59, y: 40, width: 54, height: 48)
+            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 40, width: 54, height: 48)
         case .giraffe:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 46, y: 54, width: 24, height: 22)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 22, y: 54, width: 24, height: 22)
+            leftBlushButton.frame = NSRect(x: bounds.midX - 51, y: 26, width: 48, height: 56)
+            rightBlushButton.frame = NSRect(x: bounds.midX + 3, y: 26, width: 48, height: 56)
+        case .slinky:
+            leftBlushButton.frame = NSRect(x: bounds.midX - 51, y: 36, width: 48, height: 52)
+            rightBlushButton.frame = NSRect(x: bounds.midX + 3, y: 36, width: 48, height: 52)
         }
         window?.invalidateCursorRects(for: self)
     }
@@ -156,6 +197,46 @@ final class PetView: NSView {
         super.updateTrackingAreas()
     }
 
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard bounds.contains(point) else { return nil }
+        if !minimizeButton.isHidden && minimizeButton.frame.contains(point) {
+            return minimizeButton
+        }
+        if leftBlushButton.frame.contains(point) {
+            return leftBlushButton
+        }
+        if rightBlushButton.frame.contains(point) {
+            return rightBlushButton
+        }
+        return self
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if let panel = window as? PetPanel {
+            panel.beginWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if let panel = window as? PetPanel {
+            panel.continueWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        } else {
+            super.mouseDragged(with: event)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if let panel = window as? PetPanel {
+            panel.endWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
+        } else {
+            super.mouseUp(with: event)
+        }
+    }
+
     override func mouseEntered(with event: NSEvent) { minimizeButton.isHidden = false }
     override func mouseExited(with event: NSEvent) { minimizeButton.isHidden = true }
 
@@ -166,10 +247,9 @@ final class PetView: NSView {
     private func configureBlushButton(_ button: NSButton, slot: BlushSlot) {
         button.isBordered = false
         button.isTransparent = true
-        button.alphaValue = 0.02
         button.target = self
         button.action = slot == .left ? #selector(leftBlushPressed) : #selector(rightBlushPressed)
-        button.setAccessibilityLabel("\(slot == .left ? "Left" : "Right") blush macro")
+        button.setAccessibilityLabel("\(slot == .left ? "Left" : "Right") macro trigger")
     }
 
     func updateBlushMacroLabels(_ settings: AppSettings) {
@@ -231,13 +311,23 @@ final class PetView: NSView {
             
             let flightBob = CGFloat(sin(wingPhase)) * 3.5 * flightIntensity
             let idleBob = CGFloat(sin(bobPhase)) * 1.6 * (1.0 - flightIntensity)
-            bobOffset = idleBob + flightBob
+            if animalKind == .slinky {
+                let slinkyBounce = CGFloat(sin(wingPhase * 1.1)) * 6.5 * flightIntensity
+                let idleSlinkyBob = CGFloat(sin(bobPhase * 1.4)) * 2.5 * (1.0 - flightIntensity)
+                bobOffset = idleSlinkyBob + slinkyBounce
+            } else {
+                bobOffset = idleBob + flightBob
+            }
             
             if isFlying && now.timeIntervalSince(lastMovementTime) > 0.12 {
                 targetFlightTilt *= 0.88
             }
         } else {
-            bobOffset = CGFloat(sin(bobPhase)) * 1.6
+            if animalKind == .slinky {
+                bobOffset = CGFloat(sin(bobPhase * 1.4)) * 2.5
+            } else {
+                bobOffset = CGFloat(sin(bobPhase)) * 1.6
+            }
             leftWingFlap = CGFloat(sin(idleLeftWingPhase)) * 8
             rightWingFlap = CGFloat(sin(idleRightWingPhase)) * 8
             flightTiltAngle = 0
@@ -301,7 +391,7 @@ final class PetView: NSView {
         transform.scaleX(by: scale, yBy: scale)
         transform.translateX(by: -designSize / 2, yBy: -designSize / 2)
         transform.translateX(by: 0, yBy: bobOffset)
-        if abs(flightTiltAngle) > 0.1 {
+        if abs(flightTiltAngle) > 0.1 && animalKind != .slinky {
             transform.translateX(by: designSize / 2, yBy: designSize / 2)
             transform.rotate(byDegrees: flightTiltAngle)
             transform.translateX(by: -designSize / 2, yBy: -designSize / 2)
@@ -324,6 +414,8 @@ final class PetView: NSView {
             drawMonkey(bodyColor: bodyColor, bellyColor: bellyColor, accentColor: accentColor)
         case .giraffe:
             drawGiraffe(bodyColor: bodyColor, bellyColor: bellyColor, accentColor: accentColor)
+        case .slinky:
+            drawSlinky(bodyColor: bodyColor, bellyColor: bellyColor, accentColor: accentColor)
         }
 
         drawRimHighlight()
@@ -707,6 +799,127 @@ final class PetView: NSView {
         let ear = NSBezierPath(ovalIn: NSRect(x: point.x - 14, y: point.y - 8, width: 28, height: 16))
         ear.fill()
         context.restoreGraphicsState()
+    }
+
+    private func drawSlinky(bodyColor: NSColor, bellyColor: NSColor, accentColor: NSColor) {
+        // A friendly little spring: broad rounded coils make the silhouette read
+        // clearly even at the compact 150-point buddy size.
+        let highlight = bodyColor.blended(withFraction: 0.28, of: .white) ?? bodyColor
+        let shadow = bodyColor.blended(withFraction: 0.22, of: .black) ?? bodyColor
+
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        // Slinky bounces vertically like an elastic accordion spring.
+        let bounce = CGFloat(sin(wingPhase * 0.8)) * (isFlying ? 7.5 : 2.5)
+
+        let y0: CGFloat = 31
+        let y1: CGFloat = 48 + bounce * 0.2
+        let y2: CGFloat = 65 + bounce * 0.45
+        let y3: CGFloat = 82 + bounce * 0.7
+        let y4: CGFloat = 99 + bounce * 0.9
+        let y5: CGFloat = 119 + bounce * 1.1
+
+        let coil = NSBezierPath()
+        coil.lineWidth = 15
+        coil.lineCapStyle = .round
+        coil.lineJoinStyle = .round
+        bodyColor.setStroke()
+        coil.move(to: NSPoint(x: 39, y: y0))
+        coil.curve(to: NSPoint(x: 111, y: y0), controlPoint1: NSPoint(x: 55, y: y0 - 13), controlPoint2: NSPoint(x: 95, y: y0 - 13))
+        coil.curve(to: NSPoint(x: 40, y: y1), controlPoint1: NSPoint(x: 126, y: y1 - 1), controlPoint2: NSPoint(x: 25, y: y1 + 1))
+        coil.curve(to: NSPoint(x: 110, y: y2), controlPoint1: NSPoint(x: 126, y: y2), controlPoint2: NSPoint(x: 24, y: y2 + 1))
+        coil.curve(to: NSPoint(x: 40, y: y3), controlPoint1: NSPoint(x: 126, y: y3), controlPoint2: NSPoint(x: 25, y: y3 + 1))
+        coil.curve(to: NSPoint(x: 110, y: y4), controlPoint1: NSPoint(x: 126, y: y4), controlPoint2: NSPoint(x: 25, y: y4 + 1))
+        coil.curve(to: NSPoint(x: 48, y: y5), controlPoint1: NSPoint(x: 119, y: y5), controlPoint2: NSPoint(x: 80, y: y5 + 10))
+        if animalKind == .slinky && themePreset == .rainbow {
+            drawRainbowSlinkyCoils(shift: 0)
+        } else {
+            coil.stroke()
+        }
+
+        // Extra inner turns give the spring its playful, unmistakable swirl.
+        let iy0: CGFloat = 39
+        let iy1: CGFloat = 55 + bounce * 0.25
+        let iy2: CGFloat = 72 + bounce * 0.5
+        let iy3: CGFloat = 89 + bounce * 0.75
+        let iy4: CGFloat = 105 + bounce * 1.0
+
+        let innerCoils = NSBezierPath()
+        innerCoils.lineWidth = 4.2
+        innerCoils.lineCapStyle = .round
+        highlight.withAlphaComponent(0.58).setStroke()
+        innerCoils.move(to: NSPoint(x: 45, y: iy0))
+        innerCoils.curve(to: NSPoint(x: 105, y: iy0), controlPoint1: NSPoint(x: 59, y: iy0 - 10), controlPoint2: NSPoint(x: 91, y: iy0 - 10))
+        innerCoils.curve(to: NSPoint(x: 47, y: iy1), controlPoint1: NSPoint(x: 116, y: iy1 - 2), controlPoint2: NSPoint(x: 34, y: iy1))
+        innerCoils.curve(to: NSPoint(x: 104, y: iy2), controlPoint1: NSPoint(x: 116, y: iy2), controlPoint2: NSPoint(x: 34, y: iy2 + 1))
+        innerCoils.curve(to: NSPoint(x: 47, y: iy3), controlPoint1: NSPoint(x: 116, y: iy3), controlPoint2: NSPoint(x: 34, y: iy3 + 1))
+        innerCoils.curve(to: NSPoint(x: 101, y: iy4), controlPoint1: NSPoint(x: 116, y: iy4), controlPoint2: NSPoint(x: 69, y: iy4 + 10))
+        innerCoils.stroke()
+
+        // Curled tips peek out from either side and wobble with the vertical bounce.
+        accentColor.withAlphaComponent(0.7).setStroke()
+        let curls = NSBezierPath()
+        curls.lineWidth = 3
+        curls.lineCapStyle = .round
+        curls.appendArc(withCenter: NSPoint(x: 28, y: 37 + bounce * 0.1), radius: 8, startAngle: 240, endAngle: 65)
+        curls.appendArc(withCenter: NSPoint(x: 122, y: 37 + bounce * 0.1), radius: 8, startAngle: 115, endAngle: 300)
+        curls.stroke()
+
+        // A soft face plate keeps the eyes readable against the winding spring.
+        let faceYOffset = bounce * 0.45
+        bellyColor.withAlphaComponent(0.96).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 29, y: 27 + faceYOffset, width: 92, height: 67), xRadius: 30, yRadius: 30).fill()
+        highlight.withAlphaComponent(0.42).setStroke()
+        let shine = NSBezierPath(); shine.lineWidth = 3; shine.lineCapStyle = .round
+        shine.move(to: NSPoint(x: 42, y: 111 + bounce * 1.0))
+        shine.curve(to: NSPoint(x: 105, y: 111 + bounce * 1.0), controlPoint1: NSPoint(x: 57, y: 120 + bounce * 1.0), controlPoint2: NSPoint(x: 91, y: 120 + bounce * 1.0))
+        shine.stroke()
+
+        drawStandardEyes(leftEyeRect: NSRect(x: 34, y: 39 + faceYOffset, width: 34, height: 38), rightEyeRect: NSRect(x: 82, y: 39 + faceYOffset, width: 34, height: 38))
+
+        // Tiny center nub and a happy smile.
+        accentColor.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 70, y: 72 + faceYOffset, width: 10, height: 7)).fill()
+        accentColor.setStroke()
+        let smile = NSBezierPath(); smile.lineWidth = 2.3; smile.lineCapStyle = .round
+        smile.move(to: NSPoint(x: 66, y: 83 + faceYOffset))
+        smile.curve(to: NSPoint(x: 84, y: 83 + faceYOffset), controlPoint1: NSPoint(x: 71, y: 90 + faceYOffset), controlPoint2: NSPoint(x: 79, y: 90 + faceYOffset))
+        smile.stroke()
+
+        themePalette.blushColor.nsColor.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 28, y: 76 + faceYOffset, width: 18, height: 10)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 104, y: 76 + faceYOffset, width: 18, height: 10)).fill()
+
+        let feetTuck = flightIntensity * 6.0
+        shadow.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 38, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 86, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+        bellyColor.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 44, y: 123 + bounce * 1.1 - feetTuck, width: 14, height: 7)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 92, y: 123 + bounce * 1.1 - feetTuck, width: 14, height: 7)).fill()
+        context.restoreGraphicsState()
+    }
+
+    private func drawRainbowSlinkyCoils(shift: CGFloat) {
+        let colors: [NSColor] = [
+            NSColor(calibratedRed: 1.0, green: 0.25, blue: 0.35, alpha: 1),
+            NSColor(calibratedRed: 1.0, green: 0.58, blue: 0.16, alpha: 1),
+            NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.18, alpha: 1),
+            NSColor(calibratedRed: 0.22, green: 0.78, blue: 0.45, alpha: 1),
+            NSColor(calibratedRed: 0.18, green: 0.64, blue: 1.0, alpha: 1),
+            NSColor(calibratedRed: 0.58, green: 0.34, blue: 0.94, alpha: 1)
+        ]
+        for index in 0..<6 {
+            let y = CGFloat(30 + index * 17)
+            let path = NSBezierPath()
+            path.lineWidth = 15
+            path.lineCapStyle = .round
+            colors[index].setStroke()
+            path.move(to: NSPoint(x: 40 + (index.isMultiple(of: 2) ? shift : -shift), y: y))
+            path.curve(to: NSPoint(x: 110 - (index.isMultiple(of: 2) ? shift : -shift), y: y), controlPoint1: NSPoint(x: 57, y: y - 12), controlPoint2: NSPoint(x: 93, y: y - 12))
+            path.stroke()
+        }
     }
 
     private func drawStandardEyes(leftEyeRect: NSRect, rightEyeRect: NSRect) {

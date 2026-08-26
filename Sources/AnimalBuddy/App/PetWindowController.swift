@@ -15,8 +15,6 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private var closeObserver: NSObjectProtocol?
     private var isMinimizing = false
     private var isPetDragging = false
-    private var isCrosshairVisible = false
-    private var crosshairShowTimer: Timer?
     private var currentDragContext: DropContext?
     private var isAwaitingActionChoice = false
     private var isExternalDragHovering = false
@@ -34,37 +32,29 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window.onDragBegan = { [weak self] in
             guard let self else { return }
             self.isPetDragging = false
-            self.isCrosshairVisible = false
-            self.crosshairShowTimer?.invalidate()
-            self.crosshairShowTimer = nil
         }
         window.onDragChanged = { [weak self] point, velocity, deltaX in
             guard let self, let draggedWindow = self.window, let screen = draggedWindow.screen ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
             if !self.isPetDragging {
                 self.isPetDragging = true
                 self.petView.setFlying(true)
-                let timer = Timer(timeInterval: 1.0, repeats: false) { [weak self] _ in
-                    Task { @MainActor in
-                        guard let self, self.isPetDragging, let window = self.window, window.isVisible else { return }
-                        self.isCrosshairVisible = true
-                        self.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
-                    }
-                }
-                self.crosshairShowTimer = timer
-                RunLoop.main.add(timer, forMode: .common)
             }
             self.petView.updateFlightMovement(velocity: velocity, deltaX: deltaX)
-            if self.isCrosshairVisible {
-                let target = DragTargetOverlayController.targetCenter(for: point, in: screen.visibleFrame)
+            let target = DragTargetOverlayController.targetCenter(for: point, in: screen.visibleFrame)
+            let distance = hypot(draggedWindow.frame.midX - target.x, draggedWindow.frame.midY - target.y)
+            if distance <= DragTargetOverlayController.visibilityRadius {
                 let redness = DragTargetOverlayController.redness(for: draggedWindow.frame, target: target, boundaryRadius: Self.dismissRadius)
-                self.dragTargetOverlay.show(at: point, redness: redness)
+                let alpha = min(max((DragTargetOverlayController.visibilityRadius - distance) / 50.0, 0), 1.0)
+                self.dragTargetOverlay.show(at: point, redness: redness, alpha: alpha)
                 self.updateDragFade(for: point)
+            } else {
+                self.dragTargetOverlay.hide()
+                draggedWindow.alphaValue = 1.0
             }
         }
         window.onDragEnded = { [weak self] point, startFrame, endFrame, velocity in
             self?.isPetDragging = false
-            self?.crosshairShowTimer?.invalidate()
-            self?.crosshairShowTimer = nil
+            self?.dragTargetOverlay.hide()
             self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame, velocity: velocity)
         }
         window.onDraggingEntered = { [weak self] sender in self?.draggingEntered(sender) ?? [] }
@@ -78,18 +68,20 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.onPrepareForDragOperation = { [weak self] sender in self?.prepareForDragOperation(sender) ?? false }
         petView.onPerformDragOperation = { [weak self] sender in self?.performDragOperation(sender) ?? false }
         petView.onMinimizeRequested = { [weak self] in self?.minimizePet() }
+        petView.onBlushTapped = { [weak self] slot in self?.runMacro(for: slot) }
         petView.updateBlushMacroLabels(settings)
         petView.animalKind = settings.animalKind
+        petView.themePreset = settings.themePreset
         petView.themePalette = settings.activePalette
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
-        startMouseTracking()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(settings: AppSettings) {
         self.settings = settings
         window?.level = settings.alwaysOnTop ? .floating : .normal
         petView.animalKind = settings.animalKind
+        petView.themePreset = settings.themePreset
         petView.themePalette = settings.activePalette
         petView.updateBlushMacroLabels(settings)
         updateHoverOpacity()
@@ -287,9 +279,6 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
 
     private func finishPetDrag(at screenPoint: NSPoint, startFrame: NSRect, endFrame: NSRect, velocity: CGVector) {
         isPetDragging = false
-        isCrosshairVisible = false
-        crosshairShowTimer?.invalidate()
-        crosshairShowTimer = nil
         dragTargetOverlay.hide()
         guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else {
             window?.alphaValue = 1
@@ -596,8 +585,8 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     }
 
     static func distance(from point: NSPoint, to rect: NSRect) -> CGFloat {
-        let dx = max(0, max(rect.minX - point.x, point.x - rect.maxX))
-        let dy = max(0, max(rect.minY - point.y, point.y - rect.maxY))
-        return hypot(dx, dy)
+        let deltaX = max(0, max(rect.minX - point.x, point.x - rect.maxX))
+        let deltaY = max(0, max(rect.minY - point.y, point.y - rect.maxY))
+        return hypot(deltaX, deltaY)
     }
 }

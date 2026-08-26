@@ -17,7 +17,7 @@ import UniformTypeIdentifiers
     private var hoverTranslucencyEnabled: Bool
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
-    private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom"], trackingMode: .selectOne, target: nil, action: nil)
+    private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom", "Rainbow"], trackingMode: .selectOne, target: nil, action: nil)
     private let themeDescription = NSTextField(wrappingLabelWithString: "")
 
     private let bodyLabel = NSTextField(labelWithString: "Body & Feathers")
@@ -242,6 +242,7 @@ import UniformTypeIdentifiers
         case .dark: themeSegment.selectedSegment = 1
         case .light: themeSegment.selectedSegment = 2
         case .custom: themeSegment.selectedSegment = 3
+        case .rainbow: themeSegment.selectedSegment = 4
         }
 
         themeDescription.font = .systemFont(ofSize: 12)
@@ -348,6 +349,7 @@ import UniformTypeIdentifiers
         previewPetView = PetView(frame: NSRect(x: 0, y: 0, width: 140, height: 140))
         previewPetView.translatesAutoresizingMaskIntoConstraints = false
         previewPetView.animalKind = selectedAnimal
+        previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
 
         let flapBtn = NSButton(title: "Animate Movement", target: self, action: #selector(togglePreviewFlap))
@@ -436,26 +438,24 @@ import UniformTypeIdentifiers
         updateColorWellsFromActivePalette()
         updateThemeDescription()
         updateMacroTabLabels()
+        if !selectedAnimal.themePresets.contains(selectedTheme) {
+            selectedTheme = .classic
+            themeSegment.selectedSegment = 0
+        }
         previewPetView.animalKind = selectedAnimal
+        previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
         onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
 
     @objc private func themeSegmentChanged() {
-        switch themeSegment.selectedSegment {
-        case 0:
-            selectedTheme = .classic
-        case 1:
-            selectedTheme = .dark
-        case 2:
-            selectedTheme = .light
-        case 3:
-            selectedTheme = .custom
-        default: break
-        }
+        let presets = selectedAnimal.themePresets
+        guard themeSegment.selectedSegment >= 0, themeSegment.selectedSegment < presets.count else { return }
+        selectedTheme = presets[themeSegment.selectedSegment]
         updateColorWellsFromActivePalette()
         updateThemeDescription()
         previewPetView.animalKind = selectedAnimal
+        previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
         onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
@@ -472,6 +472,7 @@ import UniformTypeIdentifiers
         )
         updateThemeDescription()
         previewPetView.themePalette = customPalette
+        previewPetView.themePreset = selectedTheme
         onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
 
@@ -482,6 +483,7 @@ import UniformTypeIdentifiers
         updateColorWellsFromActivePalette()
         updateThemeDescription()
         previewPetView.animalKind = selectedAnimal
+        previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
         themeStatusLabel.stringValue = "Restored classic colors for \(selectedAnimal.displayName)"
         themeStatusLabel.textColor = .secondaryLabelColor
@@ -541,6 +543,7 @@ import UniformTypeIdentifiers
                 self.updateThemeDescription()
                 self.updateMacroTabLabels()
                 self.previewPetView.animalKind = animal
+                self.previewPetView.themePreset = .custom
                 self.previewPetView.themePalette = importedPalette
                 self.onThemeChanged?(animal, .custom, importedPalette)
                 self.themeStatusLabel.stringValue = "✅ Loaded \(animal.displayName) theme: \(name)"
@@ -600,6 +603,12 @@ import UniformTypeIdentifiers
             beakLabel.stringValue = "Spots & Horns"
             blushLabel.stringValue = "Blush Cheeks"
             eyeLabel.stringValue = "Eye Iris"
+        case .slinky:
+            bodyLabel.stringValue = "Coils & Spring"
+            bellyLabel.stringValue = "Face Plate"
+            beakLabel.stringValue = "Nub & Feet"
+            blushLabel.stringValue = "Blush Cheeks"
+            eyeLabel.stringValue = "Eye Glow"
         }
     }
 

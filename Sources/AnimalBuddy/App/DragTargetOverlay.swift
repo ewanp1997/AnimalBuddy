@@ -15,12 +15,15 @@ import AppKit
         overlayWindow.contentView = crosshairView
     }
 
-    func show(at screenPoint: NSPoint, redness: CGFloat) {
+    static let visibilityRadius: CGFloat = 260
+
+    func show(at screenPoint: NSPoint, redness: CGFloat, alpha: CGFloat = 1.0) {
         let screen = NSScreen.screens.first { $0.frame.contains(screenPoint) } ?? NSScreen.main
         guard let screen else { return }
         let visibleFrame = screen.visibleFrame
         let center = Self.targetCenter(for: screenPoint, in: visibleFrame)
         overlayWindow.setFrameOrigin(NSPoint(x: center.x - Self.targetSize / 2, y: center.y - Self.targetSize / 2))
+        overlayWindow.alphaValue = min(max(alpha, 0), 1)
         crosshairView.redness = min(max(redness, 0), 1)
         overlayWindow.orderFrontRegardless()
     }
@@ -33,6 +36,10 @@ import AppKit
 
     static func targetCenterY(for screenPointY: CGFloat, in visibleFrame: NSRect, inset: CGFloat = 36) -> CGFloat {
         screenPointY >= visibleFrame.midY ? visibleFrame.maxY - inset : visibleFrame.minY + inset
+    }
+
+    static func isWithinVisibilityRadius(for frame: NSRect, target: NSPoint, radius: CGFloat = visibilityRadius) -> Bool {
+        hypot(frame.midX - target.x, frame.midY - target.y) <= radius
     }
 
     static func redness(for frame: NSRect, target: NSPoint, boundaryRadius: CGFloat = 100, transitionDepth: CGFloat = 24) -> CGFloat {

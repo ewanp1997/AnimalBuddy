@@ -96,6 +96,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
     case cat = "cat"
     case monkey = "monkey"
     case giraffe = "giraffe"
+    case slinky = "slinky"
 
     public var displayName: String {
         switch self {
@@ -104,6 +105,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
         case .cat: "🐱 Cat"
         case .monkey: "🐵 Monkey"
         case .giraffe: "🦒 Giraffe"
+        case .slinky: "🌀 Slinky"
         }
     }
 
@@ -114,6 +116,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
         case .cat: "Cat"
         case .monkey: "Monkey"
         case .giraffe: "Giraffe"
+        case .slinky: "Slinky"
         }
     }
 
@@ -124,11 +127,12 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
         case .cat: "🐱"
         case .monkey: "🐵"
         case .giraffe: "🦒"
+        case .slinky: "🌀"
         }
     }
 
     public var themePresets: [PetThemePreset] {
-        [.classic, .dark, .light, .custom]
+        self == .slinky ? [.classic, .dark, .light, .custom, .rainbow] : [.classic, .dark, .light, .custom]
     }
 
     public func defaultPalette(for preset: PetThemePreset) -> PetThemePalette {
@@ -161,6 +165,8 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
                 )
             case .custom:
                 return defaultPalette(for: .classic)
+            case .rainbow:
+                return defaultPalette(for: .classic)
             }
 
         case .dog:
@@ -190,6 +196,8 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
                     eyeHighlightColor: CodableColor(hex: "#0288D1")!
                 )
             case .custom:
+                return defaultPalette(for: .classic)
+            case .rainbow:
                 return defaultPalette(for: .classic)
             }
 
@@ -221,6 +229,8 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
                 )
             case .custom:
                 return defaultPalette(for: .classic)
+            case .rainbow:
+                return defaultPalette(for: .classic)
             }
 
         case .monkey:
@@ -250,6 +260,8 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
                     eyeHighlightColor: CodableColor(hex: "#0D9488")!
                 )
             case .custom:
+                return defaultPalette(for: .classic)
+            case .rainbow:
                 return defaultPalette(for: .classic)
             }
 
@@ -281,6 +293,22 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
                 )
             case .custom:
                 return defaultPalette(for: .classic)
+            case .rainbow:
+                return defaultPalette(for: .classic)
+            }
+
+        case .slinky:
+            switch preset {
+            case .classic:
+                return PetThemePalette(bodyColor: CodableColor(hex: "#4B6B9B")!, bellyColor: CodableColor(hex: "#EAF3FF")!, beakColor: CodableColor(hex: "#9B7BFF")!, blushColor: CodableColor(red: 1.0, green: 0.34, blue: 0.58, alpha: 0.62), eyeHighlightColor: CodableColor(hex: "#67D7FF")!)
+            case .dark:
+                return PetThemePalette(bodyColor: CodableColor(hex: "#293452")!, bellyColor: CodableColor(hex: "#CBD5E8")!, beakColor: CodableColor(hex: "#C084FC")!, blushColor: CodableColor(red: 0.82, green: 0.42, blue: 1.0, alpha: 0.62), eyeHighlightColor: CodableColor(hex: "#A5F3FC")!)
+            case .light:
+                return PetThemePalette(bodyColor: CodableColor(hex: "#A8B9E8")!, bellyColor: CodableColor(hex: "#FFFFFF")!, beakColor: CodableColor(hex: "#8B5CF6")!, blushColor: CodableColor(red: 1.0, green: 0.52, blue: 0.72, alpha: 0.62), eyeHighlightColor: CodableColor(hex: "#38BDF8")!)
+            case .custom:
+                return defaultPalette(for: .classic)
+            case .rainbow:
+                return PetThemePalette(bodyColor: CodableColor(hex: "#FF5C8A")!, bellyColor: CodableColor(hex: "#FFF7ED")!, beakColor: CodableColor(hex: "#8B5CF6")!, blushColor: CodableColor(red: 1.0, green: 0.24, blue: 0.52, alpha: 0.70), eyeHighlightColor: CodableColor(hex: "#22D3EE")!)
             }
         }
     }
@@ -292,6 +320,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
         case .cat: return "Left Whisker Cheek"
         case .monkey: return "Left Ear & Cheek"
         case .giraffe: return "Left Horn & Cheek Spot"
+        case .slinky: return "Left Coil & Cheek"
         }
     }
 
@@ -302,6 +331,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
         case .cat: return "Right Whisker Cheek"
         case .monkey: return "Right Ear & Cheek"
         case .giraffe: return "Right Horn & Cheek Spot"
+        case .slinky: return "Right Coil & Cheek"
         }
     }
 }
@@ -354,6 +384,7 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
     case dark = "dark"
     case light = "light"
     case custom = "custom"
+    case rainbow = "rainbow"
 
     public func displayName(for animal: AnimalKind) -> String {
         switch animal {
@@ -363,6 +394,7 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
             case .dark: "Midnight Dark"
             case .light: "Daylight Light"
             case .custom: "Custom Palette"
+            case .rainbow: "Rainbow"
             }
         case .dog:
             switch self {
@@ -370,6 +402,7 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
             case .dark: "Chocolate Pup"
             case .light: "Snow Puppy"
             case .custom: "Custom Palette"
+            case .rainbow: "Rainbow"
             }
         case .cat:
             switch self {
@@ -377,6 +410,7 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
             case .dark: "Midnight Cat"
             case .light: "Snow Kitty"
             case .custom: "Custom Palette"
+            case .rainbow: "Rainbow"
             }
         case .monkey:
             switch self {
@@ -384,6 +418,7 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
             case .dark: "Shadow Gibbon"
             case .light: "Golden Marmoset"
             case .custom: "Custom Palette"
+            case .rainbow: "Rainbow"
             }
         case .giraffe:
             switch self {
@@ -391,6 +426,15 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
             case .dark: "Sunset Auburn"
             case .light: "Pastel Snow"
             case .custom: "Custom Palette"
+            case .rainbow: "Rainbow"
+            }
+        case .slinky:
+            switch self {
+            case .classic: "Polished Blue Spring"
+            case .dark: "Deep Indigo Coil"
+            case .light: "Lavender Toy Spring"
+            case .custom: "Custom Palette"
+            case .rainbow: "Rainbow Spring"
             }
         }
     }

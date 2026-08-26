@@ -1,3 +1,4 @@
+
 Please note that this AI-assisted project is in preliminary stages, and that there has been limited human oversight of the README and associated explanatory files. Closer to stable release dates, this information will be updated and human oversight will become more present.
 
 If you have any concerns, feel free to raise them, and I will do my best to address them as quickly as possible.
@@ -49,17 +50,18 @@ The drop layer classifies input, asks `ActionRegistry` for the binding matching 
 
 ## Current functionality
 
-The `a0.10` release includes:
+The `a0.27` release includes:
 
 - File, directory, image, URL, and text drops with visual drag feedback.
 - Modifier-aware actions: Store in folder, Copy path, Reveal in Finder, Move to Trash, Convert to PNG, Optimise image, and Open URL.
 - Safe collision handling for file writes and JSON-backed settings stored in `~/Library/Application Support/AnimalBuddy/settings.json`.
-- A blue, icon-matched desktop buddy with breathing, bobbing, independent wing flaps, blinking, rosy cheeks, eye highlights, success sparkles, and nearby mouse-tracking eyes.
+- A desktop buddy suite featuring Bird, Dog, Cat, Monkey, Giraffe, and Slinky characters. Each has its own themed palette and expressive details, with breathing, bobbing, independent idle movement, blinking, rosy cheeks, eye highlights, success sparkles, nearby mouse-tracking eyes, and characteristic motions. Slinky has extra animated coil turns and an optional Rainbow Spring skin.
 - A non-activating floating window that remains available across Spaces and does not take keyboard focus from the app being used. The regular app presence keeps Animal Buddy visible in the Dock and Force Quit Applications.
+- Interactive link-clicking style pointing hand cursors when hovering over blush macro trigger spots and the minimize button.
+- Smooth hover-to-brighten translucency: the buddy gently rests at a soft translucent opacity and brightens immediately when hovered over or interacted with (configurable in Settings, with zero accessibility permissions required).
 - A hover-only minimize button and menu-bar controls for minimizing to the Dock or hiding while retaining the Animal Buddy menu-bar logo. The minimize animation respects reduced-motion preferences.
-- Passive typing awareness: when another application is frontmost and the user types, the buddy becomes translucent briefly so text behind it remains visible.
-- Free placement after dragging, with optional “Snap to Screen Edges” behavior.
-- A PiP-style top/bottom close target. Dragging the buddy near the horizontal center of a screen shows the target; releasing within it hides the buddy, while releasing outside it restores the buddy at the dropped location.
+- Free placement after dragging, with optional “Snap to Screen Edges” behavior and subtle flick inertia.
+- A proximity-based top/bottom dismiss target. Dragging the buddy towards the center edge of a screen shows the cross target; releasing within it hides or minimizes the buddy, while releasing outside restores it at the dropped location.
 - A unified Macros workshop for configuring the left and right blush buttons, plus drop-specific macros. Dragging macros can be assigned to images, folders, applications, files, URLs, text, mixed items, or unknown drops; they run before the normal drop action and can use `{{path}}`, `{{paths}}`, `{{text}}`, and `{{category}}` placeholders. Macro blocks include shell commands, installed applications, URLs, Apple Shortcuts, and nested macros, with cycle protection.
 - In-app macro suggestions, category-specific editing, and versioned macro import/export. The workshop exports a stable `com.animalbuddy.macros` JSON document and imports it atomically without changing themes or other settings.
 - Context-aware drag previews that distinguish applications, directories, images, files, URLs, text, and mixed drops. The buddy holds a matching code-drawn prop such as a camera and SD card, envelope, storage box, document, or question mark; ambiguous configured actions can be chosen from a pet-attached popover after release.
@@ -72,4 +74,4 @@ Macro exports use the versioned `com.animalbuddy.macros` JSON format. Version 1 
 
 ## Limitations and roadmap
 
-User-editable input bindings, pasteboard monitoring, sandbox entitlement and signing decisions, multi-pet packages, and script/plugin action extensions remain future work. Shortcut discovery depends on the macOS Shortcuts helper service. Typing awareness uses a passive global key-event observer and may require macOS Input Monitoring permission; it never consumes or modifies keystrokes. Destructive behavior uses macOS Trash, while file writes avoid overwrites.
+User-editable input bindings, pasteboard monitoring, sandbox entitlement and signing decisions, multi-pet packages, and script/plugin action extensions remain future work. Shortcut discovery depends on the macOS Shortcuts helper service. Destructive behavior uses macOS Trash, while file writes avoid overwrites.

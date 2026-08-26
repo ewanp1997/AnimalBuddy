@@ -14,6 +14,13 @@ import UniformTypeIdentifiers
     func testDragVelocityIsCappedToUnitRange() { XCTAssertEqual(min(2500 / 1000, 1), 1) }
     func testCrosshairStaysDarkOutsideDismissBoundary() { XCTAssertEqual(DragTargetOverlayController.redness(for: NSRect(x: 0, y: 0, width: 100, height: 100), target: NSPoint(x: 250, y: 50)), 0) }
     func testCrosshairRednessStartsAtDismissBoundary() { XCTAssertEqual(DragTargetOverlayController.redness(for: NSRect(x: 0, y: 0, width: 100, height: 100), target: NSPoint(x: 150, y: 50), boundaryRadius: 100), 0, accuracy: 0.001); XCTAssertGreaterThan(DragTargetOverlayController.redness(for: NSRect(x: 0, y: 0, width: 100, height: 100), target: NSPoint(x: 90, y: 50), boundaryRadius: 100), 0) }
+    func testCrosshairVisibilityWithinRadius() {
+        let target = NSPoint(x: 500, y: 764)
+        let insideFrame = NSRect(x: 450, y: 650, width: 100, height: 100) // midX = 500, midY = 700 -> distance = 64 <= 260
+        let outsideFrame = NSRect(x: 100, y: 200, width: 100, height: 100) // midX = 150, midY = 250 -> distance >> 260
+        XCTAssertTrue(DragTargetOverlayController.isWithinVisibilityRadius(for: insideFrame, target: target))
+        XCTAssertFalse(DragTargetOverlayController.isWithinVisibilityRadius(for: outsideFrame, target: target))
+    }
     func testCrosshairUsesTopOrBottomBasedOnScreenHalf() { let screen = NSRect(x: 0, y: 0, width: 1000, height: 800); XCTAssertEqual(DragTargetOverlayController.targetCenterY(for: 700, in: screen), 764); XCTAssertEqual(DragTargetOverlayController.targetCenterY(for: 100, in: screen), 36) }
     func testCrosshairTargetStaysHorizontallyCentered() { let screen = NSRect(x: 0, y: 0, width: 1000, height: 800); let target = DragTargetOverlayController.targetCenter(for: NSPoint(x: 300, y: 700), in: screen); XCTAssertEqual(target.x, 500); XCTAssertEqual(target.y, 764) }
     func testDismissRadiusSeparatesCloseFromRestore() { let target = NSPoint(x: 500, y: 764); XCTAssertLessThan(hypot(500 - target.x, 764 - target.y), 100); XCTAssertGreaterThan(hypot(300 - target.x, 764 - target.y), 100) }
@@ -72,24 +79,24 @@ import UniformTypeIdentifiers
         XCTAssertEqual(Set(restored.dragMacros.map(\.category)), Set(InputCategory.allCases))
     }
     func testMacroDocumentIgnoresUnknownFieldsAndDefaultsMissingEntries() throws {
-        let data = #"{"format":"com.animalbuddy.macros","schemaVersion":1,"futureField":true,"macros":{"blush":{"left":{"name":"Hello","steps":[]}},"drag":{"image":{"name":"Image","steps":[]}},"futureSection":{"enabled":true}}}"#.data(using: .utf8)!
+        let data = Data(#"{"format":"com.animalbuddy.macros","schemaVersion":1,"futureField":true,"macros":{"blush":{"left":{"name":"Hello","steps":[]}},"drag":{"image":{"name":"Image","steps":[]}},"futureSection":{"enabled":true}}}"#.utf8)
         let document = try MacroDocument.decode(from: data)
         XCTAssertEqual(document.leftMacro.name, "Hello")
         XCTAssertEqual(document.rightMacro, UserMacro())
         XCTAssertEqual(document.dragMacros.count, 1)
     }
     func testMacroDocumentRejectsUnknownDragCategory() {
-        let data = #"{"format":"com.animalbuddy.macros","schemaVersion":1,"macros":{"drag":{"notARealCategory":{"name":"Bad","steps":[]}}}}"#.data(using: .utf8)!
+        let data = Data(#"{"format":"com.animalbuddy.macros","schemaVersion":1,"macros":{"drag":{"notARealCategory":{"name":"Bad","steps":[]}}}}"#.utf8)
         XCTAssertThrowsError(try MacroDocument.decode(from: data))
     }
     func testMacroDocumentRejectsUnsupportedSchemaVersion() {
-        let data = #"{"format":"com.animalbuddy.macros","schemaVersion":2,"macros":{}}"#.data(using: .utf8)!
+        let data = Data(#"{"format":"com.animalbuddy.macros","schemaVersion":2,"macros":{}}"#.utf8)
         XCTAssertThrowsError(try MacroDocument.decode(from: data)) { error in
             XCTAssertEqual(error as? MacroDocumentError, .unsupportedSchemaVersion(2))
         }
     }
     func testLegacySettingsStillDecodeAfterMacroSchemaAddition() throws {
-        let legacy = #"{"leftBlushMacro":{"name":"Legacy","command":"say hi"},"rightBlushMacro":{},"bindings":[]}"#.data(using: .utf8)!
+        let legacy = Data(#"{"leftBlushMacro":{"name":"Legacy","command":"say hi"},"rightBlushMacro":{},"bindings":[]}"#.utf8)
         let settings = try JSONDecoder().decode(AppSettings.self, from: legacy)
         XCTAssertEqual(settings.leftBlushMacro.effectiveSteps, [MacroStep(kind: .shell, value: "say hi")])
         XCTAssertTrue(settings.dragMacros.isEmpty)
@@ -99,12 +106,16 @@ import UniformTypeIdentifiers
     func testAnimalKindPresetsAndPalettes() {
         for animal in AnimalKind.allCases {
             XCTAssertFalse(animal.displayName.isEmpty)
-            XCTAssertEqual(animal.themePresets.count, 4)
+            XCTAssertEqual(animal.themePresets.count, animal == .slinky ? 5 : 4)
             let classicPal = animal.defaultPalette(for: .classic)
             let darkPal = animal.defaultPalette(for: .dark)
             let lightPal = animal.defaultPalette(for: .light)
             XCTAssertNotEqual(classicPal.bodyColor, darkPal.bodyColor)
             XCTAssertNotEqual(classicPal.bodyColor, lightPal.bodyColor)
+            if animal == .slinky {
+                XCTAssertTrue(animal.themePresets.contains(.rainbow))
+                XCTAssertNotEqual(classicPal.bodyColor, animal.defaultPalette(for: .rainbow).bodyColor)
+            }
         }
     }
 
@@ -118,7 +129,7 @@ import UniformTypeIdentifiers
     }
 
     func testThemeDocumentBackwardsCompatibilityDefaultsToBird() throws {
-        let legacyJSON = ##"{"name":"Vintage Sky","version":1,"palette":{"bodyColor":"#4A90E2","bellyColor":"#FFF8DC","beakColor":"#FF9500","blushColor":"#FF6B81","eyeHighlightColor":"#FFFFFF"}}"##.data(using: .utf8)!
+        let legacyJSON = Data(##"{"name":"Vintage Sky","version":1,"palette":{"bodyColor":"#4A90E2","bellyColor":"#FFF8DC","beakColor":"#FF9500","blushColor":"#FF6B81","eyeHighlightColor":"#FFFFFF"}}"##.utf8)
         let (decodedAnimal, decodedName, decodedPalette) = try ThemeDocument.decode(from: legacyJSON)
         XCTAssertEqual(decodedAnimal, AnimalKind.bird)
         XCTAssertEqual(decodedName, "Vintage Sky")
@@ -142,5 +153,111 @@ import UniformTypeIdentifiers
         decoded = try JSONDecoder().decode(AppSettings.self, from: disabledEncoded)
         XCTAssertFalse(decoded.hoverTranslucencyEnabled)
     }
-}
 
+    func testBlushTappedInvokesCallback() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+        var tappedSlot: BlushSlot?
+        petView.onBlushTapped = { slot in
+            tappedSlot = slot
+        }
+
+        // Find the left and right blush button subviews
+        let buttons = petView.subviews.compactMap { $0 as? NSButton }.filter { $0.action != nil }
+        XCTAssertGreaterThanOrEqual(buttons.count, 2)
+
+        // Trigger left action
+        petView.perform(NSSelectorFromString("leftBlushPressed"))
+        XCTAssertEqual(tappedSlot, .left)
+
+        // Trigger right action
+        petView.perform(NSSelectorFromString("rightBlushPressed"))
+        XCTAssertEqual(tappedSlot, .right)
+    }
+
+    func testEyeAndBlushTriggerCoversEyePositions() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+        for animal in AnimalKind.allCases {
+            petView.animalKind = animal
+            petView.layout()
+            let blushButtons = petView.subviews.compactMap { $0 as? MacroBlushButton }
+            XCTAssertEqual(blushButtons.count, 2)
+            let leftBtn = blushButtons[0]
+            let rightBtn = blushButtons[1]
+
+            // Ensure left and right buttons have substantial width/height covering eyes and cheeks
+            XCTAssertGreaterThanOrEqual(leftBtn.frame.width, 48)
+            XCTAssertGreaterThanOrEqual(leftBtn.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(rightBtn.frame.width, 48)
+            XCTAssertGreaterThanOrEqual(rightBtn.frame.height, 44)
+
+            // Ensure left button is on left side and right button is on right side
+            XCTAssertLessThan(leftBtn.frame.midX, 75)
+            XCTAssertGreaterThan(rightBtn.frame.midX, 75)
+        }
+    }
+
+    func testHitTestCapturesEntirePetBoundary() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+        petView.animalKind = .slinky
+        petView.layout()
+
+        // Test corners, edges, and inner points across the 150x150 boundary
+        let samplePoints = [
+            NSPoint(x: 0, y: 0),
+            NSPoint(x: 149, y: 0),
+            NSPoint(x: 0, y: 149),
+            NSPoint(x: 149, y: 149),
+            NSPoint(x: 75, y: 75),
+            NSPoint(x: 20, y: 80),
+            NSPoint(x: 130, y: 80),
+            NSPoint(x: 75, y: 20),
+            NSPoint(x: 75, y: 130)
+        ]
+
+        for point in samplePoints {
+            let hitView = petView.hitTest(point)
+            XCTAssertNotNil(hitView, "Point \(point) should register a hit within pet boundaries")
+        }
+
+        // Test outside points return nil
+        XCTAssertNil(petView.hitTest(NSPoint(x: -1, y: 50)))
+        XCTAssertNil(petView.hitTest(NSPoint(x: 151, y: 50)))
+        XCTAssertNil(petView.hitTest(NSPoint(x: 50, y: -1)))
+        XCTAssertNil(petView.hitTest(NSPoint(x: 50, y: 151)))
+    }
+
+    func testWindowDirectDraggingUpdatesFrame() {
+        let panel = PetPanel(
+            contentRect: NSRect(x: 100, y: 100, width: 150, height: 150),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        var dragBeganCalled = false
+        var dragChangedCount = 0
+        var dragEndedCalled = false
+
+        panel.onDragBegan = { dragBeganCalled = true }
+        panel.onDragChanged = { _, _, _ in dragChangedCount += 1 }
+        panel.onDragEnded = { _, startFrame, endFrame, _ in
+            dragEndedCalled = true
+            XCTAssertEqual(startFrame.origin.x, 100)
+            XCTAssertEqual(startFrame.origin.y, 100)
+            XCTAssertEqual(endFrame.origin.x, 150)
+            XCTAssertEqual(endFrame.origin.y, 180)
+        }
+
+        // Simulate drag sequence
+        panel.beginWindowDrag(at: NSPoint(x: 120, y: 120), eventTimestamp: 1.0)
+        XCTAssertTrue(dragBeganCalled)
+
+        panel.continueWindowDrag(at: NSPoint(x: 170, y: 200), eventTimestamp: 1.05)
+        XCTAssertEqual(dragChangedCount, 1)
+        XCTAssertEqual(panel.frame.origin.x, 150) // 100 + (170 - 120) = 150
+        XCTAssertEqual(panel.frame.origin.y, 180) // 100 + (200 - 120) = 180
+
+        panel.endWindowDrag(at: NSPoint(x: 170, y: 200), eventTimestamp: 1.08)
+        XCTAssertTrue(dragEndedCalled)
+    }
+}
