@@ -51,10 +51,11 @@ import AppKit
 
     private func showMacroSettings() {
         let controller = MacroSettingsWindowController(settings: settings)
-        controller.onSave = { [weak self] left, right in
+        controller.onSave = { [weak self] left, right, dragMacros in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
+            self.settings.dragMacros = dragMacros
             try? self.settingsStore.save(self.settings)
             self.petWindow?.update(settings: self.settings)
         }

@@ -189,6 +189,13 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { true }
     func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let context = updateDragContext(from: sender)
+        if let macro = settings.dragMacros.first(where: { $0.category == context.category })?.macro, macro.isConfigured {
+            isAwaitingActionChoice = false
+            endExternalDragHover()
+            clearDragContext()
+            execute(macro, for: context)
+            return true
+        }
         let configuredActions = registry.configuredActions(for: context.input, modifiers: context.modifiers)
         if let action = registry.action(for: context.input, modifiers: context.modifiers) ?? (configuredActions.count == 1 ? configuredActions.first : nil) {
             isAwaitingActionChoice = false
@@ -277,6 +284,19 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         Task {
             do {
                 try await action.execute(context: ActionContext(input: context.input, destinationFolder: destination))
+                await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
+            } catch {
+                await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }
+            }
+        }
+    }
+
+    private func execute(_ macro: UserMacro, for context: DropContext) {
+        petView.state = .processing
+        let currentSettings = settings
+        Task.detached {
+            do {
+                try MacroExecutor.run(macro, settings: currentSettings, input: context.input)
                 await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
             } catch {
                 await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }

@@ -48,4 +48,11 @@ final class AnimalBuddyTests: XCTestCase {
         XCTAssertEqual(registry.action(for: input, modifiers: .none)?.descriptor.identifier, "store")
         XCTAssertEqual(registry.configuredActions(for: input, modifiers: .none).map { $0.descriptor.identifier }, ["store", "copy-path"])
     }
+    func testDragMacroBindingPersistsAndMatchesDropCategory() throws {
+        var settings = AppSettings()
+        settings.dragMacros = [DragMacroBinding(category: .image, macro: UserMacro(name: "Image helper", steps: [MacroStep(kind: .shell, value: "echo {{path}}")]))]
+        let restored = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(restored.dragMacros.first?.category, .image)
+        XCTAssertEqual(restored.dragMacros.first?.macro.effectiveSteps.first?.value, "echo {{path}}")
+    }
 }

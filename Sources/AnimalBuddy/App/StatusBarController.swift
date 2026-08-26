@@ -34,7 +34,7 @@ import AppKit
         menu.addItem(destinationItem)
         snappingItem.target = self
         menu.addItem(snappingItem)
-        let macroItem = NSMenuItem(title: "Configure Blush Macros…", action: #selector(configureMacros), keyEquivalent: "")
+        let macroItem = NSMenuItem(title: "Configure Macros…", action: #selector(configureMacros), keyEquivalent: "")
         macroItem.target = self
         menu.addItem(macroItem)
         menu.addItem(.separator())

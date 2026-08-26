@@ -121,7 +121,7 @@ public enum MacroStepKind: String, Codable, CaseIterable, Sendable {
         switch self { case .shell: "Run Shell Command"; case .openApplication: "Open Application"; case .openURL: "Open URL"; case .runShortcut: "Run Apple Shortcut"; case .runBlushMacro: "Run Another Blush Macro" }
     }
     public var placeholder: String {
-        switch self { case .shell: "e.g. say 'Hello from Animal Buddy'"; case .openApplication: "e.g. Calendar"; case .openURL: "e.g. https://example.com"; case .runShortcut: "Choose a Shortcut"; case .runBlushMacro: "Choose another blush macro" }
+        switch self { case .shell: "e.g. say 'Hello from Animal Buddy'"; case .openApplication: "e.g. Calendar"; case .openURL: "e.g. https://example.com"; case .runShortcut: "Choose a Shortcut"; case .runBlushMacro: "Choose another macro" }
     }
 }
 
@@ -144,6 +144,16 @@ public struct UserMacro: Codable, Sendable, Equatable {
         name = try values.decodeIfPresent(String.self, forKey: .name) ?? ""
         command = try values.decodeIfPresent(String.self, forKey: .command) ?? ""
         steps = try values.decodeIfPresent([MacroStep].self, forKey: .steps) ?? []
+    }
+}
+
+public struct DragMacroBinding: Codable, Sendable, Equatable {
+    public var category: InputCategory
+    public var macro: UserMacro
+
+    public init(category: InputCategory, macro: UserMacro = UserMacro()) {
+        self.category = category
+        self.macro = macro
     }
 }
 
@@ -180,6 +190,7 @@ public struct AppSettings: Codable, Sendable {
     public var snappingEnabled = false
     public var leftBlushMacro = UserMacro()
     public var rightBlushMacro = UserMacro()
+    public var dragMacros: [DragMacroBinding] = []
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
     public var minimizeDestination: MinimizeDestination = .menubar
     public var bindings: [ModifierBinding] = [
@@ -190,7 +201,7 @@ public struct AppSettings: Codable, Sendable {
         .init(category: .file, modifiers: .shift, actionID: "reveal")
     ]
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, leftBlushMacro, rightBlushMacro, destinationFolderPath, minimizeDestination, bindings }
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, bindings }
 
     public init() {}
 
@@ -201,6 +212,7 @@ public struct AppSettings: Codable, Sendable {
         snappingEnabled = try values.decodeIfPresent(Bool.self, forKey: .snappingEnabled) ?? false
         leftBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .leftBlushMacro) ?? UserMacro()
         rightBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .rightBlushMacro) ?? UserMacro()
+        dragMacros = try values.decodeIfPresent([DragMacroBinding].self, forKey: .dragMacros) ?? []
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []

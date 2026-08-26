@@ -1,18 +1,20 @@
 import AppKit
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding]) -> Void)?
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
+    private let dragEditor: DragMacroEditorView
     private let leftName = NSTextField()
     private let rightName = NSTextField()
 
     init(settings: AppSettings) {
-        let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 700, height: 620), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-        window.title = "Blush Macro Workshop"
+        let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 920), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.title = "Macros Workshop"
         window.isReleasedWhenClosed = false
         leftBuilder = MacroBuilderView(steps: settings.leftBlushMacro.effectiveSteps)
         rightBuilder = MacroBuilderView(steps: settings.rightBlushMacro.effectiveSteps)
+        dragEditor = DragMacroEditorView(bindings: settings.dragMacros)
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
         rightName.stringValue = settings.rightBlushMacro.name
@@ -23,19 +25,20 @@ import AppKit
 
     private func buildContent() {
         guard let content = window?.contentView else { return }
-        let heading = NSTextField(labelWithString: "Give each blush a tiny superpower")
+        let heading = NSTextField(labelWithString: "Give Animal Buddy tiny superpowers")
         heading.font = .systemFont(ofSize: 21, weight: .bold)
         let note = NSTextField(wrappingLabelWithString: "Build a little Scratch-like sequence of blocks. Add an action, fill in its value, and the buddy will run the blocks from top to bottom.")
         note.textColor = .secondaryLabelColor; note.maximumNumberOfLines = 3
         let leftCard = makeCard(title: "Left blush", nameField: leftName, builder: leftBuilder)
         let rightCard = makeCard(title: "Right blush", nameField: rightName, builder: rightBuilder)
         let cards = NSStackView(views: [leftCard, rightCard]); cards.orientation = .horizontal; cards.spacing = 18; cards.distribution = .fillEqually
+        let dragCard = makeDragCard()
         let save = NSButton(title: "Save Macros", target: self, action: #selector(savePressed)); save.keyEquivalent = "\r"
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
         let buttons = NSStackView(views: [NSView(), cancel, save]); buttons.orientation = .horizontal; buttons.spacing = 10
-        let stack = NSStackView(views: [heading, note, cards, buttons]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18; stack.edgeInsets = NSEdgeInsets(top: 32, left: 36, bottom: 32, right: 36)
+        let stack = NSStackView(views: [heading, note, cards, dragCard, buttons]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18; stack.edgeInsets = NSEdgeInsets(top: 32, left: 36, bottom: 32, right: 36)
         stack.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor), stack.topAnchor.constraint(equalTo: content.topAnchor), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor), cards.widthAnchor.constraint(equalTo: stack.widthAnchor), cards.heightAnchor.constraint(equalToConstant: 360)])
+        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor), stack.topAnchor.constraint(equalTo: content.topAnchor), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor), cards.widthAnchor.constraint(equalTo: stack.widthAnchor), cards.heightAnchor.constraint(equalToConstant: 360), dragCard.widthAnchor.constraint(equalTo: stack.widthAnchor), dragCard.heightAnchor.constraint(equalToConstant: 340)])
     }
 
     private func makeCard(title: String, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
@@ -50,8 +53,26 @@ import AppKit
         return stack
     }
 
+    private func makeDragCard() -> NSView {
+        let title = NSTextField(labelWithString: "Dragging macros")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        let note = NSTextField(wrappingLabelWithString: "Choose what happens when a particular kind of item is dropped on Animal Buddy. A configured dragging macro runs before the default action binding. Use {{path}}, {{paths}}, {{text}}, or {{category}} in values when needed.")
+        note.textColor = .secondaryLabelColor
+        note.maximumNumberOfLines = 2
+        let stack = NSStackView(views: [title, note, dragEditor])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 22, bottom: 20, right: 22)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        dragEditor.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true
+        return stack
+    }
+
     @objc private func savePressed() {
-        onSave?(UserMacro(name: leftName.stringValue, steps: leftBuilder.steps), UserMacro(name: rightName.stringValue, steps: rightBuilder.steps)); close()
+        onSave?(UserMacro(name: leftName.stringValue, steps: leftBuilder.steps), UserMacro(name: rightName.stringValue, steps: rightBuilder.steps), dragEditor.bindings); close()
     }
     @objc private func cancelPressed() { close() }
 }
@@ -75,6 +96,99 @@ import AppKit
     private func rebuildRows() {
         rows.arrangedSubviews.forEach { rows.removeArrangedSubview($0); $0.removeFromSuperview() }; emptyLabel.isHidden = !steps.isEmpty
         for index in steps.indices { rows.addArrangedSubview(MacroStepRow(step: steps[index], index: index) { [weak self] index, step in self?.steps[index] = step; self?.rebuildRows() } onRemove: { [weak self] index in self?.steps.remove(at: index); self?.rebuildRows() }) }
+    }
+}
+
+@MainActor final class DragMacroEditorView: NSView {
+    private static let categories: [InputCategory] = [.image, .directory, .application, .file, .url, .text, .mixed, .unknown]
+    private var macros: [InputCategory: UserMacro]
+    private let categoryPicker = NSPopUpButton()
+    private let nameField = NSTextField()
+    private let builderHost = NSView()
+    private var builder: MacroBuilderView?
+    private var selectedCategory: InputCategory = .image
+
+    init(bindings: [DragMacroBinding]) {
+        macros = Dictionary(uniqueKeysWithValues: bindings.map { ($0.category, $0.macro) })
+        super.init(frame: .zero)
+        Self.categories.forEach { categoryPicker.addItem(withTitle: Self.displayName(for: $0)) }
+        categoryPicker.target = self
+        categoryPicker.action = #selector(categoryChanged)
+        nameField.placeholderString = "Macro name (optional)"
+        nameField.target = self
+        let triggerLabel = NSTextField(labelWithString: "When I drop")
+        triggerLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        let nameLabel = NSTextField(labelWithString: "Macro name")
+        let stack = NSStackView(views: [triggerLabel, categoryPicker, nameLabel, nameField, builderHost])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        nameField.translatesAutoresizingMaskIntoConstraints = false
+        builderHost.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            categoryPicker.widthAnchor.constraint(equalToConstant: 220),
+            nameField.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            builderHost.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            builderHost.heightAnchor.constraint(equalToConstant: 225)
+        ])
+        loadSelectedMacro()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    var bindings: [DragMacroBinding] {
+        saveSelectedMacro()
+        return Self.categories.compactMap { category in
+            guard let macro = macros[category], macro.isConfigured else { return nil }
+            return DragMacroBinding(category: category, macro: macro)
+        }
+    }
+
+    @objc private func categoryChanged() {
+        saveSelectedMacro()
+        selectedCategory = Self.categories[min(max(categoryPicker.indexOfSelectedItem, 0), Self.categories.count - 1)]
+        loadSelectedMacro()
+    }
+
+    private func loadSelectedMacro() {
+        categoryPicker.selectItem(at: Self.categories.firstIndex(of: selectedCategory) ?? 0)
+        let macro = macros[selectedCategory] ?? UserMacro()
+        nameField.stringValue = macro.name
+        builder?.removeFromSuperview()
+        let newBuilder = MacroBuilderView(steps: macro.effectiveSteps)
+        newBuilder.translatesAutoresizingMaskIntoConstraints = false
+        builderHost.addSubview(newBuilder)
+        NSLayoutConstraint.activate([
+            newBuilder.leadingAnchor.constraint(equalTo: builderHost.leadingAnchor),
+            newBuilder.trailingAnchor.constraint(equalTo: builderHost.trailingAnchor),
+            newBuilder.topAnchor.constraint(equalTo: builderHost.topAnchor),
+            newBuilder.bottomAnchor.constraint(equalTo: builderHost.bottomAnchor)
+        ])
+        builder = newBuilder
+    }
+
+    private func saveSelectedMacro() {
+        guard let builder else { return }
+        macros[selectedCategory] = UserMacro(name: nameField.stringValue, steps: builder.steps)
+    }
+
+    private static func displayName(for category: InputCategory) -> String {
+        switch category {
+        case .image: "Images"
+        case .directory: "Folders"
+        case .application: "Applications"
+        case .file: "Files"
+        case .url: "URLs"
+        case .text: "Text"
+        case .mixed: "Mixed items"
+        case .unknown: "Unknown items"
+        }
     }
 }
 
