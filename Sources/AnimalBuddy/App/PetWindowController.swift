@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggingDestination {
     private static let trackingRadius: CGFloat = 300
     private static let dismissRadius: CGFloat = 100
+    private static let normalPetSize: CGFloat = 150
+    private static let expandedPetSize: CGFloat = 210
     private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
     private let registry: ActionRegistry
     private var settings: AppSettings
@@ -12,13 +14,14 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private var isMinimizing = false
     private var currentDragContext: DropContext?
     private var isAwaitingActionChoice = false
+    private var isExternalDragHovering = false
     private let dragTargetOverlay = DragTargetOverlayController()
     private let actionPopover = DropActionPopoverController()
     init(settings: AppSettings, registry: ActionRegistry) {
         self.settings = settings; self.registry = registry
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
-        super.init(window: window); window.delegate = self; window.contentView = petView; window.isMovableByWindowBackground = true
+        super.init(window: window); window.delegate = self; window.contentView = petView; petView.autoresizingMask = [.width, .height]; window.isMovableByWindowBackground = true
         window.onDragBegan = { [weak self] in
             self?.dragTargetOverlay.show(at: NSEvent.mouseLocation, redness: 0)
             self?.updateDragFade(for: NSEvent.mouseLocation)
@@ -160,12 +163,14 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         }
     }
     func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        beginExternalDragHover()
         _ = updateDragContext(from: sender)
         petView.state = .noticingDrag
         return .copy
     }
 
     func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        beginExternalDragHover()
         _ = updateDragContext(from: sender)
         petView.state = .waitingForDrop
         return .copy
@@ -173,6 +178,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
 
     func draggingExited(_ sender: NSDraggingInfo?) {
         guard !isAwaitingActionChoice, petView.state != .processing else { return }
+        endExternalDragHover()
         clearDragContext()
         petView.state = .idle
     }
@@ -183,20 +189,52 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         let configuredActions = registry.configuredActions(for: context.input, modifiers: context.modifiers)
         if let action = registry.action(for: context.input, modifiers: context.modifiers) ?? (configuredActions.count == 1 ? configuredActions.first : nil) {
             isAwaitingActionChoice = false
+            endExternalDragHover()
             clearDragContext()
             execute(action, for: context)
             return true
         }
         guard configuredActions.count > 1 else {
             isAwaitingActionChoice = false
+            endExternalDragHover()
             clearDragContext()
             petView.state = .dragRejected
             resetSoon()
             return false
         }
         isAwaitingActionChoice = true
+        endExternalDragHover()
         showActionChooser(for: context, actions: configuredActions)
         return true
+    }
+
+    private func beginExternalDragHover() {
+        guard !isExternalDragHovering, let window else { return }
+        isExternalDragHovering = true
+        petView.setDragHovering(true)
+        petView.updateDragPresentation(DragPresentation(prop: .questionMark))
+        let center = NSPoint(x: window.frame.midX, y: window.frame.midY)
+        let targetFrame = NSRect(x: center.x - Self.expandedPetSize / 2, y: center.y - Self.expandedPetSize / 2, width: Self.expandedPetSize, height: Self.expandedPetSize)
+        animatePetFrame(to: targetFrame)
+    }
+
+    private func endExternalDragHover() {
+        guard isExternalDragHovering, let window else { return }
+        isExternalDragHovering = false
+        petView.setDragHovering(false)
+        let center = NSPoint(x: window.frame.midX, y: window.frame.midY)
+        let targetFrame = NSRect(x: center.x - Self.normalPetSize / 2, y: center.y - Self.normalPetSize / 2, width: Self.normalPetSize, height: Self.normalPetSize)
+        animatePetFrame(to: targetFrame)
+    }
+
+    private func animatePetFrame(to targetFrame: NSRect) {
+        let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.01 : 0.18
+        guard let window else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().setFrame(targetFrame, display: true)
+        }
     }
 
     private func updateDragContext(from sender: NSDraggingInfo) -> DropContext {

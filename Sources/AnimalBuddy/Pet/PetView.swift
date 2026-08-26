@@ -11,6 +11,7 @@ final class PetView: NSView {
     var onMinimizeRequested: (() -> Void)?
     var onBlushTapped: ((BlushSlot) -> Void)?
     private var dragPresentation: DragPresentation?
+    private var isDragHovering = false
     private(set) var pupilOffset = NSPoint.zero
     private let minimizeButton = NSButton()
     private let leftBlushButton = NSButton()
@@ -111,6 +112,11 @@ final class PetView: NSView {
         needsDisplay = true
     }
 
+    func setDragHovering(_ hovering: Bool) {
+        isDragHovering = hovering
+        needsDisplay = true
+    }
+
     private func tickAnimation() {
         let now = Date()
         let elapsed = now.timeIntervalSince(animationStart)
@@ -156,7 +162,24 @@ final class PetView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         NSGraphicsContext.current?.saveGraphicsState()
+        let designSize: CGFloat = 150
+        let scale = min(bounds.width / designSize, bounds.height / designSize)
+        if isDragHovering {
+            let glowContext = NSGraphicsContext.current
+            glowContext?.saveGraphicsState()
+            let glow = NSShadow()
+            glow.shadowColor = NSColor(calibratedRed: 0.28, green: 0.62, blue: 1, alpha: 0.72)
+            glow.shadowBlurRadius = 18
+            glow.shadowOffset = .zero
+            glow.set()
+            NSColor(calibratedRed: 0.30, green: 0.64, blue: 1, alpha: 0.20).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 12, dy: 12), xRadius: 48, yRadius: 48).fill()
+            glowContext?.restoreGraphicsState()
+        }
         let transform = NSAffineTransform()
+        transform.translateX(by: bounds.midX, yBy: bounds.midY)
+        transform.scaleX(by: scale, yBy: scale)
+        transform.translateX(by: -designSize / 2, yBy: -designSize / 2)
         transform.translateX(by: 0, yBy: bobOffset)
         transform.concat()
         let bodyColor: NSColor = switch state { case .idle, .sleeping: NSColor(calibratedRed: 0.31, green: 0.57, blue: 0.93, alpha: 1); case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
