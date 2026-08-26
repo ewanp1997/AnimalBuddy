@@ -10,6 +10,8 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private let registry: ActionRegistry
     private var settings: AppSettings
     private var mouseTrackingTimer: Timer?
+    private var typingMonitor: Any?
+    private var typingRestoreTimer: Timer?
     private var closeObserver: NSObjectProtocol?
     private var isMinimizing = false
     private var currentDragContext: DropContext?
@@ -52,6 +54,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
+        startTypingAwareness()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(settings: AppSettings) {
@@ -92,6 +95,48 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window?.orderFrontRegardless()
     }
     private func closePet() { window?.orderOut(nil) }
+
+    private func startTypingAwareness() {
+        typingMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
+            DispatchQueue.main.async { [weak self] in self?.handleTypingBehindBuddy() }
+        }
+    }
+
+    private func handleTypingBehindBuddy() {
+        guard let window,
+              window.isVisible,
+              !isMinimizing,
+              !isExternalDragHovering,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+        typingRestoreTimer?.invalidate()
+        let typingAlpha: CGFloat = 0.32
+        if window.alphaValue > typingAlpha {
+            let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.01 : 0.12
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                window.animator().alphaValue = typingAlpha
+            }
+        }
+        typingRestoreTimer = Timer.scheduledTimer(withTimeInterval: 0.9, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let window = self.window, !self.isExternalDragHovering else { return }
+                let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.01 : 0.24
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = duration
+                    window.animator().alphaValue = 1
+                }
+            }
+        }
+    }
+
+    private func stopTypingAwareness() {
+        if let typingMonitor {
+            NSEvent.removeMonitor(typingMonitor)
+            self.typingMonitor = nil
+        }
+        typingRestoreTimer?.invalidate()
+        typingRestoreTimer = nil
+    }
 
     private func runMacro(for slot: BlushSlot) {
         let macro = slot == .left ? settings.leftBlushMacro : settings.rightBlushMacro
@@ -161,8 +206,9 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.setAccessibilityRole(.image)
         if let window {
             closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.stopMouseTracking() }
-            }
+            Task { @MainActor in self?.stopMouseTracking() }
+            Task { @MainActor in self?.stopTypingAwareness() }
+        }
         }
     }
     func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

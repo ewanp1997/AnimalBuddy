@@ -103,6 +103,7 @@ import AppKit
     private static let categories: [InputCategory] = [.image, .directory, .application, .file, .url, .text, .mixed, .unknown]
     private var macros: [InputCategory: UserMacro]
     private let categoryPicker = NSPopUpButton()
+    private let categorySummary = NSTextField(labelWithString: "")
     private let nameField = NSTextField()
     private let builderHost = NSView()
     private var builder: MacroBuilderView?
@@ -118,8 +119,10 @@ import AppKit
         nameField.target = self
         let triggerLabel = NSTextField(labelWithString: "When I drop")
         triggerLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        categorySummary.font = .systemFont(ofSize: 12, weight: .medium)
+        categorySummary.textColor = .secondaryLabelColor
         let nameLabel = NSTextField(labelWithString: "Macro name")
-        let stack = NSStackView(views: [triggerLabel, categoryPicker, nameLabel, nameField, builderHost])
+        let stack = NSStackView(views: [triggerLabel, categoryPicker, categorySummary, nameLabel, nameField, builderHost])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
@@ -159,6 +162,7 @@ import AppKit
     private func loadSelectedMacro() {
         categoryPicker.selectItem(at: Self.categories.firstIndex(of: selectedCategory) ?? 0)
         let macro = macros[selectedCategory] ?? UserMacro()
+        categorySummary.stringValue = "Editing: \(Self.displayName(for: selectedCategory))"
         nameField.stringValue = macro.name
         builder?.removeFromSuperview()
         let newBuilder = MacroBuilderView(steps: macro.effectiveSteps)
