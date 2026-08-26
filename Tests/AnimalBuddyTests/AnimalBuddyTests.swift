@@ -93,5 +93,50 @@ import UniformTypeIdentifiers
         let settings = try JSONDecoder().decode(AppSettings.self, from: legacy)
         XCTAssertEqual(settings.leftBlushMacro.effectiveSteps, [MacroStep(kind: .shell, value: "say hi")])
         XCTAssertTrue(settings.dragMacros.isEmpty)
+        XCTAssertEqual(settings.animalKind, .bird)
+    }
+
+    func testAnimalKindPresetsAndPalettes() {
+        for animal in AnimalKind.allCases {
+            XCTAssertFalse(animal.displayName.isEmpty)
+            XCTAssertEqual(animal.themePresets.count, 4)
+            let classicPal = animal.defaultPalette(for: .classic)
+            let darkPal = animal.defaultPalette(for: .dark)
+            let lightPal = animal.defaultPalette(for: .light)
+            XCTAssertNotEqual(classicPal.bodyColor, darkPal.bodyColor)
+            XCTAssertNotEqual(classicPal.bodyColor, lightPal.bodyColor)
+        }
+    }
+
+    func testThemeDocumentPreservesAnimalKind() throws {
+        let dogTheme = ThemeDocument(animal: .dog, name: "Golden Puppy", version: 1, palette: AnimalKind.dog.defaultPalette(for: .classic))
+        let data = try dogTheme.exportJSONData()
+        let (decodedAnimal, decodedName, decodedPalette) = try ThemeDocument.decode(from: data)
+        XCTAssertEqual(decodedAnimal, .dog)
+        XCTAssertEqual(decodedName, "Golden Puppy")
+        XCTAssertEqual(decodedPalette.bodyColor, AnimalKind.dog.defaultPalette(for: .classic).bodyColor)
+    }
+
+    func testThemeDocumentBackwardsCompatibilityDefaultsToBird() throws {
+        let legacyJSON = ##"{"name":"Vintage Sky","version":1,"palette":{"bodyColor":"#4A90E2","bellyColor":"#FFF8DC","beakColor":"#FF9500","blushColor":"#FF6B81","eyeHighlightColor":"#FFFFFF"}}"##.data(using: .utf8)!
+        let (decodedAnimal, decodedName, decodedPalette) = try ThemeDocument.decode(from: legacyJSON)
+        XCTAssertEqual(decodedAnimal, AnimalKind.bird)
+        XCTAssertEqual(decodedName, "Vintage Sky")
+        XCTAssertEqual(decodedPalette.bodyColor.hexString.uppercased(), "#4A90E2")
+    }
+
+    func testTextBoxAwarenessSettingDefaultAndDecoding() throws {
+        let defaultSettings = AppSettings()
+        XCTAssertTrue(defaultSettings.textBoxAwarenessEnabled)
+
+        let encoded = try JSONEncoder().encode(defaultSettings)
+        var decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
+        XCTAssertTrue(decoded.textBoxAwarenessEnabled)
+
+        decoded.textBoxAwarenessEnabled = false
+        let reencoded = try JSONEncoder().encode(decoded)
+        let redecoded = try JSONDecoder().decode(AppSettings.self, from: reencoded)
+        XCTAssertFalse(redecoded.textBoxAwarenessEnabled)
     }
 }
+

@@ -4,11 +4,14 @@ import AppKit
     var onShowPet: (() -> Void)?
     var onMinimizeDestinationChanged: ((MinimizeDestination) -> Void)?
     var onSnappingChanged: ((Bool) -> Void)?
-    var onThemePresetChanged: ((PetThemePreset) -> Void)?
+    var onAnimalAndThemeChanged: ((AnimalKind, PetThemePreset) -> Void)?
     var onImportThemeJSON: (() -> Void)?
     var onExportThemeJSON: (() -> Void)?
     var onOpenAppearanceSettings: (() -> Void)?
     var onConfigureMacros: (() -> Void)?
+    var onOpenSettings: (() -> Void)?
+    var onToggleTextBoxAwareness: ((Bool) -> Void)?
+    var onOpenAccessibility: (() -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -16,12 +19,10 @@ import AppKit
     private let dockItem = NSMenuItem(title: "Dock", action: #selector(selectDock), keyEquivalent: "")
     private let menubarItem = NSMenuItem(title: "Menu Bar", action: #selector(selectMenubar), keyEquivalent: "")
     private let snappingItem = NSMenuItem(title: "Snap to Screen Edges", action: #selector(toggleSnapping), keyEquivalent: "")
+    private let accessibilityItem = NSMenuItem(title: "Typing & Text Box Translucency", action: #selector(accessibilityClicked), keyEquivalent: "")
 
-    private let themeMenu = NSMenu(title: "Bird Theme")
-    private let classicThemeItem = NSMenuItem(title: "🔹 Classic Blue", action: #selector(selectClassicTheme), keyEquivalent: "")
-    private let darkThemeItem = NSMenuItem(title: "🌑 Midnight Dark", action: #selector(selectDarkTheme), keyEquivalent: "")
-    private let lightThemeItem = NSMenuItem(title: "☀️ Daylight Light", action: #selector(selectLightTheme), keyEquivalent: "")
-    private let customThemeItem = NSMenuItem(title: "🎨 Custom Palette", action: #selector(selectCustomTheme), keyEquivalent: "")
+    private let animalMenu = NSMenu(title: "Animal Selector")
+    private var animalSubmenuItems: [AnimalKind: [PetThemePreset: NSMenuItem]] = [:]
 
     override init() {
         super.init()
@@ -35,30 +36,42 @@ import AppKit
         menu.addItem(showItem)
         menu.addItem(.separator())
 
-        classicThemeItem.target = self
-        darkThemeItem.target = self
-        lightThemeItem.target = self
-        customThemeItem.target = self
+        // Build Animal Selector submenus for each animal
+        for animal in AnimalKind.allCases {
+            let animalSubmenu = NSMenu(title: animal.displayName)
+            var presetMap: [PetThemePreset: NSMenuItem] = [:]
 
-        themeMenu.addItem(classicThemeItem)
-        themeMenu.addItem(darkThemeItem)
-        themeMenu.addItem(lightThemeItem)
-        themeMenu.addItem(customThemeItem)
-        themeMenu.addItem(.separator())
+            for preset in animal.themePresets {
+                let itemTitle = preset.displayName(for: animal)
+                let item = NSMenuItem(title: itemTitle, action: #selector(themePresetSelected(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = (animal, preset)
+                animalSubmenu.addItem(item)
+                presetMap[preset] = item
+            }
+
+            animalSubmenuItems[animal] = presetMap
+
+            let animalItem = NSMenuItem(title: animal.displayName, action: nil, keyEquivalent: "")
+            animalItem.submenu = animalSubmenu
+            animalMenu.addItem(animalItem)
+        }
+
+        animalMenu.addItem(.separator())
         let importItem = NSMenuItem(title: "📥 Import Theme JSON…", action: #selector(importTheme), keyEquivalent: "")
         importItem.target = self
-        themeMenu.addItem(importItem)
+        animalMenu.addItem(importItem)
         let exportItem = NSMenuItem(title: "📤 Export Theme JSON…", action: #selector(exportTheme), keyEquivalent: "")
         exportItem.target = self
-        themeMenu.addItem(exportItem)
-        themeMenu.addItem(.separator())
-        let customColorsItem = NSMenuItem(title: "Customize Plumage Colors…", action: #selector(openAppearance), keyEquivalent: "")
+        animalMenu.addItem(exportItem)
+        animalMenu.addItem(.separator())
+        let customColorsItem = NSMenuItem(title: "Customize Plumage & Appearance…", action: #selector(openAppearance), keyEquivalent: "")
         customColorsItem.target = self
-        themeMenu.addItem(customColorsItem)
+        animalMenu.addItem(customColorsItem)
 
-        let themeItem = NSMenuItem(title: "Bird Theme", action: nil, keyEquivalent: "")
-        themeItem.submenu = themeMenu
-        menu.addItem(themeItem)
+        let animalSelectorRootItem = NSMenuItem(title: "Animal Selector", action: nil, keyEquivalent: "")
+        animalSelectorRootItem.submenu = animalMenu
+        menu.addItem(animalSelectorRootItem)
 
         dockItem.target = self
         menubarItem.target = self
@@ -69,15 +82,31 @@ import AppKit
         menu.addItem(destinationItem)
         snappingItem.target = self
         menu.addItem(snappingItem)
-        let macroItem = NSMenuItem(title: "Configure Macros…", action: #selector(configureMacros), keyEquivalent: "")
-        macroItem.target = self
-        menu.addItem(macroItem)
+        accessibilityItem.target = self
+        menu.addItem(accessibilityItem)
+        updateAccessibilityStatus()
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "")
         quitItem.target = self
         menu.addItem(quitItem)
         statusItem.menu = menu
+    }
+
+    func updateAccessibilityStatus() {
+        if AccessibilityHelper.isTrusted {
+            accessibilityItem.title = "✓ Typing & Text Box Translucency (Optional)"
+        } else {
+            accessibilityItem.title = "⚠️ Enable Text Box Awareness (Grant Permission…)"
+        }
+    }
+
+    func update(textBoxAwarenessEnabled: Bool) {
+        accessibilityItem.state = textBoxAwarenessEnabled ? .on : .off
+        updateAccessibilityStatus()
     }
 
     func update(destination: MinimizeDestination) {
@@ -87,25 +116,34 @@ import AppKit
 
     func update(snappingEnabled: Bool) { snappingItem.state = snappingEnabled ? .on : .off }
 
-    func update(theme: PetThemePreset) {
-        classicThemeItem.state = theme == .classic ? .on : .off
-        darkThemeItem.state = theme == .dark ? .on : .off
-        lightThemeItem.state = theme == .light ? .on : .off
-        customThemeItem.state = theme == .custom ? .on : .off
+    func update(animal: AnimalKind, theme: PetThemePreset) {
+        for (aKind, presetDict) in animalSubmenuItems {
+            for (preset, menuItem) in presetDict {
+                menuItem.state = (aKind == animal && preset == theme) ? .on : .off
+            }
+        }
+    }
+
+    @objc private func themePresetSelected(_ sender: NSMenuItem) {
+        guard let (animal, preset) = sender.representedObject as? (AnimalKind, PetThemePreset) else { return }
+        onAnimalAndThemeChanged?(animal, preset)
     }
 
     @objc private func showPet() { onShowPet?() }
-    @objc private func selectClassicTheme() { onThemePresetChanged?(.classic) }
-    @objc private func selectDarkTheme() { onThemePresetChanged?(.dark) }
-    @objc private func selectLightTheme() { onThemePresetChanged?(.light) }
-    @objc private func selectCustomTheme() { onThemePresetChanged?(.custom) }
     @objc private func importTheme() { onImportThemeJSON?() }
     @objc private func exportTheme() { onExportThemeJSON?() }
     @objc private func openAppearance() { onOpenAppearanceSettings?() }
     @objc private func selectDock() { onMinimizeDestinationChanged?(.dock) }
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
     @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
-    @objc private func configureMacros() { onConfigureMacros?() }
+    @objc private func openSettings() { (onOpenSettings ?? onConfigureMacros)?() }
+    @objc private func accessibilityClicked() {
+        if !AccessibilityHelper.isTrusted {
+            onOpenAccessibility?()
+        } else {
+            onToggleTextBoxAwareness?(accessibilityItem.state != .on)
+        }
+    }
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {

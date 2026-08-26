@@ -21,15 +21,34 @@ import UniformTypeIdentifiers
         statusBar?.onShowPet = { [weak self] in self?.petWindow?.showPet() }
         statusBar?.onMinimizeDestinationChanged = { [weak self] destination in self?.setMinimizeDestination(destination) }
         statusBar?.onSnappingChanged = { [weak self] enabled in self?.setSnapping(enabled) }
-        statusBar?.onThemePresetChanged = { [weak self] theme in self?.setThemePreset(theme) }
+        statusBar?.onAnimalAndThemeChanged = { [weak self] animal, theme in self?.setAnimalAndTheme(animal, theme: theme) }
         statusBar?.onImportThemeJSON = { [weak self] in self?.importThemeFromMenu() }
         statusBar?.onExportThemeJSON = { [weak self] in self?.exportThemeFromMenu() }
         statusBar?.onOpenAppearanceSettings = { [weak self] in self?.showSettings(initialTab: 0) }
         statusBar?.onConfigureMacros = { [weak self] in self?.showSettings(initialTab: 1) }
+        statusBar?.onOpenSettings = { [weak self] in self?.showSettings(initialTab: 0) }
+        statusBar?.onOpenAccessibility = {
+            AccessibilityHelper.openSystemSettings()
+        }
+        statusBar?.onToggleTextBoxAwareness = { [weak self] enabled in
+            guard let self else { return }
+            self.settings.textBoxAwarenessEnabled = enabled
+            try? self.settingsStore.save(self.settings)
+            self.statusBar?.update(textBoxAwarenessEnabled: enabled)
+            self.petWindow?.update(settings: self.settings)
+        }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
         statusBar?.update(snappingEnabled: settings.snappingEnabled)
-        statusBar?.update(theme: settings.themePreset)
+        statusBar?.update(animal: settings.animalKind, theme: settings.themePreset)
+        statusBar?.update(textBoxAwarenessEnabled: settings.textBoxAwarenessEnabled)
+        statusBar?.updateAccessibilityStatus()
+
+        // Check & prompt for accessibility if not yet granted
+        if !AccessibilityHelper.isTrusted {
+            AccessibilityHelper.requestPrompt()
+        }
+
         // Keep a regular application presence so Animal Buddy is available in
         // Force Quit Applications even when its pet window is minimized.
         NSApp.setActivationPolicy(.regular)
@@ -55,32 +74,40 @@ import UniformTypeIdentifiers
         petWindow?.update(settings: settings)
     }
 
-    private func setThemePreset(_ theme: PetThemePreset) {
+    private func setAnimalAndTheme(_ animal: AnimalKind, theme: PetThemePreset) {
+        settings.animalKind = animal
         settings.themePreset = theme
+        if theme == .custom {
+            settings.customPalette = animal.defaultPalette(for: .classic)
+        }
         try? settingsStore.save(settings)
-        statusBar?.update(theme: theme)
+        statusBar?.update(animal: animal, theme: theme)
         petWindow?.update(settings: settings)
     }
 
     private func showSettings(initialTab: Int = 0) {
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, themePreset, customPalette in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, textBoxAwareness in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
             self.settings.dragMacros = dragMacros
+            self.settings.animalKind = animal
             self.settings.themePreset = themePreset
             self.settings.customPalette = customPalette
+            self.settings.textBoxAwarenessEnabled = textBoxAwareness
             try? self.settingsStore.save(self.settings)
-            self.statusBar?.update(theme: themePreset)
+            self.statusBar?.update(animal: animal, theme: themePreset)
+            self.statusBar?.update(textBoxAwarenessEnabled: textBoxAwareness)
             self.petWindow?.update(settings: self.settings)
         }
-        controller.onThemeChanged = { [weak self] themePreset, customPalette in
+        controller.onThemeChanged = { [weak self] animal, themePreset, customPalette in
             guard let self else { return }
+            self.settings.animalKind = animal
             self.settings.themePreset = themePreset
             self.settings.customPalette = customPalette
             try? self.settingsStore.save(self.settings)
-            self.statusBar?.update(theme: themePreset)
+            self.statusBar?.update(animal: animal, theme: themePreset)
             self.petWindow?.update(settings: self.settings)
         }
         macroSettingsWindow = controller
@@ -100,11 +127,12 @@ import UniformTypeIdentifiers
         if openPanel.runModal() == .OK, let url = openPanel.url {
             do {
                 let data = try Data(contentsOf: url)
-                let (_, palette) = try ThemeDocument.decode(from: data)
+                let (animal, _, palette) = try ThemeDocument.decode(from: data)
+                self.settings.animalKind = animal
                 self.settings.themePreset = .custom
                 self.settings.customPalette = palette
                 try? self.settingsStore.save(self.settings)
-                self.statusBar?.update(theme: .custom)
+                self.statusBar?.update(animal: animal, theme: .custom)
                 self.petWindow?.update(settings: self.settings)
             } catch {
                 let alert = NSAlert()
@@ -117,15 +145,15 @@ import UniformTypeIdentifiers
 
     private func exportThemeFromMenu() {
         let savePanel = NSSavePanel()
-        savePanel.title = "Export Animal Buddy Theme"
+        savePanel.title = "Export \(settings.animalKind.nameWithoutEmoji) Theme"
         savePanel.prompt = "Export"
         savePanel.allowedContentTypes = [UTType.json]
-        let defaultFileName = "\(settings.themePreset == .custom ? "custom" : settings.themePreset.rawValue)-theme.json"
+        let defaultFileName = "\(settings.animalKind.rawValue)-\(settings.themePreset == .custom ? "custom" : settings.themePreset.rawValue)-theme.json"
         savePanel.nameFieldStringValue = defaultFileName
         if savePanel.runModal() == .OK, let url = savePanel.url {
             do {
-                let name = settings.themePreset == .custom ? "Custom Theme" : settings.themePreset.displayName
-                let doc = ThemeDocument(name: name, version: 1, palette: settings.activePalette)
+                let name = settings.themePreset == .custom ? "Custom \(settings.animalKind.nameWithoutEmoji) Theme" : settings.themePreset.displayName(for: settings.animalKind)
+                let doc = ThemeDocument(animal: settings.animalKind, name: name, version: 1, palette: settings.activePalette)
                 let data = try doc.exportJSONData()
                 try data.write(to: url)
             } catch {

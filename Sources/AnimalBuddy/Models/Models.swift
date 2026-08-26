@@ -90,15 +90,245 @@ public struct PetThemePalette: Codable, Sendable, Equatable {
     }
 }
 
+public enum AnimalKind: String, Codable, CaseIterable, Sendable {
+    case bird = "bird"
+    case dog = "dog"
+    case cat = "cat"
+    case monkey = "monkey"
+    case giraffe = "giraffe"
+
+    public var displayName: String {
+        switch self {
+        case .bird: "🐦 Bird"
+        case .dog: "🐶 Dog"
+        case .cat: "🐱 Cat"
+        case .monkey: "🐵 Monkey"
+        case .giraffe: "🦒 Giraffe"
+        }
+    }
+
+    public var nameWithoutEmoji: String {
+        switch self {
+        case .bird: "Bird"
+        case .dog: "Dog"
+        case .cat: "Cat"
+        case .monkey: "Monkey"
+        case .giraffe: "Giraffe"
+        }
+    }
+
+    public var emoji: String {
+        switch self {
+        case .bird: "🐦"
+        case .dog: "🐶"
+        case .cat: "🐱"
+        case .monkey: "🐵"
+        case .giraffe: "🦒"
+        }
+    }
+
+    public var themePresets: [PetThemePreset] {
+        [.classic, .dark, .light, .custom]
+    }
+
+    public func defaultPalette(for preset: PetThemePreset) -> PetThemePalette {
+        switch self {
+        case .bird:
+            switch preset {
+            case .classic:
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#4F91ED")!,
+                    bellyColor: CodableColor(hex: "#FAF7ED")!,
+                    beakColor: CodableColor(hex: "#FFAE29")!,
+                    blushColor: CodableColor(red: 1.0, green: 0.18, blue: 0.33, alpha: 0.58),
+                    eyeHighlightColor: CodableColor(hex: "#0A80E6")!
+                )
+            case .dark:
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#1E2538")!,
+                    bellyColor: CodableColor(hex: "#D8DEE9")!,
+                    beakColor: CodableColor(hex: "#F59E0B")!,
+                    blushColor: CodableColor(red: 0.65, green: 0.55, blue: 0.98, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#38BDF8")!
+                )
+            case .light:
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#E0F2FE")!,
+                    bellyColor: CodableColor(hex: "#FFFFFF")!,
+                    beakColor: CodableColor(hex: "#FBBF24")!,
+                    blushColor: CodableColor(red: 0.99, green: 0.64, blue: 0.69, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#38BDF8")!
+                )
+            case .custom:
+                return defaultPalette(for: .classic)
+            }
+
+        case .dog:
+            switch preset {
+            case .classic: // Golden Retriever Puppy
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#E5A65D")!,
+                    bellyColor: CodableColor(hex: "#FFF3E0")!,
+                    beakColor: CodableColor(hex: "#8D5B4C")!,
+                    blushColor: CodableColor(red: 1.0, green: 0.42, blue: 0.55, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#5D4037")!
+                )
+            case .dark: // Chocolate / Espresso Pup
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#4E342E")!,
+                    bellyColor: CodableColor(hex: "#BCAAA4")!,
+                    beakColor: CodableColor(hex: "#1F1209")!,
+                    blushColor: CodableColor(red: 1.0, green: 0.44, blue: 0.35, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#FFB300")!
+                )
+            case .light: // Samoyed Snow Puppy
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#F8FAFC")!,
+                    bellyColor: CodableColor(hex: "#FFFFFF")!,
+                    beakColor: CodableColor(hex: "#334155")!,
+                    blushColor: CodableColor(red: 1.0, green: 0.50, blue: 0.67, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#0288D1")!
+                )
+            case .custom:
+                return defaultPalette(for: .classic)
+            }
+
+        case .cat:
+            switch preset {
+            case .classic: // Ginger Tabby
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#F97316")!,
+                    bellyColor: CodableColor(hex: "#FEF3C7")!,
+                    beakColor: CodableColor(hex: "#FB7185")!,
+                    blushColor: CodableColor(red: 0.96, green: 0.25, blue: 0.37, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#10B981")!
+                )
+            case .dark: // Midnight Panther
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#18181B")!,
+                    bellyColor: CodableColor(hex: "#3F3F46")!,
+                    beakColor: CodableColor(hex: "#F472B6")!,
+                    blushColor: CodableColor(red: 0.75, green: 0.52, blue: 0.99, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#FACC15")!
+                )
+            case .light: // Snow White Kitty
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#F1F5F9")!,
+                    bellyColor: CodableColor(hex: "#FFFFFF")!,
+                    beakColor: CodableColor(hex: "#FDA4AF")!,
+                    blushColor: CodableColor(red: 0.99, green: 0.64, blue: 0.69, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#3B82F6")!
+                )
+            case .custom:
+                return defaultPalette(for: .classic)
+            }
+
+        case .monkey:
+            switch preset {
+            case .classic: // Playful Capuchin
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#78350F")!,
+                    bellyColor: CodableColor(hex: "#FED7AA")!,
+                    beakColor: CodableColor(hex: "#451A03")!,
+                    blushColor: CodableColor(red: 0.96, green: 0.25, blue: 0.37, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#92400E")!
+                )
+            case .dark: // Shadow Gibbon
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#1C1917")!,
+                    bellyColor: CodableColor(hex: "#78716C")!,
+                    beakColor: CodableColor(hex: "#0C0A09")!,
+                    blushColor: CodableColor(red: 0.66, green: 0.33, blue: 0.97, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#F59E0B")!
+                )
+            case .light: // Golden Marmoset
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#F59E0B")!,
+                    bellyColor: CodableColor(hex: "#FEF3C7")!,
+                    beakColor: CodableColor(hex: "#78350F")!,
+                    blushColor: CodableColor(red: 0.98, green: 0.44, blue: 0.52, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#0D9488")!
+                )
+            case .custom:
+                return defaultPalette(for: .classic)
+            }
+
+        case .giraffe:
+            switch preset {
+            case .classic: // Savanna Gold Giraffe
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#F59E0B")!,
+                    bellyColor: CodableColor(hex: "#FEF3C7")!,
+                    beakColor: CodableColor(hex: "#B45309")!,
+                    blushColor: CodableColor(red: 0.98, green: 0.44, blue: 0.52, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#78350F")!
+                )
+            case .dark: // Sunset Auburn Giraffe
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#7C2D12")!,
+                    bellyColor: CodableColor(hex: "#E7E5E4")!,
+                    beakColor: CodableColor(hex: "#431407")!,
+                    blushColor: CodableColor(red: 0.96, green: 0.25, blue: 0.37, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#EAB308")!
+                )
+            case .light: // Pastel Snow Giraffe
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#FEF08A")!,
+                    bellyColor: CodableColor(hex: "#FFFFFF")!,
+                    beakColor: CodableColor(hex: "#FDE047")!,
+                    blushColor: CodableColor(red: 0.96, green: 0.45, blue: 0.71, alpha: 0.60),
+                    eyeHighlightColor: CodableColor(hex: "#06B6D4")!
+                )
+            case .custom:
+                return defaultPalette(for: .classic)
+            }
+        }
+    }
+
+    public var leftTriggerName: String {
+        switch self {
+        case .bird: return "Left Eye / Cheek Blush"
+        case .dog: return "Left Ear & Cheek"
+        case .cat: return "Left Whisker Cheek"
+        case .monkey: return "Left Ear & Cheek"
+        case .giraffe: return "Left Horn & Cheek Spot"
+        }
+    }
+
+    public var rightTriggerName: String {
+        switch self {
+        case .bird: return "Right Eye / Cheek Blush"
+        case .dog: return "Right Ear & Cheek"
+        case .cat: return "Right Whisker Cheek"
+        case .monkey: return "Right Ear & Cheek"
+        case .giraffe: return "Right Horn & Cheek Spot"
+        }
+    }
+}
+
 public struct ThemeDocument: Codable, Sendable, Equatable {
+    public var animal: AnimalKind
     public var name: String
     public var version: Int
     public var palette: PetThemePalette
 
-    public init(name: String = "Custom Theme", version: Int = 1, palette: PetThemePalette) {
+    enum CodingKeys: String, CodingKey {
+        case animal, name, version, palette
+    }
+
+    public init(animal: AnimalKind = .bird, name: String = "Custom Theme", version: Int = 1, palette: PetThemePalette) {
+        self.animal = animal
         self.name = name
         self.version = version
         self.palette = palette
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.animal = (try? container.decodeIfPresent(AnimalKind.self, forKey: .animal)) ?? .bird
+        self.name = (try? container.decodeIfPresent(String.self, forKey: .name)) ?? "Custom Theme"
+        self.version = (try? container.decodeIfPresent(Int.self, forKey: .version)) ?? 1
+        self.palette = try container.decode(PetThemePalette.self, forKey: .palette)
     }
 
     public func exportJSONData() throws -> Data {
@@ -107,13 +337,13 @@ public struct ThemeDocument: Codable, Sendable, Equatable {
         return try encoder.encode(self)
     }
 
-    public static func decode(from data: Data) throws -> (name: String, palette: PetThemePalette) {
+    public static func decode(from data: Data) throws -> (animal: AnimalKind, name: String, palette: PetThemePalette) {
         let decoder = JSONDecoder()
         if let doc = try? decoder.decode(ThemeDocument.self, from: data) {
-            return (doc.name, doc.palette)
+            return (doc.animal, doc.name, doc.palette)
         }
         if let pal = try? decoder.decode(PetThemePalette.self, from: data) {
-            return ("Imported Theme", pal)
+            return (.bird, "Imported Theme", pal)
         }
         throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Invalid theme JSON format"))
     }
@@ -125,44 +355,52 @@ public enum PetThemePreset: String, Codable, CaseIterable, Sendable {
     case light = "light"
     case custom = "custom"
 
-    public var displayName: String {
-        switch self {
-        case .classic: "Classic Blue"
-        case .dark: "Midnight Dark"
-        case .light: "Daylight Light"
-        case .custom: "Custom Palette"
+    public func displayName(for animal: AnimalKind) -> String {
+        switch animal {
+        case .bird:
+            switch self {
+            case .classic: "Classic Blue"
+            case .dark: "Midnight Dark"
+            case .light: "Daylight Light"
+            case .custom: "Custom Palette"
+            }
+        case .dog:
+            switch self {
+            case .classic: "Golden Puppy"
+            case .dark: "Chocolate Pup"
+            case .light: "Snow Puppy"
+            case .custom: "Custom Palette"
+            }
+        case .cat:
+            switch self {
+            case .classic: "Ginger Tabby"
+            case .dark: "Midnight Cat"
+            case .light: "Snow Kitty"
+            case .custom: "Custom Palette"
+            }
+        case .monkey:
+            switch self {
+            case .classic: "Playful Capuchin"
+            case .dark: "Shadow Gibbon"
+            case .light: "Golden Marmoset"
+            case .custom: "Custom Palette"
+            }
+        case .giraffe:
+            switch self {
+            case .classic: "Savanna Gold"
+            case .dark: "Sunset Auburn"
+            case .light: "Pastel Snow"
+            case .custom: "Custom Palette"
+            }
         }
     }
 
+    public var displayName: String {
+        displayName(for: .bird)
+    }
+
     public var palette: PetThemePalette {
-        switch self {
-        case .classic:
-            return PetThemePalette(
-                bodyColor: CodableColor(red: 0.31, green: 0.57, blue: 0.93),
-                bellyColor: CodableColor(red: 0.98, green: 0.97, blue: 0.93),
-                beakColor: CodableColor(red: 1.0, green: 0.68, blue: 0.16),
-                blushColor: CodableColor(red: 1.0, green: 0.18, blue: 0.33, alpha: 0.58),
-                eyeHighlightColor: CodableColor(red: 0.04, green: 0.50, blue: 0.90)
-            )
-        case .dark:
-            return PetThemePalette(
-                bodyColor: CodableColor(red: 0.12, green: 0.15, blue: 0.22),
-                bellyColor: CodableColor(red: 0.85, green: 0.88, blue: 0.92),
-                beakColor: CodableColor(red: 0.96, green: 0.62, blue: 0.04),
-                blushColor: CodableColor(red: 0.65, green: 0.55, blue: 0.98, alpha: 0.60),
-                eyeHighlightColor: CodableColor(red: 0.22, green: 0.74, blue: 0.97)
-            )
-        case .light:
-            return PetThemePalette(
-                bodyColor: CodableColor(red: 0.88, green: 0.95, blue: 1.0),
-                bellyColor: CodableColor(red: 1.0, green: 1.0, blue: 1.0),
-                beakColor: CodableColor(red: 0.98, green: 0.75, blue: 0.14),
-                blushColor: CodableColor(red: 0.99, green: 0.64, blue: 0.69, alpha: 0.60),
-                eyeHighlightColor: CodableColor(red: 0.22, green: 0.74, blue: 0.97)
-            )
-        case .custom:
-            return Self.classic.palette
-        }
+        AnimalKind.bird.defaultPalette(for: self)
     }
 }
 
@@ -714,13 +952,15 @@ public struct AppSettings: Codable, Sendable {
     public var alwaysOnTop = true
     public var petScale = 1.0
     public var snappingEnabled = false
+    public var animalKind: AnimalKind = .bird
     public var leftBlushMacro = UserMacro()
     public var rightBlushMacro = UserMacro()
     public var dragMacros: [DragMacroBinding] = []
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
     public var minimizeDestination: MinimizeDestination = .menubar
     public var themePreset: PetThemePreset = .classic
-    public var customPalette: PetThemePalette = PetThemePreset.classic.palette
+    public var customPalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic)
+    public var textBoxAwarenessEnabled: Bool = true
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -730,10 +970,10 @@ public struct AppSettings: Codable, Sendable {
     ]
 
     public var activePalette: PetThemePalette {
-        themePreset == .custom ? customPalette : themePreset.palette
+        themePreset == .custom ? customPalette : animalKind.defaultPalette(for: themePreset)
     }
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, bindings }
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, textBoxAwarenessEnabled, bindings }
 
     public init() {}
 
@@ -742,13 +982,15 @@ public struct AppSettings: Codable, Sendable {
         alwaysOnTop = try values.decodeIfPresent(Bool.self, forKey: .alwaysOnTop) ?? true
         petScale = try values.decodeIfPresent(Double.self, forKey: .petScale) ?? 1.0
         snappingEnabled = try values.decodeIfPresent(Bool.self, forKey: .snappingEnabled) ?? false
+        animalKind = try values.decodeIfPresent(AnimalKind.self, forKey: .animalKind) ?? .bird
         leftBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .leftBlushMacro) ?? UserMacro()
         rightBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .rightBlushMacro) ?? UserMacro()
         dragMacros = try values.decodeIfPresent([DragMacroBinding].self, forKey: .dragMacros) ?? []
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         themePreset = try values.decodeIfPresent(PetThemePreset.self, forKey: .themePreset) ?? .classic
-        customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? PetThemePreset.classic.palette
+        customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? AnimalKind.bird.defaultPalette(for: .classic)
+        textBoxAwarenessEnabled = try values.decodeIfPresent(Bool.self, forKey: .textBoxAwarenessEnabled) ?? true
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

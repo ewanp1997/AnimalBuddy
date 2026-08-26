@@ -7,4 +7,4 @@ xcuserdata/
 build/
 *.dSYM
 *.app
-
+.vscode/

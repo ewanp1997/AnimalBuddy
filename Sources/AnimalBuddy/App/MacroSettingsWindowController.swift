@@ -2,8 +2,8 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], PetThemePreset, PetThemePalette) -> Void)?
-    var onThemeChanged: ((PetThemePreset, PetThemePalette) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
+    var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette) -> Void)?
 
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
@@ -11,15 +11,20 @@ import UniformTypeIdentifiers
     private let leftName = NSTextField()
     private let rightName = NSTextField()
 
+    private var selectedAnimal: AnimalKind
     private var selectedTheme: PetThemePreset
     private var customPalette: PetThemePalette
-    private let themeSegment = NSSegmentedControl(labels: [
-        "🔹 Classic Blue",
-        "🌑 Midnight Dark",
-        "☀️ Daylight Light",
-        "🎨 Custom"
-    ], trackingMode: .selectOne, target: nil, action: nil)
+    private var textBoxAwarenessEnabled: Bool
+
+    private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
+    private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom"], trackingMode: .selectOne, target: nil, action: nil)
     private let themeDescription = NSTextField(wrappingLabelWithString: "")
+
+    private let bodyLabel = NSTextField(labelWithString: "Body & Feathers")
+    private let bellyLabel = NSTextField(labelWithString: "Belly & Face")
+    private let beakLabel = NSTextField(labelWithString: "Beak & Feet")
+    private let blushLabel = NSTextField(labelWithString: "Blush Cheeks")
+    private let eyeLabel = NSTextField(labelWithString: "Eye Glow")
 
     private let bodyColorWell = NSColorWell()
     private let bellyColorWell = NSColorWell()
@@ -37,6 +42,13 @@ import UniformTypeIdentifiers
     private var macrosView: NSView!
     private let macroFileStatusLabel = NSTextField(labelWithString: "")
 
+    private let triggerBannerTitle = NSTextField(labelWithString: "")
+    private let triggerBannerSubtitle = NSTextField(wrappingLabelWithString: "")
+    private let leftCardTitleLabel = NSTextField(labelWithString: "")
+    private let leftCardSubtitleLabel = NSTextField(wrappingLabelWithString: "")
+    private let rightCardTitleLabel = NSTextField(labelWithString: "")
+    private let rightCardSubtitleLabel = NSTextField(wrappingLabelWithString: "")
+
     init(settings: AppSettings, initialTab: Int = 0) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 760),
@@ -50,8 +62,10 @@ import UniformTypeIdentifiers
         leftBuilder = MacroBuilderView(steps: settings.leftBlushMacro.effectiveSteps)
         rightBuilder = MacroBuilderView(steps: settings.rightBlushMacro.effectiveSteps)
         dragEditor = DragMacroEditorView(bindings: settings.dragMacros)
+        selectedAnimal = settings.animalKind
         selectedTheme = settings.themePreset
         customPalette = settings.customPalette
+        textBoxAwarenessEnabled = settings.textBoxAwarenessEnabled
 
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
@@ -114,8 +128,11 @@ import UniformTypeIdentifiers
         ])
 
         switchTab(to: initialTab)
+        updateThemeSegmentLabels()
+        updateColorLabels()
         updateColorWellsFromActivePalette()
         updateThemeDescription()
+        updateMacroTabLabels()
     }
 
     @objc private func tabChanged() {
@@ -148,15 +165,16 @@ import UniformTypeIdentifiers
         doc.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = doc
 
-        let heading = NSTextField(labelWithString: "Plumage & Appearance")
+        let heading = NSTextField(labelWithString: "Animal Plumage & Appearance")
         heading.font = .systemFont(ofSize: 20, weight: .bold)
-        let note = NSTextField(wrappingLabelWithString: "Choose a signature bird theme or personalize individual colors. Any custom color you pick updates Animal Buddy live!")
+        let note = NSTextField(wrappingLabelWithString: "Choose your Animal Buddy, select signature themes, or personalize individual colors live!")
         note.textColor = .secondaryLabelColor
         note.maximumNumberOfLines = 3
 
         let themeCard = makeThemeCard()
         let customCard = makePersonalCustomizationCard()
         let previewCard = makePreviewCard()
+        let awarenessCard = makeTypingAwarenessCard()
 
         let leftCol = NSStackView(views: [themeCard, customCard])
         leftCol.orientation = .vertical
@@ -169,7 +187,7 @@ import UniformTypeIdentifiers
         row.alignment = .top
         row.distribution = .fill
 
-        let mainStack = NSStackView(views: [heading, note, row])
+        let mainStack = NSStackView(views: [heading, note, row, awarenessCard])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -181,6 +199,7 @@ import UniformTypeIdentifiers
         previewCard.translatesAutoresizingMaskIntoConstraints = false
         themeCard.translatesAutoresizingMaskIntoConstraints = false
         customCard.translatesAutoresizingMaskIntoConstraints = false
+        awarenessCard.translatesAutoresizingMaskIntoConstraints = false
         row.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -194,6 +213,7 @@ import UniformTypeIdentifiers
             mainStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
 
             row.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            awarenessCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             leftCol.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.62),
             themeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
             customCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
@@ -204,8 +224,16 @@ import UniformTypeIdentifiers
     }
 
     private func makeThemeCard() -> NSView {
-        let title = NSTextField(labelWithString: "Bird Theme")
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        let animalTitle = NSTextField(labelWithString: "Animal Choice")
+        animalTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        animalSegment.target = self
+        animalSegment.action = #selector(animalSegmentChanged)
+        animalSegment.segmentStyle = .texturedRounded
+        animalSegment.selectedSegment = AnimalKind.allCases.firstIndex(of: selectedAnimal) ?? 0
+
+        let themeTitle = NSTextField(labelWithString: "Theme Preset")
+        themeTitle.font = .systemFont(ofSize: 15, weight: .semibold)
 
         themeSegment.target = self
         themeSegment.action = #selector(themeSegmentChanged)
@@ -221,7 +249,7 @@ import UniformTypeIdentifiers
         themeDescription.textColor = .secondaryLabelColor
         themeDescription.maximumNumberOfLines = 3
 
-        let stack = NSStackView(views: [title, themeSegment, themeDescription])
+        let stack = NSStackView(views: [animalTitle, animalSegment, themeTitle, themeSegment, themeDescription])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -230,9 +258,11 @@ import UniformTypeIdentifiers
         stack.layer?.cornerRadius = 12
         stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 
+        animalSegment.translatesAutoresizingMaskIntoConstraints = false
         themeSegment.translatesAutoresizingMaskIntoConstraints = false
         themeDescription.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
+            animalSegment.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             themeSegment.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             themeDescription.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
@@ -249,11 +279,11 @@ import UniformTypeIdentifiers
         subtitle.font = .systemFont(ofSize: 12)
         subtitle.textColor = .secondaryLabelColor
 
-        let bodyRow = makeColorRow(label: "Body & Feathers", well: bodyColorWell)
-        let bellyRow = makeColorRow(label: "Belly & Face", well: bellyColorWell)
-        let beakRow = makeColorRow(label: "Beak & Feet", well: beakColorWell)
-        let blushRow = makeColorRow(label: "Blush Cheeks", well: blushColorWell)
-        let eyeRow = makeColorRow(label: "Eye Glow", well: eyeHighlightColorWell)
+        let bodyRow = makeColorRow(labelView: bodyLabel, well: bodyColorWell)
+        let bellyRow = makeColorRow(labelView: bellyLabel, well: bellyColorWell)
+        let beakRow = makeColorRow(labelView: beakLabel, well: beakColorWell)
+        let blushRow = makeColorRow(labelView: blushLabel, well: blushColorWell)
+        let eyeRow = makeColorRow(labelView: eyeLabel, well: eyeHighlightColorWell)
 
         let importBtn = NSButton(title: "📥 Import JSON…", target: self, action: #selector(importThemePressed))
         importBtn.bezelStyle = .accessoryBarAction
@@ -297,9 +327,8 @@ import UniformTypeIdentifiers
         return stack
     }
 
-    private func makeColorRow(label: String, well: NSColorWell) -> NSView {
-        let lbl = NSTextField(labelWithString: label)
-        lbl.font = .systemFont(ofSize: 13, weight: .medium)
+    private func makeColorRow(labelView: NSTextField, well: NSColorWell) -> NSView {
+        labelView.font = .systemFont(ofSize: 13, weight: .medium)
 
         well.target = self
         well.action = #selector(colorWellChanged(_:))
@@ -307,7 +336,7 @@ import UniformTypeIdentifiers
         well.heightAnchor.constraint(equalToConstant: 24).isActive = true
         well.widthAnchor.constraint(equalToConstant: 44).isActive = true
 
-        let row = NSStackView(views: [lbl, NSView(), well])
+        let row = NSStackView(views: [labelView, NSView(), well])
         row.orientation = .horizontal
         row.alignment = .centerY
         return row
@@ -319,9 +348,10 @@ import UniformTypeIdentifiers
 
         previewPetView = PetView(frame: NSRect(x: 0, y: 0, width: 140, height: 140))
         previewPetView.translatesAutoresizingMaskIntoConstraints = false
+        previewPetView.animalKind = selectedAnimal
         previewPetView.themePalette = currentPalette
 
-        let flapBtn = NSButton(title: "Flap Wings", target: self, action: #selector(togglePreviewFlap))
+        let flapBtn = NSButton(title: "Animate Movement", target: self, action: #selector(togglePreviewFlap))
         flapBtn.bezelStyle = .rounded
         let happyBtn = NSButton(title: "Celebrate 🎉", target: self, action: #selector(triggerPreviewCelebrate))
         happyBtn.bezelStyle = .rounded
@@ -349,6 +379,55 @@ import UniformTypeIdentifiers
         return stack
     }
 
+    private func makeTypingAwarenessCard() -> NSView {
+        let title = NSTextField(labelWithString: "Typing & Text Box Translucency (Optional)")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let toggle = NSButton(checkboxWithTitle: "Enable automatic translucency when typing or hovering over active text fields", target: self, action: #selector(toggleTypingAwareness(_:)))
+        toggle.state = textBoxAwarenessEnabled ? .on : .off
+        toggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let ackLabel = NSTextField(wrappingLabelWithString: "ℹ️ Why Accessibility is needed:\nmacOS Accessibility permissions are only required if you want Animal Buddy to determine when you are actively typing behind the buddy or over text input fields to smoothly dim out of your way. This is completely optional — Animal Buddy remains fully functional with all macros and features even without this permission.")
+        ackLabel.font = .systemFont(ofSize: 11)
+        ackLabel.textColor = .secondaryLabelColor
+
+        let statusLabel = NSTextField(wrappingLabelWithString: AccessibilityHelper.isTrusted ? "✓ macOS Accessibility Permission Granted" : "⚠️ Accessibility Permission Not Granted")
+        statusLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        statusLabel.textColor = AccessibilityHelper.isTrusted ? .systemGreen : .systemOrange
+
+        let grantBtn = NSButton(title: "Grant Permission in System Settings…", target: self, action: #selector(grantAccessibilityPressed))
+        grantBtn.bezelStyle = .rounded
+        grantBtn.isHidden = AccessibilityHelper.isTrusted
+
+        let statusRow = NSStackView(views: [statusLabel, grantBtn])
+        statusRow.orientation = .horizontal
+        statusRow.alignment = .centerY
+        statusRow.spacing = 8
+
+        let stack = NSStackView(views: [title, toggle, ackLabel, statusRow])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+        ackLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusRow.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            toggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            ackLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            statusRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    @objc private func toggleTypingAwareness(_ sender: NSButton) {
+        textBoxAwarenessEnabled = (sender.state == .on)
+    }
+
     @objc private func togglePreviewFlap() {
         let isNowFlying = !previewPetView.isFlying
         previewPetView.setFlying(isNowFlying)
@@ -362,6 +441,20 @@ import UniformTypeIdentifiers
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
             self?.previewPetView.state = .idle
         }
+    }
+
+    @objc private func animalSegmentChanged() {
+        let idx = animalSegment.selectedSegment
+        guard idx >= 0 && idx < AnimalKind.allCases.count else { return }
+        selectedAnimal = AnimalKind.allCases[idx]
+        updateThemeSegmentLabels()
+        updateColorLabels()
+        updateColorWellsFromActivePalette()
+        updateThemeDescription()
+        updateMacroTabLabels()
+        previewPetView.animalKind = selectedAnimal
+        previewPetView.themePalette = currentPalette
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
 
     @objc private func themeSegmentChanged() {
@@ -378,8 +471,9 @@ import UniformTypeIdentifiers
         }
         updateColorWellsFromActivePalette()
         updateThemeDescription()
+        previewPetView.animalKind = selectedAnimal
         previewPetView.themePalette = currentPalette
-        onThemeChanged?(selectedTheme, customPalette)
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
 
     @objc private func colorWellChanged(_ sender: NSColorWell) {
@@ -394,35 +488,36 @@ import UniformTypeIdentifiers
         )
         updateThemeDescription()
         previewPetView.themePalette = customPalette
-        onThemeChanged?(selectedTheme, customPalette)
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
 
     @objc private func resetColorsPressed() {
         selectedTheme = .classic
         themeSegment.selectedSegment = 0
-        customPalette = PetThemePreset.classic.palette
+        customPalette = selectedAnimal.defaultPalette(for: .classic)
         updateColorWellsFromActivePalette()
         updateThemeDescription()
+        previewPetView.animalKind = selectedAnimal
         previewPetView.themePalette = currentPalette
-        themeStatusLabel.stringValue = "Restored classic colors"
+        themeStatusLabel.stringValue = "Restored classic colors for \(selectedAnimal.displayName)"
         themeStatusLabel.textColor = .secondaryLabelColor
-        onThemeChanged?(selectedTheme, customPalette)
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
     }
 
     @objc func exportThemePressed() {
         guard let window else { return }
         let savePanel = NSSavePanel()
-        savePanel.title = "Export Animal Buddy Theme"
+        savePanel.title = "Export \(selectedAnimal.nameWithoutEmoji) Theme"
         savePanel.prompt = "Export"
         savePanel.allowedContentTypes = [UTType.json]
-        let defaultFileName = "\(selectedTheme == .custom ? "custom" : selectedTheme.rawValue)-theme.json"
+        let defaultFileName = "\(selectedAnimal.rawValue)-\(selectedTheme == .custom ? "custom" : selectedTheme.rawValue)-theme.json"
         savePanel.nameFieldStringValue = defaultFileName
 
         savePanel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, let url = savePanel.url else { return }
             do {
-                let themeName = self.selectedTheme == .custom ? "Custom Theme" : self.selectedTheme.displayName
-                let doc = ThemeDocument(name: themeName, version: 1, palette: self.currentPalette)
+                let themeName = self.selectedTheme == .custom ? "Custom \(self.selectedAnimal.nameWithoutEmoji) Theme" : self.selectedTheme.displayName(for: self.selectedAnimal)
+                let doc = ThemeDocument(animal: self.selectedAnimal, name: themeName, version: 1, palette: self.currentPalette)
                 let data = try doc.exportJSONData()
                 try data.write(to: url)
                 self.themeStatusLabel.stringValue = "✅ Theme exported to \(url.lastPathComponent)"
@@ -450,15 +545,21 @@ import UniformTypeIdentifiers
             guard let self, response == .OK, let url = openPanel.url else { return }
             do {
                 let data = try Data(contentsOf: url)
-                let (name, importedPalette) = try ThemeDocument.decode(from: data)
+                let (animal, name, importedPalette) = try ThemeDocument.decode(from: data)
+                self.selectedAnimal = animal
+                self.animalSegment.selectedSegment = AnimalKind.allCases.firstIndex(of: animal) ?? 0
                 self.customPalette = importedPalette
                 self.selectedTheme = .custom
                 self.themeSegment.selectedSegment = 3
+                self.updateThemeSegmentLabels()
+                self.updateColorLabels()
                 self.updateColorWellsFromActivePalette()
                 self.updateThemeDescription()
+                self.updateMacroTabLabels()
+                self.previewPetView.animalKind = animal
                 self.previewPetView.themePalette = importedPalette
-                self.onThemeChanged?(.custom, importedPalette)
-                self.themeStatusLabel.stringValue = "✅ Loaded theme: \(name)"
+                self.onThemeChanged?(animal, .custom, importedPalette)
+                self.themeStatusLabel.stringValue = "✅ Loaded \(animal.displayName) theme: \(name)"
                 self.themeStatusLabel.textColor = .systemGreen
             } catch {
                 let alert = NSAlert()
@@ -471,7 +572,51 @@ import UniformTypeIdentifiers
     }
 
     private var currentPalette: PetThemePalette {
-        selectedTheme == .custom ? customPalette : selectedTheme.palette
+        selectedTheme == .custom ? customPalette : selectedAnimal.defaultPalette(for: selectedTheme)
+    }
+
+    private func updateThemeSegmentLabels() {
+        let presets = selectedAnimal.themePresets
+        for (i, p) in presets.enumerated() {
+            if i < themeSegment.segmentCount {
+                themeSegment.setLabel(p.displayName(for: selectedAnimal), forSegment: i)
+            }
+        }
+    }
+
+    private func updateColorLabels() {
+        switch selectedAnimal {
+        case .bird:
+            bodyLabel.stringValue = "Body & Feathers"
+            bellyLabel.stringValue = "Belly & Face"
+            beakLabel.stringValue = "Beak & Feet"
+            blushLabel.stringValue = "Blush Cheeks"
+            eyeLabel.stringValue = "Eye Glow"
+        case .dog:
+            bodyLabel.stringValue = "Body & Fur"
+            bellyLabel.stringValue = "Muzzle & Chest"
+            beakLabel.stringValue = "Nose & Ears"
+            blushLabel.stringValue = "Blush Cheeks"
+            eyeLabel.stringValue = "Eye Iris"
+        case .cat:
+            bodyLabel.stringValue = "Body & Fur"
+            bellyLabel.stringValue = "Muzzle & Chest"
+            beakLabel.stringValue = "Nose & Inner Ears"
+            blushLabel.stringValue = "Blush Cheeks"
+            eyeLabel.stringValue = "Eye Iris"
+        case .monkey:
+            bodyLabel.stringValue = "Body & Fur"
+            bellyLabel.stringValue = "Face Mask & Belly"
+            beakLabel.stringValue = "Nose & Ears"
+            blushLabel.stringValue = "Blush Cheeks"
+            eyeLabel.stringValue = "Eye Iris"
+        case .giraffe:
+            bodyLabel.stringValue = "Body & Fur"
+            bellyLabel.stringValue = "Muzzle & Belly"
+            beakLabel.stringValue = "Spots & Horns"
+            blushLabel.stringValue = "Blush Cheeks"
+            eyeLabel.stringValue = "Eye Iris"
+        }
     }
 
     private func updateColorWellsFromActivePalette() {
@@ -484,16 +629,23 @@ import UniformTypeIdentifiers
     }
 
     private func updateThemeDescription() {
-        switch selectedTheme {
-        case .classic:
-            themeDescription.stringValue = "The iconic bright sky-blue bird with gentle cream cheeks and a joyful golden beak."
-        case .dark:
-            themeDescription.stringValue = "A sleek obsidian and midnight navy bird with shimmering silver chest and warm amber glow."
-        case .light:
-            themeDescription.stringValue = "A soft morning-sky and pure snowy white plumage with delicate rose blush."
-        case .custom:
-            themeDescription.stringValue = "Your custom crafted color palette, rendered uniquely for your buddy."
-        }
+        let themeName = selectedTheme.displayName(for: selectedAnimal)
+        themeDescription.stringValue = "\(selectedAnimal.displayName) · \(themeName) theme active."
+    }
+
+    private func updateMacroTabLabels() {
+        triggerBannerTitle.stringValue = "🎯 Touch & Drop Triggers for \(selectedAnimal.displayName)"
+        triggerBannerSubtitle.stringValue = """
+        • Left Touch: \(selectedAnimal.leftTriggerName) → triggers Left Macro
+        • Right Touch: \(selectedAnimal.rightTriggerName) → triggers Right Macro
+        • Drag & Drop: Drop files, URLs, or text onto \(selectedAnimal.nameWithoutEmoji) → triggers Dragging Macros
+        """
+
+        leftCardTitleLabel.stringValue = "👈 Left Trigger (\(selectedAnimal.leftTriggerName))"
+        leftCardSubtitleLabel.stringValue = "Clicking the \(selectedAnimal.nameWithoutEmoji)'s \(selectedAnimal.leftTriggerName.lowercased()) runs this sequence:"
+
+        rightCardTitleLabel.stringValue = "👉 Right Trigger (\(selectedAnimal.rightTriggerName))"
+        rightCardSubtitleLabel.stringValue = "Clicking the \(selectedAnimal.nameWithoutEmoji)'s \(selectedAnimal.rightTriggerName.lowercased()) runs this sequence:"
     }
 
     // MARK: - Macros Tab
@@ -515,8 +667,9 @@ import UniformTypeIdentifiers
         note.textColor = .secondaryLabelColor
         note.maximumNumberOfLines = 3
 
-        let leftCard = makeCard(title: "Left blush", slot: .left, nameField: leftName, builder: leftBuilder)
-        let rightCard = makeCard(title: "Right blush", slot: .right, nameField: rightName, builder: rightBuilder)
+        let triggerBanner = makeTriggerBanner()
+        let leftCard = makeCard(slot: .left, nameField: leftName, builder: leftBuilder)
+        let rightCard = makeCard(slot: .right, nameField: rightName, builder: rightBuilder)
         let cards = NSStackView(views: [leftCard, rightCard])
         cards.orientation = .horizontal
         cards.spacing = 16
@@ -535,7 +688,7 @@ import UniformTypeIdentifiers
         fileButtons.alignment = .centerY
         fileButtons.spacing = 10
 
-        let mainStack = NSStackView(views: [heading, note, cards, dragCard, fileButtons])
+        let mainStack = NSStackView(views: [heading, note, triggerBanner, cards, dragCard, fileButtons])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 18
@@ -553,6 +706,7 @@ import UniformTypeIdentifiers
             mainStack.topAnchor.constraint(equalTo: documentView.topAnchor),
             mainStack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
 
+            triggerBanner.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             cards.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             dragCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56)
         ])
@@ -560,9 +714,57 @@ import UniformTypeIdentifiers
         return scrollView
     }
 
-    private func makeCard(title: String, slot: BlushSlot, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
-        let label = NSTextField(labelWithString: title)
+    private func makeTriggerBanner() -> NSView {
+        triggerBannerTitle.font = .systemFont(ofSize: 14, weight: .bold)
+        triggerBannerSubtitle.font = .systemFont(ofSize: 12, weight: .regular)
+        triggerBannerSubtitle.textColor = .secondaryLabelColor
+
+        let accessStatusLabel = NSTextField(wrappingLabelWithString: AccessibilityHelper.isTrusted ? "✓ Accessibility enabled for text box translucency" : "⚠️ Accessibility permission recommended for live text box translucency & global typing detection.")
+        accessStatusLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        accessStatusLabel.textColor = AccessibilityHelper.isTrusted ? .systemGreen : .systemOrange
+
+        let grantBtn = NSButton(title: "Grant Permission…", target: self, action: #selector(grantAccessibilityPressed))
+        grantBtn.bezelStyle = .inline
+        grantBtn.isHidden = AccessibilityHelper.isTrusted
+
+        let accessRow = NSStackView(views: [accessStatusLabel, grantBtn])
+        accessRow.orientation = .horizontal
+        accessRow.alignment = .centerY
+        accessRow.spacing = 8
+
+        let stack = NSStackView(views: [triggerBannerTitle, triggerBannerSubtitle, accessRow])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.10).cgColor
+        stack.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.30).cgColor
+        stack.layer?.borderWidth = 1
+
+        triggerBannerTitle.translatesAutoresizingMaskIntoConstraints = false
+        triggerBannerSubtitle.translatesAutoresizingMaskIntoConstraints = false
+        accessRow.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            triggerBannerTitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32),
+            triggerBannerSubtitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32),
+            accessRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32)
+        ])
+        return stack
+    }
+
+    @objc private func grantAccessibilityPressed() {
+        AccessibilityHelper.openSystemSettings()
+    }
+
+    private func makeCard(slot: BlushSlot, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
+        let label = slot == .left ? leftCardTitleLabel : rightCardTitleLabel
         label.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let subtitle = slot == .left ? leftCardSubtitleLabel : rightCardSubtitleLabel
+        subtitle.font = .systemFont(ofSize: 12)
+        subtitle.textColor = .secondaryLabelColor
 
         let presetPicker = NSPopUpButton()
         presetPicker.addItem(withTitle: "💡 Suggestions…")
@@ -579,7 +781,7 @@ import UniformTypeIdentifiers
         let nameLabel = NSTextField(labelWithString: "Name")
         nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
         nameLabel.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [header, nameLabel, nameField, builder])
+        let stack = NSStackView(views: [header, subtitle, nameLabel, nameField, builder])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -588,10 +790,12 @@ import UniformTypeIdentifiers
         stack.layer?.cornerRadius = 12
         stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
         header.translatesAutoresizingMaskIntoConstraints = false
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
         nameField.translatesAutoresizingMaskIntoConstraints = false
         builder.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             header.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            subtitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             nameField.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             builder.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
@@ -640,8 +844,10 @@ import UniformTypeIdentifiers
             UserMacro(name: leftName.stringValue, steps: leftBuilder.steps),
             UserMacro(name: rightName.stringValue, steps: rightBuilder.steps),
             dragEditor.bindings,
+            selectedAnimal,
             selectedTheme,
-            customPalette
+            customPalette,
+            textBoxAwarenessEnabled
         )
         close()
     }
