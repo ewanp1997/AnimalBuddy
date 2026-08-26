@@ -1,20 +1,17 @@
 import AppKit
 import UniformTypeIdentifiers
-import ApplicationServices
 
 final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggingDestination {
     private static let trackingRadius: CGFloat = 300
     private static let dismissRadius: CGFloat = 100
     private static let normalPetSize: CGFloat = 150
     private static let expandedPetSize: CGFloat = 210
+    private static let restingAlpha: CGFloat = 0.35
+    private static let activeAlpha: CGFloat = 1.0
     private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
     private let registry: ActionRegistry
     private var settings: AppSettings
     private var mouseTrackingTimer: Timer?
-    private var typingMonitor: Any?
-    private var typingRestoreTimer: Timer?
-    private var textInputCheckTimer: Timer?
-    private var isTypingActive = false
     private var closeObserver: NSObjectProtocol?
     private var isMinimizing = false
     private var isPetDragging = false
@@ -33,6 +30,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         lastRestingFrame = window.frame
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true; window.acceptsMouseMovedEvents = true
         super.init(window: window); window.delegate = self; window.contentView = petView; petView.autoresizingMask = [.width, .height]; window.isMovableByWindowBackground = true
+        startMouseTracking()
         window.onDragBegan = { [weak self] in
             guard let self else { return }
             self.isPetDragging = false
@@ -86,7 +84,6 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
         startMouseTracking()
-        startTypingAwareness()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(settings: AppSettings) {
@@ -100,7 +97,6 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         guard let window, !isMinimizing else { return }
         NSApp.setActivationPolicy(.regular)
         isMinimizing = true
-        typingRestoreTimer?.invalidate()
 
         let originalFrame = window.frame
         lastRestingFrame = originalFrame
@@ -247,194 +243,24 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     }
     private func closePet() { window?.orderOut(nil) }
 
-    private func startTypingAwareness() {
-        typingMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] _ in
-            DispatchQueue.main.async { [weak self] in self?.handleTypingBehindBuddy() }
-        }
-        textInputCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.20, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.checkActiveTextInputUnderBuddy()
-            }
-        }
-        if let textInputCheckTimer { RunLoop.main.add(textInputCheckTimer, forMode: .common) }
-    }
-
-    private func handleTypingBehindBuddy() {
-        guard let window,
-              window.isVisible,
-              !isMinimizing,
-              !isExternalDragHovering,
-              NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
-        isTypingActive = true
-        typingRestoreTimer?.invalidate()
-        checkActiveTextInputUnderBuddy()
-        typingRestoreTimer = Timer.scheduledTimer(withTimeInterval: 1.4, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                self?.isTypingActive = false
-                self?.checkActiveTextInputUnderBuddy()
-            }
-        }
-    }
-
-    private func checkActiveTextInputUnderBuddy() {
+    private func updateHoverOpacity() {
         guard let window, window.isVisible, !isMinimizing else { return }
 
-        // 1. If text box awareness is disabled by the user in settings, remain solid 1.0
-        guard settings.textBoxAwarenessEnabled else {
-            if abs(window.alphaValue - 1.0) > 0.03 {
-                window.animator().alphaValue = 1.0
-            }
-            return
-        }
-
-        // 2. Direct Interaction Check:
-        // When the buddy is being interacted with directly (mouse pointer hovering inside window, dragging, drop hover, action popup, or running actions), it MUST NOT be transparent.
         let mouseLocation = NSEvent.mouseLocation
-        let isDirectlyInteracting = window.frame.contains(mouseLocation) ||
-                                    isPetDragging ||
-                                    isExternalDragHovering ||
-                                    isAwaitingActionChoice ||
-                                    petView.state == .processing
+        let isInteracting = window.frame.contains(mouseLocation) ||
+                            isPetDragging ||
+                            isExternalDragHovering ||
+                            isAwaitingActionChoice ||
+                            petView.state == .processing
 
-        if isDirectlyInteracting {
-            if abs(window.alphaValue - 1.0) > 0.03 {
-                let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.01 : 0.12
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = duration
-                    window.animator().alphaValue = 1.0
-                }
-            }
-            return
-        }
-
-        let windowFrame = window.frame
-        var shouldBeTranslucent = isTypingActive
-
-        if let frontmostApp = NSWorkspace.shared.frontmostApplication,
-           frontmostApp.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-            
-            var focusedElement: AnyObject?
-            let appElement = AXUIElementCreateApplication(frontmostApp.processIdentifier)
-            var copyRes = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
-            
-            if copyRes != .success {
-                let systemWide = AXUIElementCreateSystemWide()
-                copyRes = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElement)
-            }
-
-            if copyRes == .success, let element = focusedElement as! AXUIElement? {
-                var roleValue: AnyObject?
-                AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
-                let role = (roleValue as? String) ?? ""
-
-                var subroleValue: AnyObject?
-                AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subroleValue)
-                let subrole = (subroleValue as? String) ?? ""
-
-                var roleDescValue: AnyObject?
-                AXUIElementCopyAttributeValue(element, kAXRoleDescriptionAttribute as CFString, &roleDescValue)
-                let roleDesc = (roleDescValue as? String) ?? ""
-
-                let isTextRole = role == (kAXTextFieldRole as String) ||
-                                 role == (kAXTextAreaRole as String) ||
-                                 role == (kAXComboBoxRole as String) ||
-                                 role == (kAXStaticTextRole as String) ||
-                                 role.localizedCaseInsensitiveContains("text") ||
-                                 role.localizedCaseInsensitiveContains("edit") ||
-                                 role.localizedCaseInsensitiveContains("input") ||
-                                 role.localizedCaseInsensitiveContains("document") ||
-                                 role.localizedCaseInsensitiveContains("term") ||
-                                 role.localizedCaseInsensitiveContains("code") ||
-                                 subrole.localizedCaseInsensitiveContains("text") ||
-                                 subrole.localizedCaseInsensitiveContains("search") ||
-                                 roleDesc.localizedCaseInsensitiveContains("text") ||
-                                 roleDesc.localizedCaseInsensitiveContains("edit")
-
-                let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? NSScreen.main?.frame.height ?? 1000
-
-                // 1. Check exact caret / text selection bounds if available
-                var rangeVal: AnyObject?
-                if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeVal) == .success,
-                   let rVal = rangeVal as! AXValue? {
-                    var boundsVal: AnyObject?
-                    if AXUIElementCopyParameterizedAttributeValue(element, kAXBoundsForRangeParameterizedAttribute as CFString, rVal, &boundsVal) == .success,
-                       let bVal = boundsVal as! AXValue? {
-                        var caretRect = CGRect.zero
-                        if AXValueGetValue(bVal, .cgRect, &caretRect), caretRect.width > 0 || caretRect.height > 0 {
-                            let cocoaCaret = NSRect(x: caretRect.origin.x, y: primaryScreenHeight - caretRect.origin.y - caretRect.height, width: max(caretRect.width, 24), height: max(caretRect.height, 24))
-                            if windowFrame.intersects(cocoaCaret.insetBy(dx: -35, dy: -35)) {
-                                shouldBeTranslucent = true
-                            }
-                        }
-                    }
-                }
-
-                // 2. Check overall element bounds
-                var posValue: AnyObject?
-                var sizeValue: AnyObject?
-                if AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posValue) == .success,
-                   AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue) == .success,
-                   let pVal = posValue as! AXValue?,
-                   let sVal = sizeValue as! AXValue? {
-                    var pt = CGPoint.zero
-                    var sz = CGSize.zero
-                    AXValueGetValue(pVal, .cgPoint, &pt)
-                    AXValueGetValue(sVal, .cgSize, &sz)
-
-                    let elementRect = NSRect(x: pt.x, y: primaryScreenHeight - pt.y - sz.height, width: max(sz.width, 20), height: max(sz.height, 20))
-                    if windowFrame.intersects(elementRect.insetBy(dx: -25, dy: -25)) {
-                        shouldBeTranslucent = true
-                    }
-                } else if isTextRole {
-                    shouldBeTranslucent = true
-                }
-            }
-
-            // 3. Fallback / Window layer check via CGWindowListCopyWindowInfo
-            if !shouldBeTranslucent, (isTypingActive || !AccessibilityHelper.isTrusted) {
-                if let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
-                    let frontPID = Int(frontmostApp.processIdentifier)
-                    let primaryHeight = NSScreen.screens.first?.frame.height ?? 1000
-                    for w in windowList {
-                        let ownerPID = w[kCGWindowOwnerPID as String] as? Int ?? -1
-                        let layer = w[kCGWindowLayer as String] as? Int ?? -1
-                        if ownerPID == frontPID && layer == 0 {
-                            if let boundsDict = w[kCGWindowBounds as String] as? [String: Any],
-                               let bx = boundsDict["X"] as? CGFloat,
-                               let by = boundsDict["Y"] as? CGFloat,
-                               let bw = boundsDict["Width"] as? CGFloat,
-                               let bh = boundsDict["Height"] as? CGFloat {
-                                let cocoaWinRect = NSRect(x: bx, y: primaryHeight - by - bh, width: bw, height: bh)
-                                if windowFrame.intersects(cocoaWinRect) {
-                                    shouldBeTranslucent = true
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let targetAlpha: CGFloat = shouldBeTranslucent ? 0.18 : 1.0
-        if abs(window.alphaValue - targetAlpha) > 0.03 {
+        let targetAlpha: CGFloat = isInteracting ? Self.activeAlpha : Self.restingAlpha
+        if abs(window.alphaValue - targetAlpha) > 0.02 {
             let duration: TimeInterval = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.01 : 0.18
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
                 window.animator().alphaValue = targetAlpha
             }
         }
-    }
-
-    private func stopTypingAwareness() {
-        if let typingMonitor {
-            NSEvent.removeMonitor(typingMonitor)
-            self.typingMonitor = nil
-        }
-        typingRestoreTimer?.invalidate()
-        typingRestoreTimer = nil
-        textInputCheckTimer?.invalidate()
-        textInputCheckTimer = nil
     }
 
     private func runMacro(for slot: BlushSlot) {
@@ -582,9 +408,8 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.setAccessibilityRole(.image)
         if let window {
             closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.stopMouseTracking() }
-            Task { @MainActor in self?.stopTypingAwareness() }
-        }
+                Task { @MainActor in self?.stopMouseTracking() }
+            }
         }
     }
     func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -748,11 +573,9 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
 
     private func updateMouseTracking() {
         guard let window else { return }
+        updateHoverOpacity()
         let mouseLocation = NSEvent.mouseLocation
         let distance = Self.distance(from: mouseLocation, to: window.frame)
-        if distance == 0 || window.alphaValue < 0.99 {
-            checkActiveTextInputUnderBuddy()
-        }
         guard distance <= Self.trackingRadius else {
             petView.setPupilOffset(.zero, animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             return

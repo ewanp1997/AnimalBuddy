@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette) -> Void)?
 
     private var leftBuilder: MacroBuilderView
@@ -14,7 +14,6 @@ import UniformTypeIdentifiers
     private var selectedAnimal: AnimalKind
     private var selectedTheme: PetThemePreset
     private var customPalette: PetThemePalette
-    private var textBoxAwarenessEnabled: Bool
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
     private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom"], trackingMode: .selectOne, target: nil, action: nil)
@@ -65,7 +64,6 @@ import UniformTypeIdentifiers
         selectedAnimal = settings.animalKind
         selectedTheme = settings.themePreset
         customPalette = settings.customPalette
-        textBoxAwarenessEnabled = settings.textBoxAwarenessEnabled
 
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
@@ -174,7 +172,6 @@ import UniformTypeIdentifiers
         let themeCard = makeThemeCard()
         let customCard = makePersonalCustomizationCard()
         let previewCard = makePreviewCard()
-        let awarenessCard = makeTypingAwarenessCard()
 
         let leftCol = NSStackView(views: [themeCard, customCard])
         leftCol.orientation = .vertical
@@ -187,7 +184,7 @@ import UniformTypeIdentifiers
         row.alignment = .top
         row.distribution = .fill
 
-        let mainStack = NSStackView(views: [heading, note, row, awarenessCard])
+        let mainStack = NSStackView(views: [heading, note, row])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -199,7 +196,6 @@ import UniformTypeIdentifiers
         previewCard.translatesAutoresizingMaskIntoConstraints = false
         themeCard.translatesAutoresizingMaskIntoConstraints = false
         customCard.translatesAutoresizingMaskIntoConstraints = false
-        awarenessCard.translatesAutoresizingMaskIntoConstraints = false
         row.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -213,7 +209,6 @@ import UniformTypeIdentifiers
             mainStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
 
             row.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
-            awarenessCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             leftCol.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.62),
             themeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
             customCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
@@ -377,55 +372,6 @@ import UniformTypeIdentifiers
             actions.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20)
         ])
         return stack
-    }
-
-    private func makeTypingAwarenessCard() -> NSView {
-        let title = NSTextField(labelWithString: "Typing & Text Box Translucency (Optional)")
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
-
-        let toggle = NSButton(checkboxWithTitle: "Enable automatic translucency when typing or hovering over active text fields", target: self, action: #selector(toggleTypingAwareness(_:)))
-        toggle.state = textBoxAwarenessEnabled ? .on : .off
-        toggle.font = .systemFont(ofSize: 13, weight: .medium)
-
-        let ackLabel = NSTextField(wrappingLabelWithString: "ℹ️ Why Accessibility is needed:\nmacOS Accessibility permissions are only required if you want Animal Buddy to determine when you are actively typing behind the buddy or over text input fields to smoothly dim out of your way. This is completely optional — Animal Buddy remains fully functional with all macros and features even without this permission.")
-        ackLabel.font = .systemFont(ofSize: 11)
-        ackLabel.textColor = .secondaryLabelColor
-
-        let statusLabel = NSTextField(wrappingLabelWithString: AccessibilityHelper.isTrusted ? "✓ macOS Accessibility Permission Granted" : "⚠️ Accessibility Permission Not Granted")
-        statusLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        statusLabel.textColor = AccessibilityHelper.isTrusted ? .systemGreen : .systemOrange
-
-        let grantBtn = NSButton(title: "Grant Permission in System Settings…", target: self, action: #selector(grantAccessibilityPressed))
-        grantBtn.bezelStyle = .rounded
-        grantBtn.isHidden = AccessibilityHelper.isTrusted
-
-        let statusRow = NSStackView(views: [statusLabel, grantBtn])
-        statusRow.orientation = .horizontal
-        statusRow.alignment = .centerY
-        statusRow.spacing = 8
-
-        let stack = NSStackView(views: [title, toggle, ackLabel, statusRow])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
-        stack.wantsLayer = true
-        stack.layer?.cornerRadius = 12
-        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-
-        toggle.translatesAutoresizingMaskIntoConstraints = false
-        ackLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusRow.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            toggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            ackLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            statusRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
-        ])
-        return stack
-    }
-
-    @objc private func toggleTypingAwareness(_ sender: NSButton) {
-        textBoxAwarenessEnabled = (sender.state == .on)
     }
 
     @objc private func togglePreviewFlap() {
@@ -719,23 +665,10 @@ import UniformTypeIdentifiers
         triggerBannerSubtitle.font = .systemFont(ofSize: 12, weight: .regular)
         triggerBannerSubtitle.textColor = .secondaryLabelColor
 
-        let accessStatusLabel = NSTextField(wrappingLabelWithString: AccessibilityHelper.isTrusted ? "✓ Accessibility enabled for text box translucency" : "⚠️ Accessibility permission recommended for live text box translucency & global typing detection.")
-        accessStatusLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        accessStatusLabel.textColor = AccessibilityHelper.isTrusted ? .systemGreen : .systemOrange
-
-        let grantBtn = NSButton(title: "Grant Permission…", target: self, action: #selector(grantAccessibilityPressed))
-        grantBtn.bezelStyle = .inline
-        grantBtn.isHidden = AccessibilityHelper.isTrusted
-
-        let accessRow = NSStackView(views: [accessStatusLabel, grantBtn])
-        accessRow.orientation = .horizontal
-        accessRow.alignment = .centerY
-        accessRow.spacing = 8
-
-        let stack = NSStackView(views: [triggerBannerTitle, triggerBannerSubtitle, accessRow])
+        let stack = NSStackView(views: [triggerBannerTitle, triggerBannerSubtitle])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 8
+        stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
         stack.wantsLayer = true
         stack.layer?.cornerRadius = 12
@@ -745,17 +678,11 @@ import UniformTypeIdentifiers
 
         triggerBannerTitle.translatesAutoresizingMaskIntoConstraints = false
         triggerBannerSubtitle.translatesAutoresizingMaskIntoConstraints = false
-        accessRow.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             triggerBannerTitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32),
-            triggerBannerSubtitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32),
-            accessRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32)
+            triggerBannerSubtitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32)
         ])
         return stack
-    }
-
-    @objc private func grantAccessibilityPressed() {
-        AccessibilityHelper.openSystemSettings()
     }
 
     private func makeCard(slot: BlushSlot, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
@@ -846,8 +773,7 @@ import UniformTypeIdentifiers
             dragEditor.bindings,
             selectedAnimal,
             selectedTheme,
-            customPalette,
-            textBoxAwarenessEnabled
+            customPalette
         )
         close()
     }

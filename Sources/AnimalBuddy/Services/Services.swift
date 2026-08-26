@@ -68,25 +68,3 @@ public struct SettingsStore: Sendable {
     public func load() -> AppSettings { guard let data = try? Data(contentsOf: url), let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) else { return AppSettings() }; return decoded }
     public func save(_ settings: AppSettings) throws { try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true); try JSONEncoder().encode(settings).write(to: url, options: .atomic) }
 }
-
-import AppKit
-import ApplicationServices
-
-public enum AccessibilityHelper {
-    public static var isTrusted: Bool {
-        AXIsProcessTrusted()
-    }
-
-    @discardableResult
-    public static func requestPrompt() -> Bool {
-        let promptKey = "AXTrustedCheckOptionPrompt" as CFString
-        let options = [promptKey: true] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
-    }
-
-    public static func openSystemSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-}

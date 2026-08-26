@@ -10,8 +10,6 @@ import AppKit
     var onOpenAppearanceSettings: (() -> Void)?
     var onConfigureMacros: (() -> Void)?
     var onOpenSettings: (() -> Void)?
-    var onToggleTextBoxAwareness: ((Bool) -> Void)?
-    var onOpenAccessibility: (() -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -19,7 +17,6 @@ import AppKit
     private let dockItem = NSMenuItem(title: "Dock", action: #selector(selectDock), keyEquivalent: "")
     private let menubarItem = NSMenuItem(title: "Menu Bar", action: #selector(selectMenubar), keyEquivalent: "")
     private let snappingItem = NSMenuItem(title: "Snap to Screen Edges", action: #selector(toggleSnapping), keyEquivalent: "")
-    private let accessibilityItem = NSMenuItem(title: "Typing & Text Box Translucency", action: #selector(accessibilityClicked), keyEquivalent: "")
 
     private let animalMenu = NSMenu(title: "Animal Selector")
     private var animalSubmenuItems: [AnimalKind: [PetThemePreset: NSMenuItem]] = [:]
@@ -82,9 +79,6 @@ import AppKit
         menu.addItem(destinationItem)
         snappingItem.target = self
         menu.addItem(snappingItem)
-        accessibilityItem.target = self
-        menu.addItem(accessibilityItem)
-        updateAccessibilityStatus()
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -94,19 +88,6 @@ import AppKit
         quitItem.target = self
         menu.addItem(quitItem)
         statusItem.menu = menu
-    }
-
-    func updateAccessibilityStatus() {
-        if AccessibilityHelper.isTrusted {
-            accessibilityItem.title = "✓ Typing & Text Box Translucency (Optional)"
-        } else {
-            accessibilityItem.title = "⚠️ Enable Text Box Awareness (Grant Permission…)"
-        }
-    }
-
-    func update(textBoxAwarenessEnabled: Bool) {
-        accessibilityItem.state = textBoxAwarenessEnabled ? .on : .off
-        updateAccessibilityStatus()
     }
 
     func update(destination: MinimizeDestination) {
@@ -137,13 +118,6 @@ import AppKit
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
     @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
     @objc private func openSettings() { (onOpenSettings ?? onConfigureMacros)?() }
-    @objc private func accessibilityClicked() {
-        if !AccessibilityHelper.isTrusted {
-            onOpenAccessibility?()
-        } else {
-            onToggleTextBoxAwareness?(accessibilityItem.state != .on)
-        }
-    }
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {

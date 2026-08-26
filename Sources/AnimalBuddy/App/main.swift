@@ -27,27 +27,10 @@ import UniformTypeIdentifiers
         statusBar?.onOpenAppearanceSettings = { [weak self] in self?.showSettings(initialTab: 0) }
         statusBar?.onConfigureMacros = { [weak self] in self?.showSettings(initialTab: 1) }
         statusBar?.onOpenSettings = { [weak self] in self?.showSettings(initialTab: 0) }
-        statusBar?.onOpenAccessibility = {
-            AccessibilityHelper.openSystemSettings()
-        }
-        statusBar?.onToggleTextBoxAwareness = { [weak self] enabled in
-            guard let self else { return }
-            self.settings.textBoxAwarenessEnabled = enabled
-            try? self.settingsStore.save(self.settings)
-            self.statusBar?.update(textBoxAwarenessEnabled: enabled)
-            self.petWindow?.update(settings: self.settings)
-        }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
         statusBar?.update(snappingEnabled: settings.snappingEnabled)
         statusBar?.update(animal: settings.animalKind, theme: settings.themePreset)
-        statusBar?.update(textBoxAwarenessEnabled: settings.textBoxAwarenessEnabled)
-        statusBar?.updateAccessibilityStatus()
-
-        // Check & prompt for accessibility if not yet granted
-        if !AccessibilityHelper.isTrusted {
-            AccessibilityHelper.requestPrompt()
-        }
 
         // Keep a regular application presence so Animal Buddy is available in
         // Force Quit Applications even when its pet window is minimized.
@@ -87,7 +70,7 @@ import UniformTypeIdentifiers
 
     private func showSettings(initialTab: Int = 0) {
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, textBoxAwareness in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -95,10 +78,8 @@ import UniformTypeIdentifiers
             self.settings.animalKind = animal
             self.settings.themePreset = themePreset
             self.settings.customPalette = customPalette
-            self.settings.textBoxAwarenessEnabled = textBoxAwareness
             try? self.settingsStore.save(self.settings)
             self.statusBar?.update(animal: animal, theme: themePreset)
-            self.statusBar?.update(textBoxAwarenessEnabled: textBoxAwareness)
             self.petWindow?.update(settings: self.settings)
         }
         controller.onThemeChanged = { [weak self] animal, themePreset, customPalette in

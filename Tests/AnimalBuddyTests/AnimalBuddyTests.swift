@@ -125,18 +125,15 @@ import UniformTypeIdentifiers
         XCTAssertEqual(decodedPalette.bodyColor.hexString.uppercased(), "#4A90E2")
     }
 
-    func testTextBoxAwarenessSettingDefaultAndDecoding() throws {
+    func testAppSettingsRoundtrip() throws {
         let defaultSettings = AppSettings()
-        XCTAssertTrue(defaultSettings.textBoxAwarenessEnabled)
+        XCTAssertEqual(defaultSettings.animalKind, .bird)
+        XCTAssertTrue(defaultSettings.alwaysOnTop)
 
         let encoded = try JSONEncoder().encode(defaultSettings)
-        var decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
-        XCTAssertTrue(decoded.textBoxAwarenessEnabled)
-
-        decoded.textBoxAwarenessEnabled = false
-        let reencoded = try JSONEncoder().encode(decoded)
-        let redecoded = try JSONDecoder().decode(AppSettings.self, from: reencoded)
-        XCTAssertFalse(redecoded.textBoxAwarenessEnabled)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
+        XCTAssertEqual(decoded.animalKind, .bird)
+        XCTAssertTrue(decoded.alwaysOnTop)
     }
 }
 

@@ -326,6 +326,7 @@ final class PetView: NSView {
             drawGiraffe(bodyColor: bodyColor, bellyColor: bellyColor, accentColor: accentColor)
         }
 
+        drawRimHighlight()
         if flightIntensity > 0.25 { drawFlightBreeze(intensity: flightIntensity) }
         if let dragPresentation { drawDragPresentation(dragPresentation) }
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
@@ -368,6 +369,8 @@ final class PetView: NSView {
         let beak = NSBezierPath(); beak.move(to: NSPoint(x: bounds.midX, y: 68)); beak.curve(to: NSPoint(x: bounds.midX + 11, y: 76), controlPoint1: NSPoint(x: bounds.midX + 7, y: 68), controlPoint2: NSPoint(x: bounds.midX + 11, y: 72)); beak.curve(to: NSPoint(x: bounds.midX, y: 82), controlPoint1: NSPoint(x: bounds.midX + 7, y: 80), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); beak.curve(to: NSPoint(x: bounds.midX - 11, y: 76), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX - 7, y: 80)); beak.close(); beak.fill()
         NSColor(calibratedRed: 0.72, green: 0.20, blue: 0.25, alpha: 1).setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 5, y: 76, width: 10, height: 7)).fill()
+        NSColor.white.withAlphaComponent(0.38).setFill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 4, y: 77, width: 4, height: 2)).fill()
 
         accentColor.setFill()
         let feetTuck = flightIntensity * 6.0
@@ -470,6 +473,8 @@ final class PetView: NSView {
         transform.concat()
         color.setFill()
         NSBezierPath(roundedRect: frame, xRadius: 16, yRadius: 16).fill()
+        color.blended(withFraction: 0.20, of: .white)?.setFill()
+        NSBezierPath(ovalIn: NSRect(x: frame.minX + 7, y: frame.minY + 8, width: 8, height: 12)).fill()
         context.restoreGraphicsState()
     }
 
@@ -670,6 +675,9 @@ final class PetView: NSView {
         accentColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 66, y: 62, width: 5, height: 4)).fill()
         NSBezierPath(ovalIn: NSRect(x: 79, y: 62, width: 5, height: 4)).fill()
+        NSColor.white.withAlphaComponent(0.32).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 68, y: 63, width: 2, height: 1.5)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 81, y: 63, width: 2, height: 1.5)).fill()
 
         accentColor.setStroke()
         let smile = NSBezierPath(); smile.lineWidth = 2.2; smile.lineCapStyle = .round
