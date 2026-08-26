@@ -30,14 +30,12 @@ import AppKit
         let leftCard = makeCard(title: "Left blush", nameField: leftName, builder: leftBuilder)
         let rightCard = makeCard(title: "Right blush", nameField: rightName, builder: rightBuilder)
         let cards = NSStackView(views: [leftCard, rightCard]); cards.orientation = .horizontal; cards.spacing = 18; cards.distribution = .fillEqually
-        let help = NSTextField(wrappingLabelWithString: "Apple Shortcuts: add a “Run Apple Shortcut” block and enter the exact Shortcut name. Shell commands are run only because you explicitly configure them here.")
-        help.textColor = .secondaryLabelColor; help.maximumNumberOfLines = 3
         let save = NSButton(title: "Save Macros", target: self, action: #selector(savePressed)); save.keyEquivalent = "\r"
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
         let buttons = NSStackView(views: [NSView(), cancel, save]); buttons.orientation = .horizontal; buttons.spacing = 10
-        let stack = NSStackView(views: [heading, note, cards, help, buttons]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18; stack.edgeInsets = NSEdgeInsets(top: 32, left: 36, bottom: 32, right: 36)
+        let stack = NSStackView(views: [heading, note, cards, buttons]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18; stack.edgeInsets = NSEdgeInsets(top: 32, left: 36, bottom: 32, right: 36)
         stack.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor), stack.topAnchor.constraint(equalTo: content.topAnchor), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor), cards.widthAnchor.constraint(equalTo: stack.widthAnchor), cards.heightAnchor.constraint(equalToConstant: 360), help.widthAnchor.constraint(equalTo: stack.widthAnchor)])
+        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor), stack.topAnchor.constraint(equalTo: content.topAnchor), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor), cards.widthAnchor.constraint(equalTo: stack.widthAnchor), cards.heightAnchor.constraint(equalToConstant: 360)])
     }
 
     private func makeCard(title: String, nameField: NSTextField, builder: MacroBuilderView) -> NSView {
