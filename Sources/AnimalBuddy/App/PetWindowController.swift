@@ -31,7 +31,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         self.settings = settings; self.registry = registry
         let window = PetPanel(contentRect: NSRect(x: 120, y: 120, width: 150, height: 150), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         lastRestingFrame = window.frame
-        window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true
+        window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true; window.acceptsMouseMovedEvents = true
         super.init(window: window); window.delegate = self; window.contentView = petView; petView.autoresizingMask = [.width, .height]; window.isMovableByWindowBackground = true
         window.onDragBegan = { [weak self] in
             guard let self else { return }

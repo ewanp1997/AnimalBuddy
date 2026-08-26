@@ -1,5 +1,33 @@
 import AppKit
 
+final class MacroBlushButton: NSButton {
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func updateTrackingAreas() {
+        trackingAreas.forEach { removeTrackingArea($0) }
+        let tracking = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect, .cursorUpdate], owner: self)
+        addTrackingArea(tracking)
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        NSCursor.pointingHand.push()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        NSCursor.pop()
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.pointingHand.set()
+    }
+}
+
 final class PetView: NSView {
     var onDraggingEntered: ((NSDraggingInfo) -> NSDragOperation)?
     var onDraggingUpdated: ((NSDraggingInfo) -> NSDragOperation)?
@@ -23,8 +51,8 @@ final class PetView: NSView {
     private var isDragHovering = false
     private(set) var pupilOffset = NSPoint.zero
     private let minimizeButton = NSButton()
-    private let leftBlushButton = NSButton()
-    private let rightBlushButton = NSButton()
+    private let leftBlushButton = MacroBlushButton()
+    private let rightBlushButton = MacroBlushButton()
     private var trackingArea: NSTrackingArea?
     private var animationTimer: Timer?
     private let animationStart = Date()
@@ -111,6 +139,14 @@ final class PetView: NSView {
             leftBlushButton.frame = NSRect(x: bounds.midX - 46, y: 54, width: 24, height: 22)
             rightBlushButton.frame = NSRect(x: bounds.midX + 22, y: 54, width: 24, height: 22)
         }
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(leftBlushButton.frame, cursor: .pointingHand)
+        addCursorRect(rightBlushButton.frame, cursor: .pointingHand)
+        addCursorRect(minimizeButton.frame, cursor: .pointingHand)
     }
 
     override func updateTrackingAreas() {
