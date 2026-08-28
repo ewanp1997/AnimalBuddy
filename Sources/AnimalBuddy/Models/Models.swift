@@ -100,7 +100,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .bird: "🐦 Bird"
+        case .bird: "🐦 Tippo the Bird"
         case .dog: "🐶 Dog"
         case .cat: "🐱 Cat"
         case .monkey: "🐵 Monkey"
@@ -111,7 +111,7 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
 
     public var nameWithoutEmoji: String {
         switch self {
-        case .bird: "Bird"
+        case .bird: "Tippo the Bird"
         case .dog: "Dog"
         case .cat: "Cat"
         case .monkey: "Monkey"
@@ -309,6 +309,13 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
                 return defaultPalette(for: .classic)
             case .rainbow:
                 return PetThemePalette(bodyColor: CodableColor(hex: "#FF5C8A")!, bellyColor: CodableColor(hex: "#FFF7ED")!, beakColor: CodableColor(hex: "#8B5CF6")!, blushColor: CodableColor(red: 1.0, green: 0.24, blue: 0.52, alpha: 0.70), eyeHighlightColor: CodableColor(hex: "#22D3EE")!)
+                return PetThemePalette(
+                    bodyColor: CodableColor(hex: "#FF3B30")!,
+                    bellyColor: CodableColor(hex: "#FFFBF2")!,
+                    beakColor: CodableColor(hex: "#8B5CF6")!,
+                    blushColor: CodableColor(red: 1.0, green: 0.30, blue: 0.45, alpha: 0.65),
+                    eyeHighlightColor: CodableColor(hex: "#06B6D4")!
+                )
             }
         }
     }
@@ -1005,6 +1012,7 @@ public struct AppSettings: Codable, Sendable {
     public var themePreset: PetThemePreset = .classic
     public var customPalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic)
     public var hoverTranslucencyEnabled: Bool = true
+    public var googlyEyesEnabled: Bool = true
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1017,7 +1025,7 @@ public struct AppSettings: Codable, Sendable {
         themePreset == .custom ? customPalette : animalKind.defaultPalette(for: themePreset)
     }
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, bindings }
+    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, bindings }
 
     public init() {}
 
@@ -1035,6 +1043,7 @@ public struct AppSettings: Codable, Sendable {
         themePreset = try values.decodeIfPresent(PetThemePreset.self, forKey: .themePreset) ?? .classic
         customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? AnimalKind.bird.defaultPalette(for: .classic)
         hoverTranslucencyEnabled = try values.decodeIfPresent(Bool.self, forKey: .hoverTranslucencyEnabled) ?? true
+        googlyEyesEnabled = try values.decodeIfPresent(Bool.self, forKey: .googlyEyesEnabled) ?? true
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

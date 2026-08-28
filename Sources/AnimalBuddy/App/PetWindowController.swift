@@ -73,6 +73,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.animalKind = settings.animalKind
         petView.themePreset = settings.themePreset
         petView.themePalette = settings.activePalette
+        petView.googlyEyesEnabled = settings.googlyEyesEnabled
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
     }
@@ -83,6 +84,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.animalKind = settings.animalKind
         petView.themePreset = settings.themePreset
         petView.themePalette = settings.activePalette
+        petView.googlyEyesEnabled = settings.googlyEyesEnabled
         petView.updateBlushMacroLabels(settings)
         updateHoverOpacity()
     }

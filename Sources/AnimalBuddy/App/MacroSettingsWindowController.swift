@@ -2,8 +2,8 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
-    var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool) -> Void)?
+    var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
 
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
@@ -15,6 +15,7 @@ import UniformTypeIdentifiers
     private var selectedTheme: PetThemePreset
     private var customPalette: PetThemePalette
     private var hoverTranslucencyEnabled: Bool
+    private var googlyEyesEnabled: Bool
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
     private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom", "Rainbow"], trackingMode: .selectOne, target: nil, action: nil)
@@ -25,6 +26,8 @@ import UniformTypeIdentifiers
     private let beakLabel = NSTextField(labelWithString: "Beak & Feet")
     private let blushLabel = NSTextField(labelWithString: "Blush Cheeks")
     private let eyeLabel = NSTextField(labelWithString: "Eye Glow")
+    private let googlyEyesToggle = NSButton(checkboxWithTitle: "Enable googly eyes (loose jiggling craft pupils)", target: nil, action: nil)
+    private var googlyEyesRow: NSView!
 
     private let bodyColorWell = NSColorWell()
     private let bellyColorWell = NSColorWell()
@@ -65,6 +68,7 @@ import UniformTypeIdentifiers
         selectedTheme = settings.themePreset
         customPalette = settings.customPalette
         hoverTranslucencyEnabled = settings.hoverTranslucencyEnabled
+        googlyEyesEnabled = settings.googlyEyesEnabled
 
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
@@ -285,6 +289,19 @@ import UniformTypeIdentifiers
         let blushRow = makeColorRow(labelView: blushLabel, well: blushColorWell)
         let eyeRow = makeColorRow(labelView: eyeLabel, well: eyeHighlightColorWell)
 
+        let googlyLabel = NSTextField(labelWithString: "Googly Eyes")
+        googlyLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        googlyEyesToggle.target = self
+        googlyEyesToggle.action = #selector(toggleGooglyEyes(_:))
+        googlyEyesToggle.state = googlyEyesEnabled ? .on : .off
+        googlyEyesToggle.font = .systemFont(ofSize: 13)
+
+        let googlyStack = NSStackView(views: [googlyLabel, NSView(), googlyEyesToggle])
+        googlyStack.orientation = .horizontal
+        googlyStack.alignment = .centerY
+        googlyEyesRow = googlyStack
+        googlyEyesRow.isHidden = (selectedAnimal != .slinky)
+
         let importBtn = NSButton(title: "📥 Import JSON…", target: self, action: #selector(importThemePressed))
         importBtn.bezelStyle = .accessoryBarAction
         let exportBtn = NSButton(title: "📤 Export JSON…", target: self, action: #selector(exportThemePressed))
@@ -299,7 +316,7 @@ import UniformTypeIdentifiers
         themeStatusLabel.font = .systemFont(ofSize: 11, weight: .medium)
         themeStatusLabel.textColor = .secondaryLabelColor
 
-        let stack = NSStackView(views: [title, subtitle, bodyRow, bellyRow, beakRow, blushRow, eyeRow, btnRow, themeStatusLabel])
+        let stack = NSStackView(views: [title, subtitle, bodyRow, bellyRow, beakRow, blushRow, eyeRow, googlyEyesRow, btnRow, themeStatusLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -313,6 +330,7 @@ import UniformTypeIdentifiers
         beakRow.translatesAutoresizingMaskIntoConstraints = false
         blushRow.translatesAutoresizingMaskIntoConstraints = false
         eyeRow.translatesAutoresizingMaskIntoConstraints = false
+        googlyEyesRow.translatesAutoresizingMaskIntoConstraints = false
         btnRow.translatesAutoresizingMaskIntoConstraints = false
         themeStatusLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -321,6 +339,7 @@ import UniformTypeIdentifiers
             beakRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             blushRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             eyeRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            googlyEyesRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             btnRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             themeStatusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
@@ -351,6 +370,7 @@ import UniformTypeIdentifiers
         previewPetView.animalKind = selectedAnimal
         previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
+        previewPetView.googlyEyesEnabled = googlyEyesEnabled
 
         let flapBtn = NSButton(title: "Animate Movement", target: self, action: #selector(togglePreviewFlap))
         flapBtn.bezelStyle = .rounded
@@ -414,6 +434,12 @@ import UniformTypeIdentifiers
         hoverTranslucencyEnabled = (sender.state == .on)
     }
 
+    @objc private func toggleGooglyEyes(_ sender: NSButton) {
+        googlyEyesEnabled = (sender.state == .on)
+        previewPetView.googlyEyesEnabled = googlyEyesEnabled
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette, googlyEyesEnabled)
+    }
+
     @objc private func togglePreviewFlap() {
         let isNowFlying = !previewPetView.isFlying
         previewPetView.setFlying(isNowFlying)
@@ -433,6 +459,7 @@ import UniformTypeIdentifiers
         let idx = animalSegment.selectedSegment
         guard idx >= 0 && idx < AnimalKind.allCases.count else { return }
         selectedAnimal = AnimalKind.allCases[idx]
+        googlyEyesRow?.isHidden = (selectedAnimal != .slinky)
         updateThemeSegmentLabels()
         updateColorLabels()
         updateColorWellsFromActivePalette()
@@ -445,7 +472,8 @@ import UniformTypeIdentifiers
         previewPetView.animalKind = selectedAnimal
         previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
-        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
+        previewPetView.googlyEyesEnabled = googlyEyesEnabled
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette, googlyEyesEnabled)
     }
 
     @objc private func themeSegmentChanged() {
@@ -457,7 +485,8 @@ import UniformTypeIdentifiers
         previewPetView.animalKind = selectedAnimal
         previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
-        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
+        previewPetView.googlyEyesEnabled = googlyEyesEnabled
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette, googlyEyesEnabled)
     }
 
     @objc private func colorWellChanged(_ sender: NSColorWell) {
@@ -473,7 +502,8 @@ import UniformTypeIdentifiers
         updateThemeDescription()
         previewPetView.themePalette = customPalette
         previewPetView.themePreset = selectedTheme
-        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
+        previewPetView.googlyEyesEnabled = googlyEyesEnabled
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette, googlyEyesEnabled)
     }
 
     @objc private func resetColorsPressed() {
@@ -485,9 +515,10 @@ import UniformTypeIdentifiers
         previewPetView.animalKind = selectedAnimal
         previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
+        previewPetView.googlyEyesEnabled = googlyEyesEnabled
         themeStatusLabel.stringValue = "Restored classic colors for \(selectedAnimal.displayName)"
         themeStatusLabel.textColor = .secondaryLabelColor
-        onThemeChanged?(selectedAnimal, selectedTheme, customPalette)
+        onThemeChanged?(selectedAnimal, selectedTheme, customPalette, googlyEyesEnabled)
     }
 
     @objc func exportThemePressed() {
@@ -534,6 +565,7 @@ import UniformTypeIdentifiers
                 let (animal, name, importedPalette) = try ThemeDocument.decode(from: data)
                 self.selectedAnimal = animal
                 self.animalSegment.selectedSegment = AnimalKind.allCases.firstIndex(of: animal) ?? 0
+                self.googlyEyesRow?.isHidden = (animal != .slinky)
                 self.customPalette = importedPalette
                 self.selectedTheme = .custom
                 self.themeSegment.selectedSegment = 3
@@ -545,7 +577,8 @@ import UniformTypeIdentifiers
                 self.previewPetView.animalKind = animal
                 self.previewPetView.themePreset = .custom
                 self.previewPetView.themePalette = importedPalette
-                self.onThemeChanged?(animal, .custom, importedPalette)
+                self.previewPetView.googlyEyesEnabled = self.googlyEyesEnabled
+                self.onThemeChanged?(animal, .custom, importedPalette, self.googlyEyesEnabled)
                 self.themeStatusLabel.stringValue = "✅ Loaded \(animal.displayName) theme: \(name)"
                 self.themeStatusLabel.textColor = .systemGreen
             } catch {
@@ -821,7 +854,8 @@ import UniformTypeIdentifiers
             selectedAnimal,
             selectedTheme,
             customPalette,
-            hoverTranslucencyEnabled
+            hoverTranslucencyEnabled,
+            googlyEyesEnabled
         )
         close()
     }

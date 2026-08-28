@@ -85,6 +85,21 @@ final class PetView: NSView {
     var themePreset: PetThemePreset = .classic {
         didSet { needsDisplay = true }
     }
+    var googlyEyesEnabled: Bool = true {
+        didSet { needsDisplay = true }
+    }
+    private var leftGooglyPupilPos = NSPoint(x: 0, y: 4.5)
+    private var leftGooglyPupilVel = NSPoint.zero
+    private var rightGooglyPupilPos = NSPoint(x: 0, y: 4.5)
+    private var rightGooglyPupilVel = NSPoint.zero
+    private var lastHeadBob: CGFloat = 0
+    private var headBobVel: CGFloat = 0
+    private var lastFlightTilt: CGFloat = 0
+    private var leftStalkPos = NSPoint.zero
+    private var leftStalkVel = NSPoint.zero
+    private var rightStalkPos = NSPoint.zero
+    private var rightStalkVel = NSPoint.zero
+    private var googlyVigor: CGFloat = 0.0
     private var dragPresentation: DragPresentation?
     private var isDragHovering = false
     private(set) var pupilOffset = NSPoint.zero
@@ -157,29 +172,54 @@ final class PetView: NSView {
         onPerformDragOperation?(sender) ?? false
     }
 
+    static func eyeRects(for kind: AnimalKind, in bounds: NSRect) -> (left: NSRect, right: NSRect) {
+        let designSize: CGFloat = 150
+        let scale = min(bounds.width / designSize, bounds.height / designSize)
+        let originX = bounds.midX - (designSize * scale) / 2
+        let originY = bounds.midY - (designSize * scale) / 2
+
+        let (leftDesign, rightDesign): (NSRect, NSRect) = switch kind {
+        case .bird:
+            (NSRect(x: 29, y: 38, width: 39, height: 45),
+             NSRect(x: 82, y: 38, width: 39, height: 45))
+        case .dog:
+            (NSRect(x: 32, y: 38, width: 37, height: 43),
+             NSRect(x: 81, y: 38, width: 37, height: 43))
+        case .cat:
+            (NSRect(x: 30, y: 38, width: 38, height: 43),
+             NSRect(x: 82, y: 38, width: 38, height: 43))
+        case .monkey:
+            (NSRect(x: 34, y: 38, width: 35, height: 40),
+             NSRect(x: 81, y: 38, width: 35, height: 40))
+        case .giraffe:
+            (NSRect(x: 34, y: 32, width: 35, height: 40),
+             NSRect(x: 81, y: 32, width: 35, height: 40))
+        case .slinky:
+            (NSRect(x: 34, y: 39, width: 34, height: 38),
+             NSRect(x: 82, y: 39, width: 34, height: 38))
+        }
+
+        let leftRect = NSRect(
+            x: originX + leftDesign.origin.x * scale,
+            y: originY + leftDesign.origin.y * scale,
+            width: leftDesign.width * scale,
+            height: leftDesign.height * scale
+        )
+        let rightRect = NSRect(
+            x: originX + rightDesign.origin.x * scale,
+            y: originY + rightDesign.origin.y * scale,
+            width: rightDesign.width * scale,
+            height: rightDesign.height * scale
+        )
+        return (leftRect, rightRect)
+    }
+
     override func layout() {
         super.layout()
         minimizeButton.frame = NSRect(x: bounds.maxX - 34, y: 10, width: 24, height: 24)
-        switch animalKind {
-        case .bird:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 53, y: 42, width: 48, height: 44)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 42, width: 48, height: 44)
-        case .dog:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 59, y: 38, width: 54, height: 50)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 38, width: 54, height: 50)
-        case .cat:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 55, y: 38, width: 50, height: 48)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 38, width: 50, height: 48)
-        case .monkey:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 59, y: 40, width: 54, height: 48)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 5, y: 40, width: 54, height: 48)
-        case .giraffe:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 51, y: 26, width: 48, height: 56)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 3, y: 26, width: 48, height: 56)
-        case .slinky:
-            leftBlushButton.frame = NSRect(x: bounds.midX - 51, y: 36, width: 48, height: 52)
-            rightBlushButton.frame = NSRect(x: bounds.midX + 3, y: 36, width: 48, height: 52)
-        }
+        let eyes = Self.eyeRects(for: animalKind, in: bounds)
+        leftBlushButton.frame = eyes.left
+        rightBlushButton.frame = eyes.right
         window?.invalidateCursorRects(for: self)
     }
 
@@ -200,14 +240,22 @@ final class PetView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard bounds.contains(point) else { return nil }
-        if !minimizeButton.isHidden && minimizeButton.frame.contains(point) {
+        let localPoint: NSPoint
+        if let superview {
+            localPoint = convert(point, from: superview)
+        } else if window != nil {
+            localPoint = convert(point, from: nil)
+        } else {
+            localPoint = point
+        }
+        guard bounds.contains(localPoint) else { return nil }
+        if !minimizeButton.isHidden && minimizeButton.frame.contains(localPoint) {
             return minimizeButton
         }
-        if leftBlushButton.frame.contains(point) {
+        if leftBlushButton.frame.contains(localPoint) {
             return leftBlushButton
         }
-        if rightBlushButton.frame.contains(point) {
+        if rightBlushButton.frame.contains(localPoint) {
             return rightBlushButton
         }
         return self
@@ -277,6 +325,7 @@ final class PetView: NSView {
 
     func updateFlightMovement(velocity: CGFloat, deltaX: CGFloat) {
         isFlying = true
+        googlyVigor = 1.0
         let tilt = max(min(deltaX * 1.8, 22), -22)
         targetFlightTilt = tilt
         lastMovementTime = Date()
@@ -338,11 +387,163 @@ final class PetView: NSView {
             nextBlink = now.addingTimeInterval(2.8 + Double.random(in: 0...2.8))
         }
         eyesAreOpen = now >= blinkEnds
+
+        // Update Googly Eyes physics coordinated with Slinky gravity, bounce acceleration, and flight tilt
+        if googlyEyesEnabled {
+            // Decay googly vigor down to baseline after movement stops
+            let isActivelyMoving = isFlying || (now.timeIntervalSince(lastMovementTime) < 0.35)
+            let targetVigor: CGFloat = isActivelyMoving ? 1.0 : 0.0
+            if targetVigor > googlyVigor {
+                googlyVigor += (targetVigor - googlyVigor) * 0.40
+            } else {
+                googlyVigor = max(0.0, googlyVigor - CGFloat(dt) * 0.75) // Graceful decay over ~1.3s
+            }
+
+            let headBounce = (animalKind == .slinky)
+                ? (CGFloat(sin(wingPhase * 0.8)) * (isFlying ? 7.5 : 2.5) * 0.45)
+                : (bobOffset * 0.45)
+            
+            let safeDt = CGFloat(max(dt, 0.002))
+            let headVel = (headBounce - lastHeadBob) / safeDt
+            let headAccel = (headVel - headBobVel) / safeDt
+            headBobVel = headVel
+            lastHeadBob = headBounce
+
+            let tiltVel = (flightTiltAngle - lastFlightTilt) / safeDt
+            lastFlightTilt = flightTiltAngle
+
+            // Gravity vector in flipped view space (down is +Y):
+            let tiltRad = Double(flightTiltAngle) * .pi / 180.0
+            let gravityStrength: CGFloat = 220.0 // points/sec^2
+            let gravityX = CGFloat(sin(tiltRad)) * gravityStrength
+            let gravityY = CGFloat(cos(tiltRad)) * gravityStrength
+
+            // Vigor-scaled dynamic gains (high energy during movement, calm at baseline)
+            let bounceGain: CGFloat = 0.5 + googlyVigor * 2.1
+            let tiltGain: CGFloat = 0.3 + googlyVigor * 1.5
+            let jiggleGain: CGFloat = 0.12 + googlyVigor * 0.88
+            let dampingRate: CGFloat = 6.8 - googlyVigor * 3.2
+            let rimRestitution: CGFloat = 1.15 + googlyVigor * 0.47
+            let stalkWobbleGain: CGFloat = 0.20 + googlyVigor * 0.80
+
+            let bounceInertiaY = -headAccel * bounceGain
+            let tiltInertiaX = -tiltVel * tiltGain
+
+            // Micro-jiggle vibrations derived from the spring's natural bounce frequency
+            let jiggleL_X = CGFloat(sin(wingPhase * 2.4)) * (isFlying ? 3.8 : 1.6) * jiggleGain
+            let jiggleL_Y = CGFloat(cos(wingPhase * 3.1)) * (isFlying ? 4.8 : 2.2) * jiggleGain
+            let jiggleR_X = CGFloat(cos(wingPhase * 2.7 + 0.8)) * (isFlying ? 3.8 : 1.6) * jiggleGain
+            let jiggleR_Y = CGFloat(sin(wingPhase * 2.9 + 1.2)) * (isFlying ? 4.8 : 2.2) * jiggleGain
+
+            // Magnetic gaze influence (curious look towards cursor)
+            let gazePullX = pupilOffset.x * 45.0
+            let gazePullY = pupilOffset.y * 32.0
+
+            // Physics step for Left Eye
+            let netForceLX = gravityX + tiltInertiaX + gazePullX + (jiggleL_X * 28.0) - (leftGooglyPupilPos.x * 16.0) - (leftGooglyPupilVel.x * dampingRate)
+            let netForceLY = gravityY + bounceInertiaY + gazePullY + (jiggleL_Y * 34.0) - (leftGooglyPupilPos.y * 12.0) - (leftGooglyPupilVel.y * dampingRate)
+
+            leftGooglyPupilVel.x += netForceLX * safeDt
+            leftGooglyPupilVel.y += netForceLY * safeDt
+            leftGooglyPupilPos.x += leftGooglyPupilVel.x * safeDt
+            leftGooglyPupilPos.y += leftGooglyPupilVel.y * safeDt
+
+            // Physics step for Right Eye (varied mass & resonance for independent rattling)
+            let rightDamping = dampingRate * 0.92
+            let netForceRX = gravityX + tiltInertiaX + gazePullX + (jiggleR_X * 26.0) - (rightGooglyPupilPos.x * 14.0) - (rightGooglyPupilVel.x * rightDamping)
+            let netForceRY = gravityY + bounceInertiaY + gazePullY + (jiggleR_Y * 32.0) - (rightGooglyPupilPos.y * 11.0) - (rightGooglyPupilVel.y * rightDamping)
+
+            rightGooglyPupilVel.x += netForceRX * safeDt
+            rightGooglyPupilVel.y += netForceRY * safeDt
+            rightGooglyPupilPos.x += rightGooglyPupilVel.x * safeDt
+            rightGooglyPupilPos.y += rightGooglyPupilVel.y * safeDt
+
+            // Capsule elliptical boundaries: chamber width 34, height 38; pupil size 17.5 x 18.5
+            let maxRx: CGFloat = 7.6
+            let maxRy: CGFloat = 9.2
+
+            // Left Eye boundary collision & crisp elastic ping-pong bounce
+            let lNormX = leftGooglyPupilPos.x / maxRx
+            let lNormY = leftGooglyPupilPos.y / maxRy
+            let lDist = hypot(lNormX, lNormY)
+            if lDist > 1.0 {
+                leftGooglyPupilPos.x = (lNormX / lDist) * maxRx
+                leftGooglyPupilPos.y = (lNormY / lDist) * maxRy
+                let normalX = lNormX / lDist
+                let normalY = lNormY / lDist
+                let dot = leftGooglyPupilVel.x * normalX + leftGooglyPupilVel.y * normalY
+                if dot > 0 {
+                    leftGooglyPupilVel.x -= rimRestitution * dot * normalX
+                    leftGooglyPupilVel.y -= rimRestitution * dot * normalY
+                }
+            }
+
+            // Right Eye boundary collision & crisp elastic ping-pong bounce
+            let rNormX = rightGooglyPupilPos.x / maxRx
+            let rNormY = rightGooglyPupilPos.y / maxRy
+            let rDist = hypot(rNormX, rNormY)
+            if rDist > 1.0 {
+                rightGooglyPupilPos.x = (rNormX / rDist) * maxRx
+                rightGooglyPupilPos.y = (rNormY / rDist) * maxRy
+                let normalX = rNormX / rDist
+                let normalY = rNormY / rDist
+                let dot = rightGooglyPupilVel.x * normalX + rightGooglyPupilVel.y * normalY
+                if dot > 0 {
+                    rightGooglyPupilVel.x -= rimRestitution * dot * normalX
+                    rightGooglyPupilVel.y -= rimRestitution * dot * normalY
+                }
+            }
+
+            // Spring stalk pop-out & boing wobble physics (eyeball popping out of socket)
+            let stalkTargetLX = pupilOffset.x * 0.40 + CGFloat(sin(wingPhase * 1.5)) * (isFlying ? 3.5 : 1.4) * stalkWobbleGain
+            let stalkTargetLY = -4.5 + (bounceInertiaY * 0.035) + pupilOffset.y * 0.25
+
+            let stalkTargetRX = pupilOffset.x * 0.40 + CGFloat(cos(wingPhase * 1.4 + 0.6)) * (isFlying ? 3.5 : 1.4) * stalkWobbleGain
+            let stalkTargetRY = -4.5 + (bounceInertiaY * 0.035) + pupilOffset.y * 0.25
+
+            let stalkDamping: CGFloat = 9.5 - googlyVigor * 2.0
+            let stalkForceLX = (stalkTargetLX - leftStalkPos.x) * 145.0 - (leftStalkVel.x * stalkDamping)
+            let stalkForceLY = (stalkTargetLY - leftStalkPos.y) * 145.0 - (leftStalkVel.y * stalkDamping)
+            leftStalkVel.x += stalkForceLX * safeDt
+            leftStalkVel.y += stalkForceLY * safeDt
+            leftStalkPos.x += leftStalkVel.x * safeDt
+            leftStalkPos.y += leftStalkVel.y * safeDt
+
+            let stalkForceRX = (stalkTargetRX - rightStalkPos.x) * 130.0 - (rightStalkVel.x * (stalkDamping * 0.92))
+            let stalkForceRY = (stalkTargetRY - rightStalkPos.y) * 130.0 - (rightStalkVel.y * (stalkDamping * 0.92))
+            rightStalkVel.x += stalkForceRX * safeDt
+            rightStalkVel.y += stalkForceRY * safeDt
+            rightStalkPos.x += rightStalkVel.x * safeDt
+            rightStalkPos.y += rightStalkVel.y * safeDt
+
+            let maxStalkRadius: CGFloat = 8.5
+            let lStalkDist = hypot(leftStalkPos.x, leftStalkPos.y + 4.5)
+            if lStalkDist > maxStalkRadius {
+                let scale = maxStalkRadius / lStalkDist
+                leftStalkPos.x *= scale
+                leftStalkPos.y = -4.5 + (leftStalkPos.y + 4.5) * scale
+                leftStalkVel.x *= 0.5
+                leftStalkVel.y *= 0.5
+            }
+            let rStalkDist = hypot(rightStalkPos.x, rightStalkPos.y + 4.5)
+            if rStalkDist > maxStalkRadius {
+                let scale = maxStalkRadius / rStalkDist
+                rightStalkPos.x *= scale
+                rightStalkPos.y = -4.5 + (rightStalkPos.y + 4.5) * scale
+                rightStalkVel.x *= 0.5
+                rightStalkVel.y *= 0.5
+            }
+        }
+
         needsDisplay = true
     }
 
     func setPupilOffset(_ target: NSPoint, animated: Bool) {
         let bounded = Self.clampPupilOffset(target)
+        let gazeDelta = hypot(bounded.x - pupilOffset.x, bounded.y - pupilOffset.y)
+        if gazeDelta > 0.6 {
+            googlyVigor = min(1.0, googlyVigor + gazeDelta * 0.12)
+        }
         if animated {
             let smoothing: CGFloat = 0.28
             pupilOffset.x += (bounded.x - pupilOffset.x) * smoothing
@@ -605,13 +806,33 @@ final class PetView: NSView {
         NSBezierPath(ovalIn: NSRect(x: 48, y: 68, width: 28, height: 22)).fill()
         NSBezierPath(ovalIn: NSRect(x: 74, y: 68, width: 28, height: 22)).fill()
 
+        let catHighlight = bodyColor.blended(withFraction: 0.24, of: .white) ?? bodyColor
+        catHighlight.setFill()
+        let foreheadTuft = NSBezierPath()
+        foreheadTuft.move(to: NSPoint(x: 65, y: 28))
+        foreheadTuft.curve(to: NSPoint(x: 75, y: 39), controlPoint1: NSPoint(x: 67, y: 31), controlPoint2: NSPoint(x: 70, y: 36))
+        foreheadTuft.curve(to: NSPoint(x: 85, y: 28), controlPoint1: NSPoint(x: 80, y: 36), controlPoint2: NSPoint(x: 83, y: 31))
+        foreheadTuft.curve(to: NSPoint(x: 75, y: 33), controlPoint1: NSPoint(x: 81, y: 28), controlPoint2: NSPoint(x: 77, y: 30))
+        foreheadTuft.curve(to: NSPoint(x: 65, y: 28), controlPoint1: NSPoint(x: 72, y: 30), controlPoint2: NSPoint(x: 68, y: 28))
+        foreheadTuft.fill()
+
         // Cat Eyes
         drawStandardEyes(leftEyeRect: NSRect(x: 30, y: 38, width: 38, height: 43), rightEyeRect: NSRect(x: 82, y: 38, width: 38, height: 43))
 
         // Pink Triangle Nose
         accentColor.setFill()
         let nose = NSBezierPath()
-        nose.move(to: NSPoint(x: 70, y: 70)); nose.line(to: NSPoint(x: 80, y: 70)); nose.line(to: NSPoint(x: 75, y: 76)); nose.close(); nose.fill()
+        nose.move(to: NSPoint(x: 70, y: 70)); nose.curve(to: NSPoint(x: 75, y: 76), controlPoint1: NSPoint(x: 71, y: 74), controlPoint2: NSPoint(x: 73, y: 76)); nose.curve(to: NSPoint(x: 80, y: 70), controlPoint1: NSPoint(x: 77, y: 76), controlPoint2: NSPoint(x: 79, y: 74)); nose.curve(to: NSPoint(x: 75, y: 69), controlPoint1: NSPoint(x: 79, y: 68), controlPoint2: NSPoint(x: 76, y: 68)); nose.curve(to: NSPoint(x: 70, y: 70), controlPoint1: NSPoint(x: 74, y: 68), controlPoint2: NSPoint(x: 71, y: 68)); nose.fill()
+
+        accentColor.setStroke()
+        let mouth = NSBezierPath(); mouth.lineWidth = 2; mouth.lineCapStyle = .round
+        mouth.move(to: NSPoint(x: 75, y: 76)); mouth.line(to: NSPoint(x: 75, y: 80))
+        mouth.move(to: NSPoint(x: 75, y: 80)); mouth.curve(to: NSPoint(x: 67, y: 80), controlPoint1: NSPoint(x: 72, y: 84), controlPoint2: NSPoint(x: 69, y: 83))
+        mouth.move(to: NSPoint(x: 75, y: 80)); mouth.curve(to: NSPoint(x: 83, y: 80), controlPoint1: NSPoint(x: 81, y: 83), controlPoint2: NSPoint(x: 78, y: 84)); mouth.stroke()
+        accentColor.withAlphaComponent(0.62).setFill()
+        for point in [NSPoint(x: 49, y: 77), NSPoint(x: 54, y: 81), NSPoint(x: 101, y: 77), NSPoint(x: 96, y: 81)] {
+            NSBezierPath(ovalIn: NSRect(x: point.x, y: point.y, width: 2.5, height: 2.5)).fill()
+        }
 
         // Cat Whiskers
         NSColor(calibratedWhite: 0.2, alpha: 0.55).setStroke()
@@ -629,8 +850,8 @@ final class PetView: NSView {
 
         // Blush Cheeks
         themePalette.blushColor.nsColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 48, y: 78, width: 16, height: 9)).fill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX + 32, y: 78, width: 16, height: 9)).fill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 48, y: 86, width: 18, height: 10)).fill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX + 30, y: 86, width: 18, height: 10)).fill()
 
         // Dainty Cat Paws
         let feetTuck = flightIntensity * 6.0
@@ -640,6 +861,8 @@ final class PetView: NSView {
         bellyColor.withAlphaComponent(0.85).setFill()
         NSBezierPath(ovalIn: NSRect(x: 44, y: 128 - feetTuck, width: 6, height: 4)).fill()
         NSBezierPath(ovalIn: NSRect(x: 100, y: 128 - feetTuck, width: 6, height: 4)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 51, y: 130 - feetTuck, width: 4, height: 3)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 95, y: 130 - feetTuck, width: 4, height: 3)).fill()
     }
 
     private func drawCatEar(tip: NSPoint, baseLeft: NSPoint, baseRight: NSPoint, bodyColor: NSColor, innerColor: NSColor) {
@@ -810,6 +1033,16 @@ final class PetView: NSView {
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
 
+        let isRainbow = (themePreset == .rainbow)
+        let rainbowCoilColors: [NSColor] = [
+            NSColor(calibratedRed: 1.00, green: 0.20, blue: 0.28, alpha: 1.0), // 0: Vivid Red
+            NSColor(calibratedRed: 1.00, green: 0.53, blue: 0.00, alpha: 1.0), // 1: Tangerine Orange
+            NSColor(calibratedRed: 1.00, green: 0.85, blue: 0.00, alpha: 1.0), // 2: Sunshine Yellow
+            NSColor(calibratedRed: 0.16, green: 0.82, blue: 0.38, alpha: 1.0), // 3: Emerald Green
+            NSColor(calibratedRed: 0.00, green: 0.65, blue: 1.00, alpha: 1.0), // 4: Cyan Blue
+            NSColor(calibratedRed: 0.66, green: 0.32, blue: 0.98, alpha: 1.0)  // 5: Electric Purple
+        ]
+
         // Slinky bounces vertically like an elastic accordion spring.
         let bounce = CGFloat(sin(wingPhase * 0.8)) * (isFlying ? 7.5 : 2.5)
 
@@ -832,10 +1065,42 @@ final class PetView: NSView {
         coil.curve(to: NSPoint(x: 40, y: y3), controlPoint1: NSPoint(x: 126, y: y3), controlPoint2: NSPoint(x: 25, y: y3 + 1))
         coil.curve(to: NSPoint(x: 110, y: y4), controlPoint1: NSPoint(x: 126, y: y4), controlPoint2: NSPoint(x: 25, y: y4 + 1))
         coil.curve(to: NSPoint(x: 48, y: y5), controlPoint1: NSPoint(x: 119, y: y5), controlPoint2: NSPoint(x: 80, y: y5 + 10))
-        if animalKind == .slinky && themePreset == .rainbow {
-            drawRainbowSlinkyCoils(shift: 0)
-        } else {
-            coil.stroke()
+        coil.stroke()
+        let seg0 = NSBezierPath()
+        seg0.move(to: NSPoint(x: 39, y: y0))
+        seg0.curve(to: NSPoint(x: 111, y: y0), controlPoint1: NSPoint(x: 55, y: y0 - 13), controlPoint2: NSPoint(x: 95, y: y0 - 13))
+
+        let seg1 = NSBezierPath()
+        seg1.move(to: NSPoint(x: 111, y: y0))
+        seg1.curve(to: NSPoint(x: 40, y: y1), controlPoint1: NSPoint(x: 126, y: y1 - 1), controlPoint2: NSPoint(x: 25, y: y1 + 1))
+
+        let seg2 = NSBezierPath()
+        seg2.move(to: NSPoint(x: 40, y: y1))
+        seg2.curve(to: NSPoint(x: 110, y: y2), controlPoint1: NSPoint(x: 126, y: y2), controlPoint2: NSPoint(x: 24, y: y2 + 1))
+
+        let seg3 = NSBezierPath()
+        seg3.move(to: NSPoint(x: 110, y: y2))
+        seg3.curve(to: NSPoint(x: 40, y: y3), controlPoint1: NSPoint(x: 126, y: y3), controlPoint2: NSPoint(x: 25, y: y3 + 1))
+
+        let seg4 = NSBezierPath()
+        seg4.move(to: NSPoint(x: 40, y: y3))
+        seg4.curve(to: NSPoint(x: 110, y: y4), controlPoint1: NSPoint(x: 126, y: y4), controlPoint2: NSPoint(x: 25, y: y4 + 1))
+
+        let seg5 = NSBezierPath()
+        seg5.move(to: NSPoint(x: 110, y: y4))
+        seg5.curve(to: NSPoint(x: 48, y: y5), controlPoint1: NSPoint(x: 119, y: y5), controlPoint2: NSPoint(x: 80, y: y5 + 10))
+
+        let segments = [seg0, seg1, seg2, seg3, seg4, seg5]
+        for (i, seg) in segments.enumerated() {
+            seg.lineWidth = 15
+            seg.lineCapStyle = .round
+            seg.lineJoinStyle = .round
+            if isRainbow {
+                rainbowCoilColors[i].setStroke()
+            } else {
+                bodyColor.setStroke()
+            }
+            seg.stroke()
         }
 
         // Extra inner turns give the spring its playful, unmistakable swirl.
@@ -856,9 +1121,45 @@ final class PetView: NSView {
         innerCoils.curve(to: NSPoint(x: 47, y: iy3), controlPoint1: NSPoint(x: 116, y: iy3), controlPoint2: NSPoint(x: 34, y: iy3 + 1))
         innerCoils.curve(to: NSPoint(x: 101, y: iy4), controlPoint1: NSPoint(x: 116, y: iy4), controlPoint2: NSPoint(x: 69, y: iy4 + 10))
         innerCoils.stroke()
+        let iseg0 = NSBezierPath()
+        iseg0.move(to: NSPoint(x: 45, y: iy0))
+        iseg0.curve(to: NSPoint(x: 105, y: iy0), controlPoint1: NSPoint(x: 59, y: iy0 - 10), controlPoint2: NSPoint(x: 91, y: iy0 - 10))
+
+        let iseg1 = NSBezierPath()
+        iseg1.move(to: NSPoint(x: 105, y: iy0))
+        iseg1.curve(to: NSPoint(x: 47, y: iy1), controlPoint1: NSPoint(x: 116, y: iy1 - 2), controlPoint2: NSPoint(x: 34, y: iy1))
+
+        let iseg2 = NSBezierPath()
+        iseg2.move(to: NSPoint(x: 47, y: iy1))
+        iseg2.curve(to: NSPoint(x: 104, y: iy2), controlPoint1: NSPoint(x: 116, y: iy2), controlPoint2: NSPoint(x: 34, y: iy2 + 1))
+
+        let iseg3 = NSBezierPath()
+        iseg3.move(to: NSPoint(x: 104, y: iy2))
+        iseg3.curve(to: NSPoint(x: 47, y: iy3), controlPoint1: NSPoint(x: 116, y: iy3), controlPoint2: NSPoint(x: 34, y: iy3 + 1))
+
+        let iseg4 = NSBezierPath()
+        iseg4.move(to: NSPoint(x: 47, y: iy3))
+        iseg4.curve(to: NSPoint(x: 101, y: iy4), controlPoint1: NSPoint(x: 116, y: iy4), controlPoint2: NSPoint(x: 69, y: iy4 + 10))
+
+        let innerSegments = [iseg0, iseg1, iseg2, iseg3, iseg4]
+        for (i, iseg) in innerSegments.enumerated() {
+            iseg.lineWidth = 4.2
+            iseg.lineCapStyle = .round
+            if isRainbow {
+                rainbowCoilColors[i].blended(withFraction: 0.45, of: .white)?.setStroke() ?? rainbowCoilColors[i].setStroke()
+            } else {
+                highlight.withAlphaComponent(0.58).setStroke()
+            }
+            iseg.stroke()
+        }
 
         // Curled tips peek out from either side and wobble with the vertical bounce.
         accentColor.withAlphaComponent(0.7).setStroke()
+        if isRainbow {
+            rainbowCoilColors[0].withAlphaComponent(0.85).setStroke()
+        } else {
+            accentColor.withAlphaComponent(0.7).setStroke()
+        }
         let curls = NSBezierPath()
         curls.lineWidth = 3
         curls.lineCapStyle = .round
@@ -876,7 +1177,15 @@ final class PetView: NSView {
         shine.curve(to: NSPoint(x: 105, y: 111 + bounce * 1.0), controlPoint1: NSPoint(x: 57, y: 120 + bounce * 1.0), controlPoint2: NSPoint(x: 91, y: 120 + bounce * 1.0))
         shine.stroke()
 
-        drawStandardEyes(leftEyeRect: NSRect(x: 34, y: 39 + faceYOffset, width: 34, height: 38), rightEyeRect: NSRect(x: 82, y: 39 + faceYOffset, width: 34, height: 38))
+        let leftEyeRect = NSRect(x: 34, y: 39 + faceYOffset, width: 34, height: 38)
+        let rightEyeRect = NSRect(x: 82, y: 39 + faceYOffset, width: 34, height: 38)
+        let eyeAccent = isRainbow ? rainbowCoilColors[5] : accentColor
+        if googlyEyesEnabled {
+            drawGooglyEyes(leftEyeRect: leftEyeRect, rightEyeRect: rightEyeRect, accentColor: accentColor)
+            drawGooglyEyes(leftEyeRect: leftEyeRect, rightEyeRect: rightEyeRect, accentColor: eyeAccent)
+        } else {
+            drawStandardEyes(leftEyeRect: leftEyeRect, rightEyeRect: rightEyeRect)
+        }
 
         // Tiny center nub and a happy smile.
         accentColor.setFill()
@@ -895,31 +1204,157 @@ final class PetView: NSView {
         shadow.setFill()
         NSBezierPath(ovalIn: NSRect(x: 38, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
         NSBezierPath(ovalIn: NSRect(x: 86, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+        if isRainbow {
+            rainbowCoilColors[4].setFill()
+            NSBezierPath(ovalIn: NSRect(x: 38, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+            rainbowCoilColors[5].setFill()
+            NSBezierPath(ovalIn: NSRect(x: 86, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+        } else {
+            shadow.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 38, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 86, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
+        }
         bellyColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 44, y: 123 + bounce * 1.1 - feetTuck, width: 14, height: 7)).fill()
         NSBezierPath(ovalIn: NSRect(x: 92, y: 123 + bounce * 1.1 - feetTuck, width: 14, height: 7)).fill()
         context.restoreGraphicsState()
     }
 
-    private func drawRainbowSlinkyCoils(shift: CGFloat) {
-        let colors: [NSColor] = [
-            NSColor(calibratedRed: 1.0, green: 0.25, blue: 0.35, alpha: 1),
-            NSColor(calibratedRed: 1.0, green: 0.58, blue: 0.16, alpha: 1),
-            NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.18, alpha: 1),
-            NSColor(calibratedRed: 0.22, green: 0.78, blue: 0.45, alpha: 1),
-            NSColor(calibratedRed: 0.18, green: 0.64, blue: 1.0, alpha: 1),
-            NSColor(calibratedRed: 0.58, green: 0.34, blue: 0.94, alpha: 1)
-        ]
-        for index in 0..<6 {
-            let y = CGFloat(30 + index * 17)
-            let path = NSBezierPath()
-            path.lineWidth = 15
-            path.lineCapStyle = .round
-            colors[index].setStroke()
-            path.move(to: NSPoint(x: 40 + (index.isMultiple(of: 2) ? shift : -shift), y: y))
-            path.curve(to: NSPoint(x: 110 - (index.isMultiple(of: 2) ? shift : -shift), y: y), controlPoint1: NSPoint(x: 57, y: y - 12), controlPoint2: NSPoint(x: 93, y: y - 12))
-            path.stroke()
+    private func drawGooglyEyes(leftEyeRect: NSRect, rightEyeRect: NSRect, accentColor: NSColor) {
+        drawSingleGooglyEye(in: leftEyeRect, pupilOffset: leftGooglyPupilPos, stalkOffset: leftStalkPos, accentColor: accentColor)
+        drawSingleGooglyEye(in: rightEyeRect, pupilOffset: rightGooglyPupilPos, stalkOffset: rightStalkPos, accentColor: accentColor)
+    }
+
+    private func drawSingleGooglyEye(in eyeRect: NSRect, pupilOffset: NSPoint, stalkOffset: NSPoint, accentColor: NSColor) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let baseCenter = NSPoint(x: eyeRect.midX, y: eyeRect.midY + 3.0)
+        let eyeCenter = NSPoint(x: eyeRect.midX + stalkOffset.x, y: eyeRect.midY - 5.0 + stalkOffset.y)
+        let poppedRect = NSRect(x: eyeCenter.x - eyeRect.width / 2, y: eyeCenter.y - eyeRect.height / 2, width: eyeRect.width, height: eyeRect.height)
+
+        // 1. Socket Base Gasket & Well (sunken metal ring on face plate)
+        NSColor(calibratedWhite: 0.08, alpha: 0.40).setFill()
+        NSBezierPath(ovalIn: NSRect(x: baseCenter.x - 14, y: baseCenter.y - 7, width: 28, height: 15)).fill()
+
+        accentColor.withAlphaComponent(0.92).setStroke()
+        let socketRim = NSBezierPath(ovalIn: NSRect(x: baseCenter.x - 14, y: baseCenter.y - 7, width: 28, height: 15))
+        socketRim.lineWidth = 2.4
+        socketRim.stroke()
+
+        // 2. Coiled Micro-Spring Stalk
+        let p0 = baseCenter
+        let p1 = NSPoint(x: eyeCenter.x, y: eyeCenter.y + 11.0)
+        let dx = p1.x - p0.x
+        let dy = p1.y - p0.y
+        let coils = 3
+
+        let springShadow = NSBezierPath()
+        springShadow.lineWidth = 3.6
+        springShadow.lineCapStyle = .round
+        springShadow.lineJoinStyle = .round
+        springShadow.move(to: p0)
+        for i in 1...coils {
+            let t = CGFloat(i) / CGFloat(coils)
+            let prevT = CGFloat(i - 1) / CGFloat(coils)
+            let midT = (t + prevT) / 2.0
+            let side: CGFloat = (i % 2 == 1) ? 7.0 : -7.0
+            let cx = p0.x + dx * midT + side
+            let cy = p0.y + dy * midT
+            let endX = p0.x + dx * t
+            let endY = p0.y + dy * t
+            springShadow.curve(to: NSPoint(x: endX, y: endY), controlPoint1: NSPoint(x: cx, y: cy - 2), controlPoint2: NSPoint(x: cx, y: cy + 2))
         }
+        NSColor(calibratedWhite: 0.10, alpha: 0.55).setStroke()
+        springShadow.stroke()
+
+        let springBody = NSBezierPath()
+        springBody.lineWidth = 2.2
+        springBody.lineCapStyle = .round
+        springBody.lineJoinStyle = .round
+        springBody.move(to: p0)
+        for i in 1...coils {
+            let t = CGFloat(i) / CGFloat(coils)
+            let prevT = CGFloat(i - 1) / CGFloat(coils)
+            let midT = (t + prevT) / 2.0
+            let side: CGFloat = (i % 2 == 1) ? 7.0 : -7.0
+            let cx = p0.x + dx * midT + side
+            let cy = p0.y + dy * midT
+            let endX = p0.x + dx * t
+            let endY = p0.y + dy * t
+            springBody.curve(to: NSPoint(x: endX, y: endY), controlPoint1: NSPoint(x: cx, y: cy - 2), controlPoint2: NSPoint(x: cx, y: cy + 2))
+        }
+        accentColor.withAlphaComponent(0.95).setStroke()
+        springBody.stroke()
+
+        // 3. Drop Shadow of Elevated Eyeball on the face
+        NSColor.black.withAlphaComponent(0.24).setFill()
+        NSBezierPath(ovalIn: NSRect(x: baseCenter.x - 14 + stalkOffset.x * 0.25, y: baseCenter.y - 5 + stalkOffset.y * 0.25, width: 28, height: 14)).fill()
+
+        // 4. White plastic backing disk
+        NSColor(calibratedWhite: 0.98, alpha: 1.0).setFill()
+        NSBezierPath(ovalIn: poppedRect).fill()
+
+        // 5. Plastic capsule outer bevel wall
+        NSColor(calibratedWhite: 0.12, alpha: 0.52).setStroke()
+        let outerRim = NSBezierPath(ovalIn: poppedRect.insetBy(dx: 0.8, dy: 0.8))
+        outerRim.lineWidth = 1.8
+        outerRim.stroke()
+
+        // Inner rim shadow for 3D depth inside the plastic chamber
+        NSColor(calibratedWhite: 0.0, alpha: 0.10).setStroke()
+        let innerRim = NSBezierPath(ovalIn: poppedRect.insetBy(dx: 2.2, dy: 2.2))
+        innerRim.lineWidth = 1.2
+        innerRim.stroke()
+
+        // 6. Free-floating black disc pupil
+        let pupilSize = NSSize(width: 17.5, height: 18.5)
+        let pCenter = NSPoint(
+            x: poppedRect.midX + pupilOffset.x,
+            y: poppedRect.midY + pupilOffset.y
+        )
+        let pupilRect = NSRect(
+            x: pCenter.x - pupilSize.width / 2,
+            y: pCenter.y - pupilSize.height / 2,
+            width: pupilSize.width,
+            height: pupilSize.height
+        )
+        NSColor(calibratedWhite: 0.06, alpha: 1.0).setFill()
+        NSBezierPath(ovalIn: pupilRect).fill()
+
+        // Specular highlight on the black disc pupil
+        NSColor.white.withAlphaComponent(0.88).setFill()
+        NSBezierPath(ovalIn: NSRect(x: pupilRect.minX + 3.2, y: pupilRect.minY + 3.2, width: 4.5, height: 4.5)).fill()
+
+        // 7. Glossy clear plastic dome reflections
+        NSColor.white.withAlphaComponent(0.40).setFill()
+        NSBezierPath(ovalIn: NSRect(
+            x: poppedRect.minX + 4.5,
+            y: poppedRect.minY + 3.5,
+            width: poppedRect.width * 0.50,
+            height: poppedRect.height * 0.32
+        )).fill()
+
+        NSColor.white.withAlphaComponent(0.70).setFill()
+        NSBezierPath(ovalIn: NSRect(
+            x: poppedRect.minX + 7.5,
+            y: poppedRect.minY + 5.0,
+            width: 3.5,
+            height: 2.2
+        )).fill()
+
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        let botRim = NSBezierPath()
+        botRim.lineWidth = 1.2
+        botRim.appendArc(
+            withCenter: NSPoint(x: poppedRect.midX, y: poppedRect.midY),
+            radius: poppedRect.width * 0.42,
+            startAngle: 300,
+            endAngle: 40
+        )
+        botRim.stroke()
+
+        context.restoreGraphicsState()
     }
 
     private func drawStandardEyes(leftEyeRect: NSRect, rightEyeRect: NSRect) {

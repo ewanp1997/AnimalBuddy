@@ -141,17 +141,38 @@ import UniformTypeIdentifiers
         XCTAssertEqual(defaultSettings.animalKind, .bird)
         XCTAssertTrue(defaultSettings.alwaysOnTop)
         XCTAssertTrue(defaultSettings.hoverTranslucencyEnabled)
+        XCTAssertTrue(defaultSettings.googlyEyesEnabled)
 
         let encoded = try JSONEncoder().encode(defaultSettings)
         var decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
         XCTAssertEqual(decoded.animalKind, .bird)
         XCTAssertTrue(decoded.alwaysOnTop)
         XCTAssertTrue(decoded.hoverTranslucencyEnabled)
+        XCTAssertTrue(decoded.googlyEyesEnabled)
 
         defaultSettings.hoverTranslucencyEnabled = false
+        defaultSettings.googlyEyesEnabled = false
         let disabledEncoded = try JSONEncoder().encode(defaultSettings)
         decoded = try JSONDecoder().decode(AppSettings.self, from: disabledEncoded)
         XCTAssertFalse(decoded.hoverTranslucencyEnabled)
+        XCTAssertFalse(decoded.googlyEyesEnabled)
+    }
+
+    func testSlinkyGooglyEyesToggleAndRendering() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+        petView.animalKind = .slinky
+        petView.themePreset = .rainbow
+        petView.googlyEyesEnabled = true
+        petView.layout()
+
+        // Verify googly eyes property is set and view draws without error
+        XCTAssertTrue(petView.googlyEyesEnabled)
+        petView.display()
+
+        // Toggle googly eyes off
+        petView.googlyEyesEnabled = false
+        XCTAssertFalse(petView.googlyEyesEnabled)
+        petView.display()
     }
 
     func testBlushTappedInvokesCallback() {
@@ -174,7 +195,7 @@ import UniformTypeIdentifiers
         XCTAssertEqual(tappedSlot, .right)
     }
 
-    func testEyeAndBlushTriggerCoversEyePositions() {
+    func testEyeMacroTriggerMatchesEyePositions() {
         let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
         for animal in AnimalKind.allCases {
             petView.animalKind = animal
@@ -184,16 +205,58 @@ import UniformTypeIdentifiers
             let leftBtn = blushButtons[0]
             let rightBtn = blushButtons[1]
 
-            // Ensure left and right buttons have substantial width/height covering eyes and cheeks
-            XCTAssertGreaterThanOrEqual(leftBtn.frame.width, 48)
-            XCTAssertGreaterThanOrEqual(leftBtn.frame.height, 44)
-            XCTAssertGreaterThanOrEqual(rightBtn.frame.width, 48)
-            XCTAssertGreaterThanOrEqual(rightBtn.frame.height, 44)
+            let (expectedLeft, expectedRight) = PetView.eyeRects(for: animal, in: petView.bounds)
+            XCTAssertEqual(leftBtn.frame, expectedLeft)
+            XCTAssertEqual(rightBtn.frame, expectedRight)
 
             // Ensure left button is on left side and right button is on right side
             XCTAssertLessThan(leftBtn.frame.midX, 75)
             XCTAssertGreaterThan(rightBtn.frame.midX, 75)
+
+            // Verify entire eye is clickable: top half, center, and bottom half
+            let leftEyeTop = NSPoint(x: expectedLeft.midX, y: expectedLeft.minY + 3)
+            let leftEyeCenter = NSPoint(x: expectedLeft.midX, y: expectedLeft.midY)
+            let leftEyeBottom = NSPoint(x: expectedLeft.midX, y: expectedLeft.maxY - 3)
+            XCTAssertEqual(petView.hitTest(leftEyeTop), leftBtn, "Top of left eye for \(animal.displayName) must hit macro button")
+            XCTAssertEqual(petView.hitTest(leftEyeCenter), leftBtn, "Center of left eye for \(animal.displayName) must hit macro button")
+            XCTAssertEqual(petView.hitTest(leftEyeBottom), leftBtn, "Bottom of left eye for \(animal.displayName) must hit macro button")
+
+            let rightEyeTop = NSPoint(x: expectedRight.midX, y: expectedRight.minY + 3)
+            let rightEyeCenter = NSPoint(x: expectedRight.midX, y: expectedRight.midY)
+            let rightEyeBottom = NSPoint(x: expectedRight.midX, y: expectedRight.maxY - 3)
+            XCTAssertEqual(petView.hitTest(rightEyeTop), rightBtn, "Top of right eye for \(animal.displayName) must hit macro button")
+            XCTAssertEqual(petView.hitTest(rightEyeCenter), rightBtn, "Center of right eye for \(animal.displayName) must hit macro button")
+            XCTAssertEqual(petView.hitTest(rightEyeBottom), rightBtn, "Bottom of right eye for \(animal.displayName) must hit macro button")
+
+            // Clicking blush / cheek areas below or outside the eyes should hit the petView directly (not the macro buttons)
+            let cheekPoint = NSPoint(x: 20, y: 80)
+            XCTAssertEqual(petView.hitTest(cheekPoint), petView)
         }
+
+        // Verify window-backed hit testing (where NSWindow sends points in window coordinate space)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 150, height: 150), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = petView
+        petView.animalKind = .bird
+        petView.layout()
+        let blushButtons = petView.subviews.compactMap { $0 as? MacroBlushButton }
+        let leftBtn = blushButtons[0]
+        let rightBtn = blushButtons[1]
+        let (birdLeft, birdRight) = PetView.eyeRects(for: .bird, in: petView.bounds)
+
+        // In window coords (unflipped, y=0 at bottom), top of eye (flipped y=38) is window y = 150 - 38 = 112
+        let windowTopLeftEye = NSPoint(x: birdLeft.midX, y: 150 - (birdLeft.minY + 3))
+        let windowCenterLeftEye = NSPoint(x: birdLeft.midX, y: 150 - birdLeft.midY)
+        let windowBottomLeftEye = NSPoint(x: birdLeft.midX, y: 150 - (birdLeft.maxY - 3))
+        XCTAssertEqual(petView.hitTest(windowTopLeftEye), leftBtn, "Top of left eye in window coords must hit macro button")
+        XCTAssertEqual(petView.hitTest(windowCenterLeftEye), leftBtn, "Center of left eye in window coords must hit macro button")
+        XCTAssertEqual(petView.hitTest(windowBottomLeftEye), leftBtn, "Bottom of left eye in window coords must hit macro button")
+
+        let windowTopRightEye = NSPoint(x: birdRight.midX, y: 150 - (birdRight.minY + 3))
+        let windowCenterRightEye = NSPoint(x: birdRight.midX, y: 150 - birdRight.midY)
+        let windowBottomRightEye = NSPoint(x: birdRight.midX, y: 150 - (birdRight.maxY - 3))
+        XCTAssertEqual(petView.hitTest(windowTopRightEye), rightBtn, "Top of right eye in window coords must hit macro button")
+        XCTAssertEqual(petView.hitTest(windowCenterRightEye), rightBtn, "Center of right eye in window coords must hit macro button")
+        XCTAssertEqual(petView.hitTest(windowBottomRightEye), rightBtn, "Bottom of right eye in window coords must hit macro button")
     }
 
     func testHitTestCapturesEntirePetBoundary() {
