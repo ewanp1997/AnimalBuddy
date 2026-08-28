@@ -350,26 +350,26 @@ import UniformTypeIdentifiers
     func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.27"
+        settings.lastSeenAppVersion = "a0.41"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.41")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.42")
         guard case .whatsNew(let version, let releases)? = presentation else {
             XCTFail("Expected .whatsNew presentation on update")
             return
         }
-        XCTAssertEqual(version, "a0.41")
+        XCTAssertEqual(version, "a0.42")
         XCTAssertEqual(releases.count, 1)
-        XCTAssertEqual(releases.first?.version, "a0.41")
-        XCTAssertEqual(releases.first?.releaseTitle, "Googly Spring Physics, Rainbow Coils & Auto Updates")
-        XCTAssertTrue(releases.first?.features.contains { $0.title == "Dorky Spring-Mounted Googly Eyes" } == true)
+        XCTAssertEqual(releases.first?.version, "a0.42")
+        XCTAssertEqual(releases.first?.releaseTitle, "General Settings & Helpful Tips Speech Bubble")
+        XCTAssertTrue(releases.first?.features.contains { $0.title == "General Settings Tab" } == true)
     }
 
     func testWelcomeEvaluatorSameVersionReturnsNil() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.41"
+        settings.lastSeenAppVersion = "a0.42"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.41")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.42")
         XCTAssertNil(presentation, "Expected nil when version matches last seen")
     }
 
@@ -378,12 +378,12 @@ import UniformTypeIdentifiers
         settings.hasCompletedWelcome = true
         settings.lastSeenAppVersion = "a0.25"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.41")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.42")
         guard case .whatsNew(_, let releases)? = presentation else {
             XCTFail("Expected .whatsNew for multi-version upgrade")
             return
         }
-        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41"])
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42"])
     }
 
     func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
@@ -407,6 +407,70 @@ import UniformTypeIdentifiers
         XCTAssertTrue(restored.automaticallyCheckForUpdates)
         XCTAssertNil(restored.skippedAppVersion)
         XCTAssertNil(restored.lastUpdateCheckDate)
+        XCTAssertFalse(restored.helpfulTipsEnabled, "Helpful tips must be switched off by default")
+    }
+
+    func testAppSettingsPreservesHelpfulTipsEnabledOnRoundTrip() throws {
+        var settings = AppSettings()
+        settings.helpfulTipsEnabled = true
+
+        let data = try JSONEncoder().encode(settings)
+        let restored = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertTrue(restored.helpfulTipsEnabled)
+    }
+
+    func testHelpfulTipsCatalogContainsUniqueTips() {
+        let tips = HelpfulTipsCatalog.allTips
+        XCTAssertGreaterThanOrEqual(tips.count, 5)
+
+        let ids = tips.map(\.id)
+        let uniqueIds = Set(ids)
+        XCTAssertEqual(ids.count, uniqueIds.count, "Tip IDs must be distinct")
+
+        for tip in tips {
+            XCTAssertFalse(tip.emoji.isEmpty)
+            XCTAssertFalse(tip.title.isEmpty)
+            XCTAssertFalse(tip.message.isEmpty)
+        }
+    }
+
+    func testHelpfulTipsCatalogRandomTipExcludesGivenId() {
+        let excludedId = "eye-macros"
+        for _ in 0..<20 {
+            let tip = HelpfulTipsCatalog.randomTip(excluding: excludedId)
+            XCTAssertNotEqual(tip.id, excludedId, "Expected random tip to exclude specified ID")
+        }
+    }
+
+    func testHelpfulTipsTargetsMapToValidSettingsTabs() {
+        let generalTip = HelpfulTipsCatalog.allTips.first { $0.id == "smart-inbox" }
+        XCTAssertEqual(generalTip?.settingsTarget, .general)
+        XCTAssertEqual(generalTip?.settingsTarget?.tabIndex, 0)
+
+        let themeTip = HelpfulTipsCatalog.allTips.first { $0.id == "custom-themes" }
+        XCTAssertEqual(themeTip?.settingsTarget, .appearance)
+        XCTAssertEqual(themeTip?.settingsTarget?.tabIndex, 1)
+
+        let eyeMacrosTip = HelpfulTipsCatalog.allTips.first { $0.id == "eye-macros" }
+        XCTAssertEqual(eyeMacrosTip?.settingsTarget, .macrosWorkshop)
+        XCTAssertEqual(eyeMacrosTip?.settingsTarget?.tabIndex, 2)
+    }
+
+    func testAppSettingsPreservesGeneralSettingsOnRoundTrip() throws {
+        var settings = AppSettings()
+        settings.destinationFolderPath = "/Custom/Path/Inbox"
+        settings.alwaysOnTop = false
+        settings.snappingEnabled = false
+        settings.minimizeDestination = .dock
+
+        let data = try JSONEncoder().encode(settings)
+        let restored = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertEqual(restored.destinationFolderPath, "/Custom/Path/Inbox")
+        XCTAssertFalse(restored.alwaysOnTop)
+        XCTAssertFalse(restored.snappingEnabled)
+        XCTAssertEqual(restored.minimizeDestination, .dock)
     }
 
     func testAppSettingsPreservesUpdatePreferencesOnRoundTrip() throws {
@@ -427,32 +491,32 @@ import UniformTypeIdentifiers
     func testGitHubReleaseDecodingAndDownloadURL() throws {
         let json = """
         {
-            "tag_name": "a0.41",
-            "name": "Animal Buddy a0.41",
-            "body": "## What's New\\n- Googly eyes with real springs\\n- Automatic update checking",
-            "html_url": "https://github.com/ewanp1997/AnimalBuddy/releases/tag/a0.41",
-            "published_at": "2026-08-28T14:00:00Z",
+            "tag_name": "a0.42",
+            "name": "Animal Buddy a0.42",
+            "body": "## What's New\\n- General Settings Tab\\n- Helpful tips speech bubble with tap navigation",
+            "html_url": "https://github.com/ewanp1997/AnimalBuddy/releases/tag/a0.42",
+            "published_at": "2026-08-29T01:00:00Z",
             "assets": [
                 {
-                    "name": "AnimalBuddy-a0.41.zip",
-                    "browser_download_url": "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.41/AnimalBuddy-a0.41.zip",
+                    "name": "AnimalBuddy-a0.42.zip",
+                    "browser_download_url": "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.42/AnimalBuddy-a0.42.zip",
                     "size": 5242880
                 }
             ]
         }
         """
         let release = try JSONDecoder().decode(GitHubRelease.self, from: Data(json.utf8))
-        XCTAssertEqual(release.tagName, "a0.41")
-        XCTAssertEqual(release.name, "Animal Buddy a0.41")
-        XCTAssertEqual(release.displayTitle, "Animal Buddy a0.41")
-        XCTAssertEqual(release.primaryDownloadURL?.absoluteString, "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.41/AnimalBuddy-a0.41.zip")
+        XCTAssertEqual(release.tagName, "a0.42")
+        XCTAssertEqual(release.name, "Animal Buddy a0.42")
+        XCTAssertEqual(release.displayTitle, "Animal Buddy a0.42")
+        XCTAssertEqual(release.primaryDownloadURL?.absoluteString, "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.42/AnimalBuddy-a0.42.zip")
     }
 
     func testVersionComparisonDetectsUpdate() {
-        XCTAssertTrue(VersionComparator.isVersion("a0.41", greaterThan: "a0.27"))
-        XCTAssertTrue(VersionComparator.isVersion("a0.41", greaterThan: "a0.40"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.41", greaterThan: "a0.41"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.40", greaterThan: "a0.41"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.42", greaterThan: "a0.41"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.42", greaterThan: "a0.27"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.42", greaterThan: "a0.42"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.41", greaterThan: "a0.42"))
     }
 }
 

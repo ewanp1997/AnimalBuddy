@@ -2,9 +2,10 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, Bool, MinimizeDestination) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
+    var onShowTipPreview: (() -> Void)?
 
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
@@ -18,7 +19,13 @@ import UniformTypeIdentifiers
     private var hoverTranslucencyEnabled: Bool
     private var googlyEyesEnabled: Bool
     private var automaticallyCheckForUpdates: Bool
-    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.41")
+    private var helpfulTipsEnabled: Bool
+    private var destinationFolderPath: String?
+    private var alwaysOnTop: Bool
+    private var snappingEnabled: Bool
+    private var minimizeDestination: MinimizeDestination
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.42")
+    private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
     private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom", "Rainbow"], trackingMode: .selectOne, target: nil, action: nil)
@@ -40,10 +47,12 @@ import UniformTypeIdentifiers
     private var previewPetView: PetView!
 
     private let tabSegment = NSSegmentedControl(labels: [
+        "⚙️ General",
         "🎨 Plumage & Themes",
         "⚡️ Macros Workshop"
     ], trackingMode: .selectOne, target: nil, action: nil)
     private let tabContainer = NSView()
+    private var generalView: NSView!
     private var appearanceView: NSView!
     private var macrosView: NSView!
     private let macroFileStatusLabel = NSTextField(labelWithString: "")
@@ -73,6 +82,11 @@ import UniformTypeIdentifiers
         hoverTranslucencyEnabled = settings.hoverTranslucencyEnabled
         googlyEyesEnabled = settings.googlyEyesEnabled
         automaticallyCheckForUpdates = settings.automaticallyCheckForUpdates
+        helpfulTipsEnabled = settings.helpfulTipsEnabled
+        destinationFolderPath = settings.destinationFolderPath
+        alwaysOnTop = settings.alwaysOnTop
+        snappingEnabled = settings.snappingEnabled
+        minimizeDestination = settings.minimizeDestination
 
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
@@ -101,6 +115,7 @@ import UniformTypeIdentifiers
 
         tabContainer.translatesAutoresizingMaskIntoConstraints = false
 
+        generalView = buildGeneralTab()
         appearanceView = buildAppearanceTab()
         macrosView = buildMacrosTab()
 
@@ -140,15 +155,27 @@ import UniformTypeIdentifiers
         updateColorWellsFromActivePalette()
         updateThemeDescription()
         updateMacroTabLabels()
+        updateFolderPathDisplay()
     }
 
     @objc private func tabChanged() {
         switchTab(to: tabSegment.selectedSegment)
     }
 
+    func selectTab(_ index: Int) {
+        let validIndex = min(max(index, 0), tabSegment.segmentCount - 1)
+        tabSegment.selectedSegment = validIndex
+        switchTab(to: validIndex)
+    }
+
     private func switchTab(to index: Int) {
         tabContainer.subviews.forEach { $0.removeFromSuperview() }
-        let targetView = index == 0 ? appearanceView! : macrosView!
+        let targetView: NSView
+        switch index {
+        case 0: targetView = generalView!
+        case 1: targetView = appearanceView!
+        default: targetView = macrosView!
+        }
         targetView.translatesAutoresizingMaskIntoConstraints = false
         tabContainer.addSubview(targetView)
         NSLayoutConstraint.activate([
@@ -157,6 +184,62 @@ import UniformTypeIdentifiers
             targetView.topAnchor.constraint(equalTo: tabContainer.topAnchor),
             targetView.bottomAnchor.constraint(equalTo: tabContainer.bottomAnchor)
         ])
+    }
+
+    // MARK: - General Tab
+
+    private func buildGeneralTab() -> NSView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+
+        let doc = NSView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = doc
+
+        let heading = NSTextField(labelWithString: "General Settings")
+        heading.font = .systemFont(ofSize: 20, weight: .bold)
+        let note = NSTextField(wrappingLabelWithString: "Configure your desktop inbox folder, window presence, helpful tips, and software updates.")
+        note.textColor = .secondaryLabelColor
+        note.maximumNumberOfLines = 3
+
+        let inboxCard = makeInboxFolderCard()
+        let windowCard = makeWindowBehaviorCard()
+        let tipsCard = makeHelpfulTipsCard()
+        let updatesCard = makeSoftwareUpdatesCard()
+
+        let mainStack = NSStackView(views: [heading, note, inboxCard, windowCard, tipsCard, updatesCard])
+        mainStack.orientation = .vertical
+        mainStack.alignment = .leading
+        mainStack.spacing = 16
+        mainStack.edgeInsets = NSEdgeInsets(top: 16, left: 28, bottom: 20, right: 28)
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(mainStack)
+
+        inboxCard.translatesAutoresizingMaskIntoConstraints = false
+        windowCard.translatesAutoresizingMaskIntoConstraints = false
+        tipsCard.translatesAutoresizingMaskIntoConstraints = false
+        updatesCard.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            doc.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            doc.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+
+            mainStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
+            mainStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            mainStack.topAnchor.constraint(equalTo: doc.topAnchor),
+            mainStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
+
+            inboxCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            windowCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            tipsCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            updatesCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56)
+        ])
+
+        return scrollView
     }
 
     // MARK: - Appearance Tab
@@ -181,7 +264,6 @@ import UniformTypeIdentifiers
         let themeCard = makeThemeCard()
         let customCard = makePersonalCustomizationCard()
         let previewCard = makePreviewCard()
-        let behaviorCard = makeBehaviorCard()
 
         let leftCol = NSStackView(views: [themeCard, customCard])
         leftCol.orientation = .vertical
@@ -194,7 +276,7 @@ import UniformTypeIdentifiers
         row.alignment = .top
         row.distribution = .fill
 
-        let mainStack = NSStackView(views: [heading, note, row, behaviorCard])
+        let mainStack = NSStackView(views: [heading, note, row])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -206,7 +288,6 @@ import UniformTypeIdentifiers
         previewCard.translatesAutoresizingMaskIntoConstraints = false
         themeCard.translatesAutoresizingMaskIntoConstraints = false
         customCard.translatesAutoresizingMaskIntoConstraints = false
-        behaviorCard.translatesAutoresizingMaskIntoConstraints = false
         row.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -220,7 +301,6 @@ import UniformTypeIdentifiers
             mainStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
 
             row.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
-            behaviorCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             leftCol.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.62),
             themeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
             customCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
@@ -404,20 +484,148 @@ import UniformTypeIdentifiers
         return stack
     }
 
-    private func makeBehaviorCard() -> NSView {
-        let title = NSTextField(labelWithString: "Window Behavior & Transparency")
+    // MARK: - General Tab Cards & Actions
+
+    private func makeInboxFolderCard() -> NSView {
+        let title = NSTextField(labelWithString: "📁 Desktop Inbox Folder")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
 
-        let toggle = NSButton(checkboxWithTitle: "Enable subtle translucency at rest (dims to 35% opacity when idle, 100% on hover)", target: self, action: #selector(toggleHoverTranslucency(_:)))
-        toggle.state = hoverTranslucencyEnabled ? .on : .off
-        toggle.font = .systemFont(ofSize: 13, weight: .medium)
-
-        let desc = NSTextField(wrappingLabelWithString: "When enabled, Animal Buddy floats transparently over your windows and text editors so it never blocks your view, then instantly becomes solid the moment you move your mouse over it.")
+        let desc = NSTextField(wrappingLabelWithString: "Items dragged and dropped onto Animal Buddy without a custom drop macro are safely stored in this folder.")
         desc.font = .systemFont(ofSize: 11)
         desc.textColor = .secondaryLabelColor
 
-        let updateTitle = NSTextField(labelWithString: "Software Updates")
-        updateTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        folderPathLabel.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        folderPathLabel.textColor = .labelColor
+        folderPathLabel.isSelectable = true
+
+        let chooseBtn = NSButton(title: "Choose Folder…", target: self, action: #selector(chooseFolderPressed))
+        chooseBtn.bezelStyle = .rounded
+        chooseBtn.font = .systemFont(ofSize: 12)
+
+        let revealBtn = NSButton(title: "Reveal in Finder", target: self, action: #selector(revealFolderPressed))
+        revealBtn.bezelStyle = .rounded
+        revealBtn.font = .systemFont(ofSize: 12)
+
+        let resetBtn = NSButton(title: "Reset to Default", target: self, action: #selector(resetFolderPressed))
+        resetBtn.bezelStyle = .rounded
+        resetBtn.font = .systemFont(ofSize: 12)
+
+        let btnRow = NSStackView(views: [chooseBtn, revealBtn, resetBtn])
+        btnRow.orientation = .horizontal
+        btnRow.spacing = 10
+
+        let stack = NSStackView(views: [title, desc, folderPathLabel, btnRow])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        desc.translatesAutoresizingMaskIntoConstraints = false
+        folderPathLabel.translatesAutoresizingMaskIntoConstraints = false
+        btnRow.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            folderPathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            btnRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    private func makeWindowBehaviorCard() -> NSView {
+        let title = NSTextField(labelWithString: "🪟 Window Behavior & Snapping")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let floatingToggle = NSButton(checkboxWithTitle: "Always on top (floats above all regular windows and spaces)", target: self, action: #selector(toggleAlwaysOnTop(_:)))
+        floatingToggle.state = alwaysOnTop ? .on : .off
+        floatingToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let transToggle = NSButton(checkboxWithTitle: "Enable subtle translucency at rest (dims to 35% opacity when idle, 100% on hover)", target: self, action: #selector(toggleHoverTranslucency(_:)))
+        transToggle.state = hoverTranslucencyEnabled ? .on : .off
+        transToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let transDesc = NSTextField(wrappingLabelWithString: "When enabled, Animal Buddy floats transparently over your windows and text editors so it never blocks your view, then instantly becomes solid the moment you move your cursor over it.")
+        transDesc.font = .systemFont(ofSize: 11)
+        transDesc.textColor = .secondaryLabelColor
+
+        let snapToggle = NSButton(checkboxWithTitle: "Snap to screen edges when dropped", target: self, action: #selector(toggleSnapping(_:)))
+        snapToggle.state = snappingEnabled ? .on : .off
+        snapToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let minTitle = NSTextField(labelWithString: "Minimize Pet To:")
+        minTitle.font = .systemFont(ofSize: 12, weight: .medium)
+
+        let minSegment = NSSegmentedControl(labels: ["Menu Bar", "Dock"], trackingMode: .selectOne, target: self, action: #selector(minimizeDestinationChanged(_:)))
+        minSegment.selectedSegment = (minimizeDestination == .dock ? 1 : 0)
+
+        let minRow = NSStackView(views: [minTitle, minSegment])
+        minRow.orientation = .horizontal
+        minRow.spacing = 10
+        minRow.alignment = .centerY
+
+        let stack = NSStackView(views: [title, floatingToggle, transToggle, transDesc, snapToggle, minRow])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        floatingToggle.translatesAutoresizingMaskIntoConstraints = false
+        transToggle.translatesAutoresizingMaskIntoConstraints = false
+        transDesc.translatesAutoresizingMaskIntoConstraints = false
+        snapToggle.translatesAutoresizingMaskIntoConstraints = false
+        minRow.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            floatingToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            transToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            transDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            snapToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            minRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    private func makeHelpfulTipsCard() -> NSView {
+        let title = NSTextField(labelWithString: "💡 Helpful Tips & Discovery")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let tipsToggle = NSButton(checkboxWithTitle: "Show random helpful tips in a speech bubble (off by default)", target: self, action: #selector(toggleHelpfulTips(_:)))
+        tipsToggle.state = helpfulTipsEnabled ? .on : .off
+        tipsToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let tipsDesc = NSTextField(wrappingLabelWithString: "Occasionally displays friendly, non-intrusive speech bubble tips above your buddy while resting to help you discover shortcuts, drop modifiers, and macros.")
+        tipsDesc.font = .systemFont(ofSize: 11)
+        tipsDesc.textColor = .secondaryLabelColor
+
+        let showTipBtn = NSButton(title: "Show a Tip Now", target: self, action: #selector(showTipNowPressed))
+        showTipBtn.bezelStyle = .rounded
+        showTipBtn.font = .systemFont(ofSize: 12)
+
+        let stack = NSStackView(views: [title, tipsToggle, tipsDesc, showTipBtn])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        tipsToggle.translatesAutoresizingMaskIntoConstraints = false
+        tipsDesc.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tipsToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            tipsDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
+    private func makeSoftwareUpdatesCard() -> NSView {
+        let title = NSTextField(labelWithString: "🚀 Software Updates")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
 
         let autoUpdateToggle = NSButton(checkboxWithTitle: "Automatically check for updates on startup", target: self, action: #selector(toggleAutoUpdates(_:)))
         autoUpdateToggle.state = automaticallyCheckForUpdates ? .on : .off
@@ -435,7 +643,7 @@ import UniformTypeIdentifiers
         updateRow.alignment = .centerY
         updateRow.spacing = 12
 
-        let stack = NSStackView(views: [title, toggle, desc, updateTitle, autoUpdateToggle, updateRow])
+        let stack = NSStackView(views: [title, autoUpdateToggle, updateRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -444,21 +652,71 @@ import UniformTypeIdentifiers
         stack.layer?.cornerRadius = 12
         stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 
-        toggle.translatesAutoresizingMaskIntoConstraints = false
-        desc.translatesAutoresizingMaskIntoConstraints = false
         autoUpdateToggle.translatesAutoresizingMaskIntoConstraints = false
         updateRow.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            toggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             autoUpdateToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             updateRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
         return stack
     }
 
+    // MARK: - Folder & Behavior Actions
+
+    private var effectiveFolderPath: String {
+        destinationFolderPath ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path ?? "~/Desktop/Animal Buddy Inbox"
+    }
+
+    private func updateFolderPathDisplay() {
+        let path = effectiveFolderPath
+        let isCustom = (destinationFolderPath != nil)
+        folderPathLabel.stringValue = "\(isCustom ? "📍 Custom: " : "🏠 Default: ")\(path)"
+    }
+
+    @objc private func chooseFolderPressed() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Folder"
+        panel.message = "Choose a destination folder for Animal Buddy drops"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            self.destinationFolderPath = url.path
+            self.updateFolderPathDisplay()
+        }
+    }
+
+    @objc private func revealFolderPressed() {
+        let path = effectiveFolderPath
+        let url = URL(fileURLWithPath: path)
+        if !FileManager.default.fileExists(atPath: path) {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+    }
+
+    @objc private func resetFolderPressed() {
+        destinationFolderPath = nil
+        updateFolderPathDisplay()
+    }
+
+    @objc private func toggleAlwaysOnTop(_ sender: NSButton) {
+        alwaysOnTop = (sender.state == .on)
+    }
+
     @objc private func toggleHoverTranslucency(_ sender: NSButton) {
         hoverTranslucencyEnabled = (sender.state == .on)
+    }
+
+    @objc private func toggleSnapping(_ sender: NSButton) {
+        snappingEnabled = (sender.state == .on)
+    }
+
+    @objc private func minimizeDestinationChanged(_ sender: NSSegmentedControl) {
+        minimizeDestination = (sender.selectedSegment == 1) ? .dock : .menubar
     }
 
     @objc private func toggleAutoUpdates(_ sender: NSButton) {
@@ -467,6 +725,14 @@ import UniformTypeIdentifiers
 
     @objc private func checkNowPressed() {
         onCheckForUpdates?()
+    }
+
+    @objc private func toggleHelpfulTips(_ sender: NSButton) {
+        helpfulTipsEnabled = (sender.state == .on)
+    }
+
+    @objc private func showTipNowPressed() {
+        onShowTipPreview?()
     }
 
     @objc private func toggleGooglyEyes(_ sender: NSButton) {
@@ -891,7 +1157,12 @@ import UniformTypeIdentifiers
             customPalette,
             hoverTranslucencyEnabled,
             googlyEyesEnabled,
-            automaticallyCheckForUpdates
+            automaticallyCheckForUpdates,
+            helpfulTipsEnabled,
+            destinationFolderPath,
+            alwaysOnTop,
+            snappingEnabled,
+            minimizeDestination
         )
         close()
     }

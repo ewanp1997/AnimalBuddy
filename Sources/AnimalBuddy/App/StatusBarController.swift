@@ -11,6 +11,7 @@ import AppKit
     var onConfigureMacros: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onOpenWelcome: (() -> Void)?
+    var onShowHelpfulTip: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onQuit: (() -> Void)?
 
@@ -84,6 +85,9 @@ import AppKit
         let welcomeItem = NSMenuItem(title: "Welcome & What's New…", action: #selector(openWelcome), keyEquivalent: "")
         welcomeItem.target = self
         menu.addItem(welcomeItem)
+        let tipItem = NSMenuItem(title: "Show Helpful Tip…", action: #selector(showHelpfulTip), keyEquivalent: "")
+        tipItem.target = self
+        menu.addItem(tipItem)
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -126,6 +130,7 @@ import AppKit
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
     @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
     @objc private func openWelcome() { onOpenWelcome?() }
+    @objc private func showHelpfulTip() { onShowHelpfulTip?() }
     @objc private func openSettings() { (onOpenSettings ?? onConfigureMacros)?() }
     @objc private func checkForUpdates() { onCheckForUpdates?() }
     @objc private func quit() { onQuit?() }

@@ -48,10 +48,27 @@ On the current machine, `swift build -c release` succeeds. `swift test` is confi
 
 The drop layer classifies input, asks `ActionRegistry` for the binding matching `InputCategory + ModifierCombination`, then executes an action with an `ActionContext`. Pet assets can later be introduced behind the state model without changing automation code.
 
+## 🛡️ macOS Gatekeeper & Installation Note
+
+When downloading prebuilt `.app` application releases directly from the web or GitHub, macOS Gatekeeper automatically sets a quarantine attribute (`com.apple.quarantine`), displaying a warning that *"Animal Buddy is damaged and can't be opened"* on unsigned/ad-hoc signed builds.
+
+To clear this on your Mac, open **Terminal** and run:
+
+```sh
+sudo xattr -rd com.apple.quarantine "/Applications/Animal Buddy.app"
+```
+*(or replace `/Applications/Animal Buddy.app` with the path to where you extracted the app)*.
+
+---
+
 ## Current functionality
 
-The `a0.41` release includes:
+The `a0.42` release includes:
 
+- **General Settings Tab**: Centralized hub for configuring the Desktop Inbox storage directory, window behavior, floating and snapping rules, helpful tips, and software updates.
+- **Custom Desktop Inbox Location**: Choose any directory on your Mac for dropped files and snippets, with instant **Reveal in Finder** and **Reset to Default** actions.
+- **Helpful Tips Speech Bubble**: Gentle educational tips float in a frosted glass speech bubble above your buddy while idle, with tap-to-navigate directly into the relevant Settings tab (disabled by default).
+- **Expanded Macro Placeholders**: Drop macros now support `{{inbox}}` and `{{destination}}` placeholders in custom shell scripts and workflows.
 - File, directory, image, URL, and text drops with visual drag feedback.
 - Modifier-aware actions: Store in folder, Copy path, Reveal in Finder, Move to Trash, Convert to PNG, Optimise image, and Open URL.
 - Safe collision handling for file writes and JSON-backed settings stored in `~/Library/Application Support/AnimalBuddy/settings.json`.
@@ -64,7 +81,7 @@ The `a0.41` release includes:
 - A hover-only minimize button and menu-bar controls for minimizing to the Dock or hiding while retaining the Animal Buddy menu-bar logo. The minimize animation respects reduced-motion preferences.
 - Free placement after dragging, with optional “Snap to Screen Edges” behavior and subtle flick inertia.
 - A proximity-based top/bottom dismiss target. Dragging the buddy towards the center edge of a screen shows the cross target; releasing within it hides or minimizes the buddy, while releasing outside restores it at the dropped location.
-- A unified Macros workshop for configuring the left and right eye click buttons, plus drop-specific macros. Dragging macros can be assigned to images, folders, applications, files, URLs, text, mixed items, or unknown drops; they run before the normal drop action and can use `{{path}}`, `{{paths}}`, `{{text}}`, and `{{category}}` placeholders. Macro blocks include shell commands, installed applications, URLs, Apple Shortcuts, and nested macros, with cycle protection.
+- A unified Macros workshop for configuring the left and right eye click buttons, plus drop-specific macros. Dragging macros can be assigned to images, folders, applications, files, URLs, text, mixed items, or unknown drops; they run before the normal drop action and can use `{{path}}`, `{{paths}}`, `{{text}}`, `{{category}}`, `{{inbox}}`, and `{{destination}}` placeholders. Macro blocks include shell commands, installed applications, URLs, Apple Shortcuts, and nested macros, with cycle protection.
 - In-app macro suggestions, category-specific editing, and versioned macro import/export. The workshop exports a stable `com.animalbuddy.macros` JSON document and imports it atomically without changing themes or other settings.
 
 Hover over the pet to reveal the minimize button. Use “Show Animal Buddy” from the status-item menu to bring it back after hiding it. Existing single-command macro settings migrate as shell blocks; Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.

@@ -43,7 +43,7 @@ if [ -f "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServ
 fi
 
 # Package zip for GitHub release
-ZIP_NAME="AnimalBuddy-a0.41.zip"
+ZIP_NAME="AnimalBuddy-a0.42.zip"
 echo "🗜️ Creating release archive $ZIP_NAME..."
 rm -f "$ZIP_NAME" ".build/$ZIP_NAME"
 ditto -c -k --sequesterRsrc --keepParent "$PRIMARY_APP" "$ZIP_NAME"

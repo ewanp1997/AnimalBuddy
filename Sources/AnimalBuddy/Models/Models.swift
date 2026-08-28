@@ -1125,6 +1125,32 @@ public enum AppChangelog {
                     description: "Seamlessly checks GitHub for new releases with one-click download and instant updates."
                 )
             ]
+        ),
+        VersionRelease(
+            version: "a0.42",
+            releaseTitle: "General Settings & Helpful Tips Speech Bubble",
+            features: [
+                FeatureItem(
+                    iconName: "gearshape.fill",
+                    title: "General Settings Tab",
+                    description: "Easily customize your desktop inbox storage folder, window behavior, snapping, tips, and updates."
+                ),
+                FeatureItem(
+                    iconName: "bubble.left.and.text.bubble.right.fill",
+                    title: "Helpful Tips Speech Bubble",
+                    description: "Friendly educational tips float gently above your buddy, with one-tap navigation directly into Settings."
+                ),
+                FeatureItem(
+                    iconName: "folder.fill.badge.plus",
+                    title: "Desktop Inbox Customization",
+                    description: "Choose any folder on your Mac for dropped items, with direct Reveal in Finder and Reset actions."
+                ),
+                FeatureItem(
+                    iconName: "sparkle.magnifyingglass",
+                    title: "Expanded Macro Placeholders",
+                    description: "Drop macros now support {{inbox}} and {{destination}} placeholder paths in custom scripts."
+                )
+            ]
         )
     ]
 }
@@ -1191,6 +1217,7 @@ public struct AppSettings: Codable, Sendable {
     public var automaticallyCheckForUpdates: Bool = true
     public var skippedAppVersion: String? = nil
     public var lastUpdateCheckDate: Date? = nil
+    public var helpfulTipsEnabled: Bool = false
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1204,7 +1231,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, bindings
     }
 
     public init() {}
@@ -1229,6 +1256,110 @@ public struct AppSettings: Codable, Sendable {
         automaticallyCheckForUpdates = try values.decodeIfPresent(Bool.self, forKey: .automaticallyCheckForUpdates) ?? true
         skippedAppVersion = try values.decodeIfPresent(String.self, forKey: .skippedAppVersion)
         lastUpdateCheckDate = try values.decodeIfPresent(Date.self, forKey: .lastUpdateCheckDate)
+        helpfulTipsEnabled = try values.decodeIfPresent(Bool.self, forKey: .helpfulTipsEnabled) ?? false
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
+    }
+}
+
+public enum TipSettingsTarget: String, Sendable, Codable, Equatable {
+    case general = "general"
+    case appearance = "appearance"
+    case macrosWorkshop = "macros"
+
+    public var tabIndex: Int {
+        switch self {
+        case .general: return 0
+        case .appearance: return 1
+        case .macrosWorkshop: return 2
+        }
+    }
+}
+
+public struct AppTip: Sendable, Equatable {
+    public let id: String
+    public let emoji: String
+    public let title: String
+    public let message: String
+    public let settingsTarget: TipSettingsTarget?
+
+    public init(id: String, emoji: String, title: String, message: String, settingsTarget: TipSettingsTarget? = nil) {
+        self.id = id
+        self.emoji = emoji
+        self.title = title
+        self.message = message
+        self.settingsTarget = settingsTarget
+    }
+}
+
+public enum HelpfulTipsCatalog {
+    public static let allTips: [AppTip] = [
+        AppTip(
+            id: "eye-macros",
+            emoji: "👀",
+            title: "Eye Click Macros",
+            message: "Click my left or right eye to trigger your custom shell commands or launch Apple Shortcuts!",
+            settingsTarget: .macrosWorkshop
+        ),
+        AppTip(
+            id: "option-convert-png",
+            emoji: "🖼️",
+            title: "Quick PNG Conversion",
+            message: "Hold the Option key while dropping an image onto me to automatically convert it to PNG format.",
+            settingsTarget: .macrosWorkshop
+        ),
+        AppTip(
+            id: "shift-reveal-finder",
+            emoji: "🔍",
+            title: "Reveal in Finder",
+            message: "Hold the Shift key while dropping any file or folder to immediately highlight it in Finder.",
+            settingsTarget: .macrosWorkshop
+        ),
+        AppTip(
+            id: "cmd-compress",
+            emoji: "🗜️",
+            title: "Quick Image Compression",
+            message: "Hold the Command key while dropping an image to compress and optimize it for web use.",
+            settingsTarget: .macrosWorkshop
+        ),
+        AppTip(
+            id: "dismiss-crosshair",
+            emoji: "🎯",
+            title: "Screen Edge Dismissal",
+            message: "Drag me towards the top or bottom center edge of your screen to quickly hide or minimize me.",
+            settingsTarget: .general
+        ),
+        AppTip(
+            id: "slinky-googly-eyes",
+            emoji: "🤪",
+            title: "Googly Eyes Mode",
+            message: "Customize the Slinky buddy with spring-mounted, gravity-coordinated jiggling craft eyes!",
+            settingsTarget: .appearance
+        ),
+        AppTip(
+            id: "macro-workshop",
+            emoji: "⚡️",
+            title: "Macros Workshop",
+            message: "Open Settings → Macros Workshop to create Scratch-like automated multi-step sequences.",
+            settingsTarget: .macrosWorkshop
+        ),
+        AppTip(
+            id: "custom-themes",
+            emoji: "🎨",
+            title: "Custom Plumage & Themes",
+            message: "Pick custom colors for feathers, fur, and eyes, or import & export theme JSON files from the Menu Bar.",
+            settingsTarget: .appearance
+        ),
+        AppTip(
+            id: "smart-inbox",
+            emoji: "📥",
+            title: "Smart Desktop Inbox",
+            message: "Drop files, links, or text snippets onto me anytime to safely store them in your Animal Buddy Inbox.",
+            settingsTarget: .general
+        )
+    ]
+
+    public static func randomTip(excluding currentId: String? = nil) -> AppTip {
+        let candidates = allTips.filter { $0.id != currentId }
+        return candidates.randomElement() ?? allTips[0]
     }
 }

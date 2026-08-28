@@ -20,6 +20,9 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private var isExternalDragHovering = false
     private let dragTargetOverlay = DragTargetOverlayController()
     private let actionPopover = DropActionPopoverController()
+    private let speechBubble = SpeechBubbleWindowController()
+    private var tipTimer: Timer?
+    private var lastShownTipId: String?
     private var lastRestingFrame = NSRect(x: 120, y: 120, width: 150, height: 150)
 
     init(settings: AppSettings, registry: ActionRegistry) {
@@ -29,17 +32,21 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = true; window.level = settings.alwaysOnTop ? .floating : .normal; window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]; window.isMovableByWindowBackground = true; window.acceptsMouseMovedEvents = true
         super.init(window: window); window.delegate = self; window.contentView = petView; petView.autoresizingMask = [.width, .height]; window.isMovableByWindowBackground = true
         startMouseTracking()
+        configureTipTimer()
         window.onDragBegan = { [weak self] in
             guard let self else { return }
             self.isPetDragging = false
+            self.speechBubble.dismiss(animated: false)
         }
         window.onDragChanged = { [weak self] point, velocity, deltaX in
             guard let self, let draggedWindow = self.window, let screen = draggedWindow.screen ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
             if !self.isPetDragging {
                 self.isPetDragging = true
                 self.petView.setFlying(true)
+                self.speechBubble.dismiss(animated: false)
             }
             self.petView.updateFlightMovement(velocity: velocity, deltaX: deltaX)
+            self.speechBubble.updatePosition(relativeTo: draggedWindow.frame, in: screen)
             let target = DragTargetOverlayController.targetCenter(for: point, in: screen.visibleFrame)
             let distance = hypot(draggedWindow.frame.midX - target.x, draggedWindow.frame.midY - target.y)
             if distance <= DragTargetOverlayController.visibilityRadius {
@@ -87,11 +94,13 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.googlyEyesEnabled = settings.googlyEyesEnabled
         petView.updateBlushMacroLabels(settings)
         updateHoverOpacity()
+        configureTipTimer()
     }
     func minimizePet() {
         guard let window, !isMinimizing else { return }
         NSApp.setActivationPolicy(.regular)
         isMinimizing = true
+        speechBubble.dismiss(animated: false)
 
         let originalFrame = window.frame
         lastRestingFrame = originalFrame
@@ -590,5 +599,39 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         let deltaX = max(0, max(rect.minX - point.x, point.x - rect.maxX))
         let deltaY = max(0, max(rect.minY - point.y, point.y - rect.maxY))
         return hypot(deltaX, deltaY)
+    }
+
+    func showTip(_ tip: AppTip? = nil) {
+        guard let window, window.isVisible, !isMinimizing, !isPetDragging else { return }
+        let chosenTip = tip ?? HelpfulTipsCatalog.randomTip(excluding: lastShownTipId)
+        lastShownTipId = chosenTip.id
+        speechBubble.show(tip: chosenTip, relativeTo: window.frame, in: window.screen)
+    }
+
+    private func configureTipTimer() {
+        tipTimer?.invalidate()
+        tipTimer = nil
+
+        guard settings.helpfulTipsEnabled else {
+            speechBubble.dismiss(animated: false)
+            return
+        }
+
+        scheduleNextTipTimer()
+    }
+
+    private func scheduleNextTipTimer() {
+        tipTimer?.invalidate()
+        // Random interval between 3.5 minutes (210s) and 6.5 minutes (390s)
+        let interval = Double.random(in: 210...390)
+        tipTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.settings.helpfulTipsEnabled else { return }
+                if !self.isPetDragging && !self.isMinimizing && !self.isExternalDragHovering && !self.isAwaitingActionChoice {
+                    self.showTip()
+                }
+                self.scheduleNextTipTimer()
+            }
+        }
     }
 }

@@ -1,3 +1,4 @@
+
 import AppKit
 import UniformTypeIdentifiers
 
@@ -26,10 +27,11 @@ import UniformTypeIdentifiers
         statusBar?.onAnimalAndThemeChanged = { [weak self] animal, theme in self?.setAnimalAndTheme(animal, theme: theme) }
         statusBar?.onImportThemeJSON = { [weak self] in self?.importThemeFromMenu() }
         statusBar?.onExportThemeJSON = { [weak self] in self?.exportThemeFromMenu() }
-        statusBar?.onOpenAppearanceSettings = { [weak self] in self?.showSettings(initialTab: 0) }
-        statusBar?.onConfigureMacros = { [weak self] in self?.showSettings(initialTab: 1) }
+        statusBar?.onOpenAppearanceSettings = { [weak self] in self?.showSettings(initialTab: 1) }
+        statusBar?.onConfigureMacros = { [weak self] in self?.showSettings(initialTab: 2) }
         statusBar?.onOpenSettings = { [weak self] in self?.showSettings(initialTab: 0) }
         statusBar?.onOpenWelcome = { [weak self] in self?.showWelcomeFromMenu() }
+        statusBar?.onShowHelpfulTip = { [weak self] in self?.petWindow?.showTip() }
         statusBar?.onCheckForUpdates = { [weak self] in self?.checkForUpdates(silent: false) }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
@@ -41,7 +43,7 @@ import UniformTypeIdentifiers
         NSApp.setActivationPolicy(.regular)
         petWindow?.showPet()
 
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.41"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.42"
         if let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: currentVersion) {
             showWelcome(presentation: presentation, currentVersion: currentVersion)
         }
@@ -84,8 +86,16 @@ import UniformTypeIdentifiers
     }
 
     private func showSettings(initialTab: Int = 0) {
+        if let existing = macroSettingsWindow, existing.window?.isVisible == true {
+            existing.selectTab(initialTab)
+            existing.showWindow(nil)
+            existing.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, alwaysOnTop, snapping, minDest in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -96,7 +106,14 @@ import UniformTypeIdentifiers
             self.settings.hoverTranslucencyEnabled = hoverTranslucency
             self.settings.googlyEyesEnabled = googlyEyes
             self.settings.automaticallyCheckForUpdates = autoUpdates
+            self.settings.helpfulTipsEnabled = helpfulTips
+            self.settings.destinationFolderPath = destinationFolder
+            self.settings.alwaysOnTop = alwaysOnTop
+            self.settings.snappingEnabled = snapping
+            self.settings.minimizeDestination = minDest
             try? self.settingsStore.save(self.settings)
+            self.statusBar?.update(destination: minDest)
+            self.statusBar?.update(snappingEnabled: snapping)
             self.statusBar?.update(animal: animal, theme: themePreset)
             self.petWindow?.update(settings: self.settings)
         }
@@ -112,6 +129,9 @@ import UniformTypeIdentifiers
         }
         controller.onCheckForUpdates = { [weak self] in
             self?.checkForUpdates(silent: false)
+        }
+        controller.onShowTipPreview = { [weak self] in
+            self?.petWindow?.showTip()
         }
         macroSettingsWindow = controller
         controller.showWindow(nil)
@@ -136,7 +156,7 @@ import UniformTypeIdentifiers
     }
 
     private func showWelcomeFromMenu() {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.41"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.42"
         let presentation: WelcomePresentationKind
         if let latestRelease = AppChangelog.releases.last {
             presentation = .whatsNew(currentVersion: currentVersion, unseenReleases: [latestRelease])
@@ -147,7 +167,7 @@ import UniformTypeIdentifiers
     }
 
     private func checkForUpdates(silent: Bool) {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.41"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.42"
         let skipped = settings.skippedAppVersion
 
         Task { @MainActor [weak self] in

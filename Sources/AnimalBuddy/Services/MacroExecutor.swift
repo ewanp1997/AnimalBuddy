@@ -15,7 +15,7 @@ enum MacroExecutor {
     ) throws {
         for step in steps {
             guard !step.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-            let value = substituted(step.value, input: input)
+            let value = substituted(step.value, settings: settings, input: input)
             try executeStep(kind: step.kind, value: value, settings: settings, nestedSlots: nestedSlots, input: input)
         }
     }
@@ -62,12 +62,15 @@ enum MacroExecutor {
         try runSteps(nested.effectiveSteps, settings: settings, nestedSlots: nestedSlots + [slot], input: input)
     }
 
-    private static func substituted(_ value: String, input: DropInput?) -> String {
+    private static func substituted(_ value: String, settings: AppSettings, input: DropInput?) -> String {
+        let inboxPath = settings.destinationFolderPath ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path ?? "~/Desktop/Animal Buddy Inbox"
         return value
             .replacingOccurrences(of: "{{path}}", with: input?.urls.first?.path ?? "")
             .replacingOccurrences(of: "{{paths}}", with: input?.urls.map(\.path).joined(separator: "\n") ?? "")
             .replacingOccurrences(of: "{{text}}", with: input?.text ?? "")
             .replacingOccurrences(of: "{{category}}", with: input?.category.rawValue ?? "")
+            .replacingOccurrences(of: "{{inbox}}", with: inboxPath)
+            .replacingOccurrences(of: "{{destination}}", with: inboxPath)
     }
 
     private static func runProcess(executable: String, arguments: [String]) throws {
