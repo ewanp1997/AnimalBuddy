@@ -50,21 +50,22 @@ The drop layer classifies input, asks `ActionRegistry` for the binding matching 
 
 ## Current functionality
 
-The `a0.27` release includes:
+The `a0.41` release includes:
 
 - File, directory, image, URL, and text drops with visual drag feedback.
 - Modifier-aware actions: Store in folder, Copy path, Reveal in Finder, Move to Trash, Convert to PNG, Optimise image, and Open URL.
 - Safe collision handling for file writes and JSON-backed settings stored in `~/Library/Application Support/AnimalBuddy/settings.json`.
-- A desktop buddy suite featuring Bird, Dog, Cat, Monkey, Giraffe, and Slinky characters. Each has its own themed palette and expressive details, with breathing, bobbing, independent idle movement, blinking, rosy cheeks, eye highlights, success sparkles, nearby mouse-tracking eyes, and characteristic motions. Slinky has extra animated coil turns and an optional Rainbow Spring skin.
+- A desktop buddy suite featuring Bird, Dog, Cat, Monkey, Giraffe, and Slinky characters. Each has its own themed palette and expressive details, with breathing, bobbing, independent idle movement, blinking, rosy cheeks, eye highlights, success sparkles, nearby mouse-tracking eyes, and characteristic motions.
+- Slinky companion featuring animated coil physics, an authentic 6-tier Rainbow Spring skin, and spring-mounted pop-out Googly Eyes with gravity coordination and loose craft pupils.
+- Automatic GitHub Update Checker with background startup checks, manual "Check for Updates…" controls, release notes presentation, and one-click download.
+- Full-eye hit detection and standardized eye click macro triggers across all animal companions.
 - A non-activating floating window that remains available across Spaces and does not take keyboard focus from the app being used. The regular app presence keeps Animal Buddy visible in the Dock and Force Quit Applications.
-- Interactive link-clicking style pointing hand cursors when hovering over blush macro trigger spots and the minimize button.
-- Smooth hover-to-brighten translucency: the buddy gently rests at a soft translucent opacity and brightens immediately when hovered over or interacted with (configurable in Settings, with zero accessibility permissions required).
+- Interactive link-clicking style pointing hand cursors when hovering over eye macro trigger spots and the minimize button.
 - A hover-only minimize button and menu-bar controls for minimizing to the Dock or hiding while retaining the Animal Buddy menu-bar logo. The minimize animation respects reduced-motion preferences.
 - Free placement after dragging, with optional “Snap to Screen Edges” behavior and subtle flick inertia.
 - A proximity-based top/bottom dismiss target. Dragging the buddy towards the center edge of a screen shows the cross target; releasing within it hides or minimizes the buddy, while releasing outside restores it at the dropped location.
-- A unified Macros workshop for configuring the left and right blush buttons, plus drop-specific macros. Dragging macros can be assigned to images, folders, applications, files, URLs, text, mixed items, or unknown drops; they run before the normal drop action and can use `{{path}}`, `{{paths}}`, `{{text}}`, and `{{category}}` placeholders. Macro blocks include shell commands, installed applications, URLs, Apple Shortcuts, and nested macros, with cycle protection.
+- A unified Macros workshop for configuring the left and right eye click buttons, plus drop-specific macros. Dragging macros can be assigned to images, folders, applications, files, URLs, text, mixed items, or unknown drops; they run before the normal drop action and can use `{{path}}`, `{{paths}}`, `{{text}}`, and `{{category}}` placeholders. Macro blocks include shell commands, installed applications, URLs, Apple Shortcuts, and nested macros, with cycle protection.
 - In-app macro suggestions, category-specific editing, and versioned macro import/export. The workshop exports a stable `com.animalbuddy.macros` JSON document and imports it atomically without changing themes or other settings.
-- Context-aware drag previews that distinguish applications, directories, images, files, URLs, text, and mixed drops. The buddy holds a matching code-drawn prop such as a camera and SD card, envelope, storage box, document, or question mark; ambiguous configured actions can be chosen from a pet-attached popover after release.
 
 Hover over the pet to reveal the minimize button. Use “Show Animal Buddy” from the status-item menu to bring it back after hiding it. Existing single-command macro settings migrate as shell blocks; Shortcut discovery requires the macOS Shortcuts helper service to be available in the logged-in user session.
 

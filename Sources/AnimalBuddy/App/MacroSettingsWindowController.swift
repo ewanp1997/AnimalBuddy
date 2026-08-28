@@ -2,8 +2,9 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
+    var onCheckForUpdates: (() -> Void)?
 
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
@@ -16,6 +17,8 @@ import UniformTypeIdentifiers
     private var customPalette: PetThemePalette
     private var hoverTranslucencyEnabled: Bool
     private var googlyEyesEnabled: Bool
+    private var automaticallyCheckForUpdates: Bool
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.41")
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
     private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom", "Rainbow"], trackingMode: .selectOne, target: nil, action: nil)
@@ -47,10 +50,10 @@ import UniformTypeIdentifiers
 
     private let triggerBannerTitle = NSTextField(labelWithString: "")
     private let triggerBannerSubtitle = NSTextField(wrappingLabelWithString: "")
-    private let leftCardTitleLabel = NSTextField(labelWithString: "👈 Left Blush Macro")
-    private let leftCardSubtitleLabel = NSTextField(wrappingLabelWithString: "Triggered by clicking the left cheek blush spot")
-    private let rightCardTitleLabel = NSTextField(labelWithString: "👉 Right Blush Macro")
-    private let rightCardSubtitleLabel = NSTextField(wrappingLabelWithString: "Triggered by clicking the right cheek blush spot")
+    private let leftCardTitleLabel = NSTextField(labelWithString: "👈 Left Eye Macro")
+    private let leftCardSubtitleLabel = NSTextField(wrappingLabelWithString: "Triggered by clicking the left eye")
+    private let rightCardTitleLabel = NSTextField(labelWithString: "👉 Right Eye Macro")
+    private let rightCardSubtitleLabel = NSTextField(wrappingLabelWithString: "Triggered by clicking the right eye")
 
     init(settings: AppSettings, initialTab: Int = 0) {
         let window = NSWindow(
@@ -69,6 +72,7 @@ import UniformTypeIdentifiers
         customPalette = settings.customPalette
         hoverTranslucencyEnabled = settings.hoverTranslucencyEnabled
         googlyEyesEnabled = settings.googlyEyesEnabled
+        automaticallyCheckForUpdates = settings.automaticallyCheckForUpdates
 
         super.init(window: window)
         leftName.stringValue = settings.leftBlushMacro.name
@@ -412,10 +416,29 @@ import UniformTypeIdentifiers
         desc.font = .systemFont(ofSize: 11)
         desc.textColor = .secondaryLabelColor
 
-        let stack = NSStackView(views: [title, toggle, desc])
+        let updateTitle = NSTextField(labelWithString: "Software Updates")
+        updateTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let autoUpdateToggle = NSButton(checkboxWithTitle: "Automatically check for updates on startup", target: self, action: #selector(toggleAutoUpdates(_:)))
+        autoUpdateToggle.state = automaticallyCheckForUpdates ? .on : .off
+        autoUpdateToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let checkNowBtn = NSButton(title: "Check for Updates Now…", target: self, action: #selector(checkNowPressed))
+        checkNowBtn.bezelStyle = .rounded
+        checkNowBtn.font = .systemFont(ofSize: 12)
+
+        updateStatusLabel.font = .systemFont(ofSize: 11)
+        updateStatusLabel.textColor = .secondaryLabelColor
+
+        let updateRow = NSStackView(views: [checkNowBtn, updateStatusLabel])
+        updateRow.orientation = .horizontal
+        updateRow.alignment = .centerY
+        updateRow.spacing = 12
+
+        let stack = NSStackView(views: [title, toggle, desc, updateTitle, autoUpdateToggle, updateRow])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 8
+        stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
         stack.wantsLayer = true
         stack.layer?.cornerRadius = 12
@@ -423,15 +446,27 @@ import UniformTypeIdentifiers
 
         toggle.translatesAutoresizingMaskIntoConstraints = false
         desc.translatesAutoresizingMaskIntoConstraints = false
+        autoUpdateToggle.translatesAutoresizingMaskIntoConstraints = false
+        updateRow.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             toggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            autoUpdateToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            updateRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
         return stack
     }
 
     @objc private func toggleHoverTranslucency(_ sender: NSButton) {
         hoverTranslucencyEnabled = (sender.state == .on)
+    }
+
+    @objc private func toggleAutoUpdates(_ sender: NSButton) {
+        automaticallyCheckForUpdates = (sender.state == .on)
+    }
+
+    @objc private func checkNowPressed() {
+        onCheckForUpdates?()
     }
 
     @objc private func toggleGooglyEyes(_ sender: NSButton) {
@@ -660,17 +695,17 @@ import UniformTypeIdentifiers
     }
 
     private func updateMacroTabLabels() {
-        triggerBannerTitle.stringValue = "🎯 Touch & Drop Triggers for \(selectedAnimal.displayName)"
+        triggerBannerTitle.stringValue = "🎯 Eye Click & Drag Triggers for \(selectedAnimal.displayName)"
         triggerBannerSubtitle.stringValue = """
-        • Left Touch: \(selectedAnimal.leftTriggerName) → triggers Left Macro
-        • Right Touch: \(selectedAnimal.rightTriggerName) → triggers Right Macro
+        • Left Eye Click: \(selectedAnimal.leftTriggerName) → triggers Left Eye Macro
+        • Right Eye Click: \(selectedAnimal.rightTriggerName) → triggers Right Eye Macro
         • Drag & Drop: Drop files, URLs, or text onto \(selectedAnimal.nameWithoutEmoji) → triggers Dragging Macros
         """
 
-        leftCardTitleLabel.stringValue = "👈 Left Trigger (\(selectedAnimal.leftTriggerName))"
+        leftCardTitleLabel.stringValue = "👈 Left Eye Macro (\(selectedAnimal.leftTriggerName))"
         leftCardSubtitleLabel.stringValue = "Clicking the \(selectedAnimal.nameWithoutEmoji)'s \(selectedAnimal.leftTriggerName.lowercased()) runs this sequence:"
 
-        rightCardTitleLabel.stringValue = "👉 Right Trigger (\(selectedAnimal.rightTriggerName))"
+        rightCardTitleLabel.stringValue = "👉 Right Eye Macro (\(selectedAnimal.rightTriggerName))"
         rightCardSubtitleLabel.stringValue = "Clicking the \(selectedAnimal.nameWithoutEmoji)'s \(selectedAnimal.rightTriggerName.lowercased()) runs this sequence:"
     }
 
@@ -855,7 +890,8 @@ import UniformTypeIdentifiers
             selectedTheme,
             customPalette,
             hoverTranslucencyEnabled,
-            googlyEyesEnabled
+            googlyEyesEnabled,
+            automaticallyCheckForUpdates
         )
         close()
     }
@@ -1157,6 +1193,7 @@ import UniformTypeIdentifiers
             loadApplications(selecting: currentValue)
         } else if selected == .runBlushMacro {
             choicePicker.removeAllItems(); choicePicker.addItem(withTitle: "Right blush"); choicePicker.addItem(withTitle: "Left blush")
+            choicePicker.removeAllItems(); choicePicker.addItem(withTitle: "Right Eye Macro"); choicePicker.addItem(withTitle: "Left Eye Macro")
             choicePicker.selectItem(at: currentValue == BlushSlot.left.rawValue ? 1 : 0)
         } else if selected == .runShortcut {
             loadShortcuts(selecting: currentValue)

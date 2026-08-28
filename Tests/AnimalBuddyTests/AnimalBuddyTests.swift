@@ -323,4 +323,136 @@ import UniformTypeIdentifiers
         panel.endWindowDrag(at: NSPoint(x: 170, y: 200), eventTimestamp: 1.08)
         XCTAssertTrue(dragEndedCalled)
     }
+
+    func testVersionComparatorHandlesAlphaAndSemVer() {
+        XCTAssertTrue(VersionComparator.isVersion("a0.27", greaterThan: "a0.26"))
+        XCTAssertTrue(VersionComparator.isVersion("0.27", greaterThan: "0.26"))
+        XCTAssertTrue(VersionComparator.isVersion("1.0.0", greaterThan: "0.9.9"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.25", greaterThan: "a0.27"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.27", greaterThan: "a0.27"))
+        XCTAssertEqual(VersionComparator.compare("a0.27", "a0.27"), .orderedSame)
+    }
+
+    func testWelcomeEvaluatorFirstLaunchReturnsInitialWelcome() {
+        var settings = AppSettings()
+        settings.hasCompletedWelcome = false
+        settings.lastSeenAppVersion = nil
+
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.27")
+        guard case .firstLaunch(let features)? = presentation else {
+            XCTFail("Expected .firstLaunch presentation on fresh install")
+            return
+        }
+        XCTAssertEqual(features.count, 4)
+        XCTAssertEqual(features.first?.title, "Your Desktop Pet")
+    }
+
+    func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
+        var settings = AppSettings()
+        settings.hasCompletedWelcome = true
+        settings.lastSeenAppVersion = "a0.27"
+
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.41")
+        guard case .whatsNew(let version, let releases)? = presentation else {
+            XCTFail("Expected .whatsNew presentation on update")
+            return
+        }
+        XCTAssertEqual(version, "a0.41")
+        XCTAssertEqual(releases.count, 1)
+        XCTAssertEqual(releases.first?.version, "a0.41")
+        XCTAssertEqual(releases.first?.releaseTitle, "Googly Spring Physics, Rainbow Coils & Auto Updates")
+        XCTAssertTrue(releases.first?.features.contains { $0.title == "Dorky Spring-Mounted Googly Eyes" } == true)
+    }
+
+    func testWelcomeEvaluatorSameVersionReturnsNil() {
+        var settings = AppSettings()
+        settings.hasCompletedWelcome = true
+        settings.lastSeenAppVersion = "a0.41"
+
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.41")
+        XCTAssertNil(presentation, "Expected nil when version matches last seen")
+    }
+
+    func testWelcomeEvaluatorMultiVersionUpgradeAggregatesUnseenReleases() {
+        var settings = AppSettings()
+        settings.hasCompletedWelcome = true
+        settings.lastSeenAppVersion = "a0.25"
+
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.41")
+        guard case .whatsNew(_, let releases)? = presentation else {
+            XCTFail("Expected .whatsNew for multi-version upgrade")
+            return
+        }
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41"])
+    }
+
+    func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
+        var settings = AppSettings()
+        settings.hasCompletedWelcome = true
+        settings.lastSeenAppVersion = "a0.27"
+
+        let data = try JSONEncoder().encode(settings)
+        let restored = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertTrue(restored.hasCompletedWelcome)
+        XCTAssertEqual(restored.lastSeenAppVersion, "a0.27")
+    }
+
+    func testLegacySettingsDecodesDefaultWelcomeValues() throws {
+        let legacy = Data(#"{"alwaysOnTop":true,"bindings":[]}"#.utf8)
+        let restored = try JSONDecoder().decode(AppSettings.self, from: legacy)
+
+        XCTAssertFalse(restored.hasCompletedWelcome)
+        XCTAssertNil(restored.lastSeenAppVersion)
+        XCTAssertTrue(restored.automaticallyCheckForUpdates)
+        XCTAssertNil(restored.skippedAppVersion)
+        XCTAssertNil(restored.lastUpdateCheckDate)
+    }
+
+    func testAppSettingsPreservesUpdatePreferencesOnRoundTrip() throws {
+        var settings = AppSettings()
+        settings.automaticallyCheckForUpdates = false
+        settings.skippedAppVersion = "a0.50"
+        let checkDate = Date(timeIntervalSince1970: 1700000000)
+        settings.lastUpdateCheckDate = checkDate
+
+        let data = try JSONEncoder().encode(settings)
+        let restored = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertFalse(restored.automaticallyCheckForUpdates)
+        XCTAssertEqual(restored.skippedAppVersion, "a0.50")
+        XCTAssertEqual(restored.lastUpdateCheckDate?.timeIntervalSince1970, checkDate.timeIntervalSince1970)
+    }
+
+    func testGitHubReleaseDecodingAndDownloadURL() throws {
+        let json = """
+        {
+            "tag_name": "a0.41",
+            "name": "Animal Buddy a0.41",
+            "body": "## What's New\\n- Googly eyes with real springs\\n- Automatic update checking",
+            "html_url": "https://github.com/ewanp1997/AnimalBuddy/releases/tag/a0.41",
+            "published_at": "2026-08-28T14:00:00Z",
+            "assets": [
+                {
+                    "name": "AnimalBuddy-a0.41.zip",
+                    "browser_download_url": "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.41/AnimalBuddy-a0.41.zip",
+                    "size": 5242880
+                }
+            ]
+        }
+        """
+        let release = try JSONDecoder().decode(GitHubRelease.self, from: Data(json.utf8))
+        XCTAssertEqual(release.tagName, "a0.41")
+        XCTAssertEqual(release.name, "Animal Buddy a0.41")
+        XCTAssertEqual(release.displayTitle, "Animal Buddy a0.41")
+        XCTAssertEqual(release.primaryDownloadURL?.absoluteString, "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.41/AnimalBuddy-a0.41.zip")
+    }
+
+    func testVersionComparisonDetectsUpdate() {
+        XCTAssertTrue(VersionComparator.isVersion("a0.41", greaterThan: "a0.27"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.41", greaterThan: "a0.40"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.41", greaterThan: "a0.41"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.40", greaterThan: "a0.41"))
+    }
 }
+

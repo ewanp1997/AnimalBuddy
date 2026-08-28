@@ -308,7 +308,6 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
             case .custom:
                 return defaultPalette(for: .classic)
             case .rainbow:
-                return PetThemePalette(bodyColor: CodableColor(hex: "#FF5C8A")!, bellyColor: CodableColor(hex: "#FFF7ED")!, beakColor: CodableColor(hex: "#8B5CF6")!, blushColor: CodableColor(red: 1.0, green: 0.24, blue: 0.52, alpha: 0.70), eyeHighlightColor: CodableColor(hex: "#22D3EE")!)
                 return PetThemePalette(
                     bodyColor: CodableColor(hex: "#FF3B30")!,
                     bellyColor: CodableColor(hex: "#FFFBF2")!,
@@ -320,27 +319,8 @@ public enum AnimalKind: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    public var leftTriggerName: String {
-        switch self {
-        case .bird: return "Left Eye / Cheek Blush"
-        case .dog: return "Left Ear & Cheek"
-        case .cat: return "Left Whisker Cheek"
-        case .monkey: return "Left Ear & Cheek"
-        case .giraffe: return "Left Horn & Cheek Spot"
-        case .slinky: return "Left Coil & Cheek"
-        }
-    }
-
-    public var rightTriggerName: String {
-        switch self {
-        case .bird: return "Right Eye / Cheek Blush"
-        case .dog: return "Right Ear & Cheek"
-        case .cat: return "Right Whisker Cheek"
-        case .monkey: return "Right Ear & Cheek"
-        case .giraffe: return "Right Horn & Cheek Spot"
-        case .slinky: return "Right Coil & Cheek"
-        }
-    }
+    public var leftTriggerName: String { "Left Eye" }
+    public var rightTriggerName: String { "Right Eye" }
 }
 
 public struct ThemeDocument: Codable, Sendable, Equatable {
@@ -572,10 +552,22 @@ public enum BlushSlot: String, Codable, Sendable { case left, right }
 public enum MacroStepKind: String, Codable, CaseIterable, Sendable {
     case shell, openApplication, openURL, runShortcut, runBlushMacro
     public var displayName: String {
-        switch self { case .shell: "Run Shell Command"; case .openApplication: "Open Application"; case .openURL: "Open URL"; case .runShortcut: "Run Apple Shortcut"; case .runBlushMacro: "Run Another Blush Macro" }
+        switch self {
+        case .shell: return "Run Shell Command"
+        case .openApplication: return "Open Application"
+        case .openURL: return "Open URL"
+        case .runShortcut: return "Run Apple Shortcut"
+        case .runBlushMacro: return "Run Another Eye Macro"
+        }
     }
     public var placeholder: String {
-        switch self { case .shell: "e.g. say 'Hello from Animal Buddy'"; case .openApplication: "e.g. Calendar"; case .openURL: "e.g. https://example.com"; case .runShortcut: "Choose a Shortcut"; case .runBlushMacro: "Choose another macro" }
+        switch self {
+        case .shell: return "e.g. say 'Hello from Animal Buddy'"
+        case .openApplication: return "e.g. Calendar"
+        case .openURL: return "e.g. https://example.com"
+        case .runShortcut: return "Choose a Shortcut"
+        case .runBlushMacro: return "Choose another eye macro"
+        }
     }
 }
 
@@ -999,6 +991,187 @@ public struct ModifierBinding: Codable, Hashable, Sendable {
     public var modifiers: ModifierCombination { ModifierCombination(rawValue: modifierRawValue) }
 }
 
+public struct FeatureItem: Identifiable, Codable, Hashable, Sendable {
+    public var id: String { title }
+    public let iconName: String
+    public let title: String
+    public let description: String
+
+    public init(iconName: String, title: String, description: String) {
+        self.iconName = iconName
+        self.title = title
+        self.description = description
+    }
+}
+
+public struct VersionRelease: Identifiable, Codable, Hashable, Sendable {
+    public var id: String { version }
+    public let version: String
+    public let releaseTitle: String
+    public let features: [FeatureItem]
+
+    public init(version: String, releaseTitle: String, features: [FeatureItem]) {
+        self.version = version
+        self.releaseTitle = releaseTitle
+        self.features = features
+    }
+}
+
+public enum AppChangelog {
+    public static let initialWelcomeFeatures: [FeatureItem] = [
+        FeatureItem(
+            iconName: "pawprint.fill",
+            title: "Your Desktop Pet",
+            description: "A friendly companion that floats on your screen, reacts to your cursor, and stays out of your way."
+        ),
+        FeatureItem(
+            iconName: "tray.and.arrow.down.fill",
+            title: "Drag & Drop Superpowers",
+            description: "Drop files, images, or links directly onto your pet to store them in your inbox folder or trigger actions."
+        ),
+        FeatureItem(
+            iconName: "keyboard.fill",
+            title: "Modifier Shortcuts",
+            description: "Hold Option or Shift while dropping to convert images to PNG, reveal in Finder, copy paths, and more."
+        ),
+        FeatureItem(
+            iconName: "bolt.horizontal.fill",
+            title: "Eye Click Macros",
+            description: "Click your buddy's left or right eye to run custom shell commands or launch your favorite macOS Shortcuts."
+        )
+    ]
+
+    public static let releases: [VersionRelease] = [
+        VersionRelease(
+            version: "a0.25",
+            releaseTitle: "Initial Companion Release",
+            features: [
+                FeatureItem(
+                    iconName: "bird.fill",
+                    title: "Bird, Dog, & Cat Companions",
+                    description: "Choose your favorite buddy with expressive eye tracking and animations."
+                ),
+                FeatureItem(
+                    iconName: "folder.fill",
+                    title: "Smart File Inbox",
+                    description: "Drop files directly onto your pet for collision-safe file storage."
+                )
+            ]
+        ),
+        VersionRelease(
+            version: "a0.26",
+            releaseTitle: "Monkey, Giraffe & Macro Workshop",
+            features: [
+                FeatureItem(
+                    iconName: "sparkles",
+                    title: "New Animal Characters",
+                    description: "Say hello to the Monkey and Giraffe buddies with custom color palettes."
+                ),
+                FeatureItem(
+                    iconName: "hammer.fill",
+                    title: "Macro Builder & Custom Themes",
+                    description: "Export and import custom theme JSONs, and configure custom click actions."
+                )
+            ]
+        ),
+        VersionRelease(
+            version: "a0.27",
+            releaseTitle: "Slinky Spring & Googly Eyes",
+            features: [
+                FeatureItem(
+                    iconName: "scribble.variable",
+                    title: "Slinky Pet & Rainbow Spring",
+                    description: "Enjoy fluid coil animations and the vibrant new Rainbow Spring theme."
+                ),
+                FeatureItem(
+                    iconName: "eyes",
+                    title: "Googly Eyes Mode",
+                    description: "Loose, jiggling craft pupils with real physics for the Slinky buddy."
+                ),
+                FeatureItem(
+                    iconName: "circle.dotted",
+                    title: "Resting Translucency",
+                    description: "Subtle resting opacity that smoothly brightens when your mouse hovers near."
+                ),
+                FeatureItem(
+                    iconName: "hand.point.up.left.fill",
+                    title: "Interactive Hand Cursors",
+                    description: "Hovering over eyes and interactive zones now shows a pointer hand."
+                )
+            ]
+        ),
+        VersionRelease(
+            version: "a0.41",
+            releaseTitle: "Googly Spring Physics, Rainbow Coils & Auto Updates",
+            features: [
+                FeatureItem(
+                    iconName: "sparkles",
+                    title: "Dorky Spring-Mounted Googly Eyes",
+                    description: "Slinky features 3D pop-out micro-spring stalks, gravity coordination, and dynamic vigor damping."
+                ),
+                FeatureItem(
+                    iconName: "paintpalette.fill",
+                    title: "True Rainbow Spectrum Coils",
+                    description: "Vibrant multi-color rainbow spectrum loops and glowing swirl highlights."
+                ),
+                FeatureItem(
+                    iconName: "bolt.horizontal.fill",
+                    title: "Eye Click Macro Triggers",
+                    description: "Exact full-eye click targets and standardized trigger mapping for every animal companion."
+                ),
+                FeatureItem(
+                    iconName: "arrow.triangle.2.circlepath.circle.fill",
+                    title: "Automatic GitHub Update Checker",
+                    description: "Seamlessly checks GitHub for new releases with one-click download and instant updates."
+                )
+            ]
+        )
+    ]
+}
+
+public enum VersionComparator {
+    public static func compare(_ v1: String, _ v2: String) -> ComparisonResult {
+        let clean1 = cleanVersion(v1)
+        let clean2 = cleanVersion(v2)
+        return clean1.compare(clean2, options: .numeric)
+    }
+
+    public static func isVersion(_ v1: String, greaterThan v2: String) -> Bool {
+        compare(v1, v2) == .orderedDescending
+    }
+
+    public static func cleanVersion(_ version: String) -> String {
+        version.trimmingCharacters(in: CharacterSet.letters.union(.whitespacesAndNewlines))
+    }
+}
+
+public enum WelcomePresentationKind: Equatable, Sendable {
+    case firstLaunch(features: [FeatureItem])
+    case whatsNew(currentVersion: String, unseenReleases: [VersionRelease])
+}
+
+public enum WelcomePresentationEvaluator {
+    public static func evaluate(
+        settings: AppSettings,
+        currentVersion: String,
+        catalog: [VersionRelease] = AppChangelog.releases,
+        initialWelcomeFeatures: [FeatureItem] = AppChangelog.initialWelcomeFeatures
+    ) -> WelcomePresentationKind? {
+        guard settings.hasCompletedWelcome, let lastSeen = settings.lastSeenAppVersion else {
+            return .firstLaunch(features: initialWelcomeFeatures)
+        }
+
+        if VersionComparator.isVersion(currentVersion, greaterThan: lastSeen) {
+            let unseen = catalog.filter { VersionComparator.isVersion($0.version, greaterThan: lastSeen) }
+            if !unseen.isEmpty {
+                return .whatsNew(currentVersion: currentVersion, unseenReleases: unseen)
+            }
+        }
+
+        return nil
+    }
+}
+
 public struct AppSettings: Codable, Sendable {
     public var alwaysOnTop = true
     public var petScale = 1.0
@@ -1013,6 +1186,11 @@ public struct AppSettings: Codable, Sendable {
     public var customPalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic)
     public var hoverTranslucencyEnabled: Bool = true
     public var googlyEyesEnabled: Bool = true
+    public var hasCompletedWelcome: Bool = false
+    public var lastSeenAppVersion: String? = nil
+    public var automaticallyCheckForUpdates: Bool = true
+    public var skippedAppVersion: String? = nil
+    public var lastUpdateCheckDate: Date? = nil
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1025,7 +1203,9 @@ public struct AppSettings: Codable, Sendable {
         themePreset == .custom ? customPalette : animalKind.defaultPalette(for: themePreset)
     }
 
-    private enum CodingKeys: String, CodingKey { case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, bindings }
+    private enum CodingKeys: String, CodingKey {
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, bindings
+    }
 
     public init() {}
 
@@ -1044,6 +1224,11 @@ public struct AppSettings: Codable, Sendable {
         customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? AnimalKind.bird.defaultPalette(for: .classic)
         hoverTranslucencyEnabled = try values.decodeIfPresent(Bool.self, forKey: .hoverTranslucencyEnabled) ?? true
         googlyEyesEnabled = try values.decodeIfPresent(Bool.self, forKey: .googlyEyesEnabled) ?? true
+        hasCompletedWelcome = try values.decodeIfPresent(Bool.self, forKey: .hasCompletedWelcome) ?? false
+        lastSeenAppVersion = try values.decodeIfPresent(String.self, forKey: .lastSeenAppVersion)
+        automaticallyCheckForUpdates = try values.decodeIfPresent(Bool.self, forKey: .automaticallyCheckForUpdates) ?? true
+        skippedAppVersion = try values.decodeIfPresent(String.self, forKey: .skippedAppVersion)
+        lastUpdateCheckDate = try values.decodeIfPresent(Date.self, forKey: .lastUpdateCheckDate)
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

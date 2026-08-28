@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
     private let settingsStore = SettingsStore()
     private var statusBar: StatusBarController?
     private var macroSettingsWindow: MacroSettingsWindowController?
+    private var welcomeWindow: WelcomeWindowController?
+    private var updateWindow: UpdateWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let iconURL = Bundle.main.url(forResource: "AnimalBuddyIcon", withExtension: "png"),
@@ -27,6 +29,8 @@ import UniformTypeIdentifiers
         statusBar?.onOpenAppearanceSettings = { [weak self] in self?.showSettings(initialTab: 0) }
         statusBar?.onConfigureMacros = { [weak self] in self?.showSettings(initialTab: 1) }
         statusBar?.onOpenSettings = { [weak self] in self?.showSettings(initialTab: 0) }
+        statusBar?.onOpenWelcome = { [weak self] in self?.showWelcomeFromMenu() }
+        statusBar?.onCheckForUpdates = { [weak self] in self?.checkForUpdates(silent: false) }
         statusBar?.onQuit = { NSApp.terminate(nil) }
         statusBar?.update(destination: settings.minimizeDestination)
         statusBar?.update(snappingEnabled: settings.snappingEnabled)
@@ -36,6 +40,17 @@ import UniformTypeIdentifiers
         // Force Quit Applications even when its pet window is minimized.
         NSApp.setActivationPolicy(.regular)
         petWindow?.showPet()
+
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.41"
+        if let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: currentVersion) {
+            showWelcome(presentation: presentation, currentVersion: currentVersion)
+        }
+
+        if settings.automaticallyCheckForUpdates {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+                self?.checkForUpdates(silent: true)
+            }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -70,7 +85,7 @@ import UniformTypeIdentifiers
 
     private func showSettings(initialTab: Int = 0) {
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -80,6 +95,7 @@ import UniformTypeIdentifiers
             self.settings.customPalette = customPalette
             self.settings.hoverTranslucencyEnabled = hoverTranslucency
             self.settings.googlyEyesEnabled = googlyEyes
+            self.settings.automaticallyCheckForUpdates = autoUpdates
             try? self.settingsStore.save(self.settings)
             self.statusBar?.update(animal: animal, theme: themePreset)
             self.petWindow?.update(settings: self.settings)
@@ -94,7 +110,94 @@ import UniformTypeIdentifiers
             self.statusBar?.update(animal: animal, theme: themePreset)
             self.petWindow?.update(settings: self.settings)
         }
+        controller.onCheckForUpdates = { [weak self] in
+            self?.checkForUpdates(silent: false)
+        }
         macroSettingsWindow = controller
+        controller.showWindow(nil)
+        controller.window?.center()
+        controller.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func showWelcome(presentation: WelcomePresentationKind, currentVersion: String) {
+        let controller = WelcomeWindowController(presentation: presentation)
+        controller.onDismiss = { [weak self] in
+            guard let self else { return }
+            self.settings.hasCompletedWelcome = true
+            self.settings.lastSeenAppVersion = currentVersion
+            try? self.settingsStore.save(self.settings)
+        }
+        welcomeWindow = controller
+        controller.showWindow(nil)
+        controller.window?.center()
+        controller.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func showWelcomeFromMenu() {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.41"
+        let presentation: WelcomePresentationKind
+        if let latestRelease = AppChangelog.releases.last {
+            presentation = .whatsNew(currentVersion: currentVersion, unseenReleases: [latestRelease])
+        } else {
+            presentation = .firstLaunch(features: AppChangelog.initialWelcomeFeatures)
+        }
+        showWelcome(presentation: presentation, currentVersion: currentVersion)
+    }
+
+    private func checkForUpdates(silent: Bool) {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.41"
+        let skipped = settings.skippedAppVersion
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await UpdateChecker.shared.checkForUpdates(currentVersion: currentVersion, skippedVersion: skipped, ignoreSkipped: !silent)
+            self.settings.lastUpdateCheckDate = Date()
+            try? self.settingsStore.save(self.settings)
+
+            switch result {
+            case .updateAvailable(let release, let current):
+                self.showUpdateWindow(release: release, currentVersion: current)
+            case .upToDate:
+                if !silent {
+                    let alert = NSAlert()
+                    alert.messageText = "You're Up to Date!"
+                    alert.informativeText = "Animal Buddy \(currentVersion) is the latest available release."
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            case .skipped:
+                if !silent {
+                    let alert = NSAlert()
+                    alert.messageText = "You're Up to Date"
+                    alert.informativeText = "You have skipped the latest version available on GitHub."
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            case .error(let message):
+                if !silent {
+                    let alert = NSAlert()
+                    alert.messageText = "Could Not Check for Updates"
+                    alert.informativeText = message
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+        }
+    }
+
+    private func showUpdateWindow(release: GitHubRelease, currentVersion: String) {
+        let controller = UpdateWindowController(release: release, currentVersion: currentVersion)
+        controller.onSkipVersion = { [weak self] skippedVersion in
+            guard let self else { return }
+            self.settings.skippedAppVersion = skippedVersion
+            try? self.settingsStore.save(self.settings)
+        }
+        updateWindow = controller
         controller.showWindow(nil)
         controller.window?.center()
         controller.window?.makeKeyAndOrderFront(nil)

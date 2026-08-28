@@ -10,6 +10,8 @@ import AppKit
     var onOpenAppearanceSettings: (() -> Void)?
     var onConfigureMacros: (() -> Void)?
     var onOpenSettings: (() -> Void)?
+    var onOpenWelcome: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -79,9 +81,15 @@ import AppKit
         menu.addItem(destinationItem)
         snappingItem.target = self
         menu.addItem(snappingItem)
+        let welcomeItem = NSMenuItem(title: "Welcome & What's New…", action: #selector(openWelcome), keyEquivalent: "")
+        welcomeItem.target = self
+        menu.addItem(welcomeItem)
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "")
@@ -117,7 +125,9 @@ import AppKit
     @objc private func selectDock() { onMinimizeDestinationChanged?(.dock) }
     @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
     @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
+    @objc private func openWelcome() { onOpenWelcome?() }
     @objc private func openSettings() { (onOpenSettings ?? onConfigureMacros)?() }
+    @objc private func checkForUpdates() { onCheckForUpdates?() }
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {

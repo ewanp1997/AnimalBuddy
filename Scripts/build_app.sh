@@ -42,4 +42,11 @@ if [ -f "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServ
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$PRIMARY_APP" 2>/dev/null || true
 fi
 
-echo "✅ App bundle synced across all locations: $PRIMARY_APP"
+# Package zip for GitHub release
+ZIP_NAME="AnimalBuddy-a0.41.zip"
+echo "🗜️ Creating release archive $ZIP_NAME..."
+rm -f "$ZIP_NAME" ".build/$ZIP_NAME"
+ditto -c -k --sequesterRsrc --keepParent "$PRIMARY_APP" "$ZIP_NAME"
+cp "$ZIP_NAME" ".build/$ZIP_NAME"
+
+echo "✅ App bundle synced across all locations and packaged: $ZIP_NAME"
