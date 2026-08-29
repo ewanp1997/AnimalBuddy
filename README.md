@@ -63,8 +63,9 @@ sudo xattr -rd com.apple.quarantine "/Applications/Animal Buddy.app"
 
 ## Current functionality
 
-The `a0.42` release includes:
+The `a0.43` release includes:
 
+- **Streamlined Menu Bar**: Clean, lightweight status menu with dynamic Show/Hide and direct access to Settings without visual clutter.
 - **General Settings Tab**: Centralized hub for configuring the Desktop Inbox storage directory, window behavior, floating and snapping rules, helpful tips, and software updates.
 - **Custom Desktop Inbox Location**: Choose any directory on your Mac for dropped files and snippets, with instant **Reveal in Finder** and **Reset to Default** actions.
 - **Helpful Tips Speech Bubble**: Gentle educational tips float in a frosted glass speech bubble above your buddy while idle, with tap-to-navigate directly into the relevant Settings tab (disabled by default).

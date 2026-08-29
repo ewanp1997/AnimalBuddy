@@ -1151,6 +1151,22 @@ public enum AppChangelog {
                     description: "Drop macros now support {{inbox}} and {{destination}} placeholder paths in custom scripts."
                 )
             ]
+        ),
+        VersionRelease(
+            version: "a0.43",
+            releaseTitle: "Streamlined Menu Bar & Settings Integration",
+            features: [
+                FeatureItem(
+                    iconName: "menubar.rectangle",
+                    title: "Streamlined Menu Bar",
+                    description: "A clean, lightweight menu bar dropdown with dynamic show/hide and direct settings shortcuts."
+                ),
+                FeatureItem(
+                    iconName: "slider.horizontal.3",
+                    title: "Unified Settings Hub",
+                    description: "All animal choices, appearance palettes, snapping rules, updates, and macros now live neatly inside Settings."
+                )
+            ]
         )
     ]
 }

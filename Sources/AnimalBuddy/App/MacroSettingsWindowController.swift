@@ -24,7 +24,7 @@ import UniformTypeIdentifiers
     private var alwaysOnTop: Bool
     private var snappingEnabled: Bool
     private var minimizeDestination: MinimizeDestination
-    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.42")
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.43")
     private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
 
     private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)

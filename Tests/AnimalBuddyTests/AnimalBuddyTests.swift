@@ -350,26 +350,26 @@ import UniformTypeIdentifiers
     func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.41"
+        settings.lastSeenAppVersion = "a0.42"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.42")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.43")
         guard case .whatsNew(let version, let releases)? = presentation else {
             XCTFail("Expected .whatsNew presentation on update")
             return
         }
-        XCTAssertEqual(version, "a0.42")
+        XCTAssertEqual(version, "a0.43")
         XCTAssertEqual(releases.count, 1)
-        XCTAssertEqual(releases.first?.version, "a0.42")
-        XCTAssertEqual(releases.first?.releaseTitle, "General Settings & Helpful Tips Speech Bubble")
-        XCTAssertTrue(releases.first?.features.contains { $0.title == "General Settings Tab" } == true)
+        XCTAssertEqual(releases.first?.version, "a0.43")
+        XCTAssertEqual(releases.first?.releaseTitle, "Streamlined Menu Bar & Settings Integration")
+        XCTAssertTrue(releases.first?.features.contains { $0.title == "Streamlined Menu Bar" } == true)
     }
 
     func testWelcomeEvaluatorSameVersionReturnsNil() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.42"
+        settings.lastSeenAppVersion = "a0.43"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.42")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.43")
         XCTAssertNil(presentation, "Expected nil when version matches last seen")
     }
 
@@ -378,12 +378,12 @@ import UniformTypeIdentifiers
         settings.hasCompletedWelcome = true
         settings.lastSeenAppVersion = "a0.25"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.42")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.43")
         guard case .whatsNew(_, let releases)? = presentation else {
             XCTFail("Expected .whatsNew for multi-version upgrade")
             return
         }
-        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42"])
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43"])
     }
 
     func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
@@ -491,32 +491,32 @@ import UniformTypeIdentifiers
     func testGitHubReleaseDecodingAndDownloadURL() throws {
         let json = """
         {
-            "tag_name": "a0.42",
-            "name": "Animal Buddy a0.42",
-            "body": "## What's New\\n- General Settings Tab\\n- Helpful tips speech bubble with tap navigation",
-            "html_url": "https://github.com/ewanp1997/AnimalBuddy/releases/tag/a0.42",
-            "published_at": "2026-08-29T01:00:00Z",
+            "tag_name": "a0.43",
+            "name": "Animal Buddy a0.43",
+            "body": "## What's New\\n- Streamlined Menu Bar\\n- Unified Settings Hub",
+            "html_url": "https://github.com/ewanp1997/AnimalBuddy/releases/tag/a0.43",
+            "published_at": "2026-08-29T10:25:00Z",
             "assets": [
                 {
-                    "name": "AnimalBuddy-a0.42.zip",
-                    "browser_download_url": "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.42/AnimalBuddy-a0.42.zip",
+                    "name": "AnimalBuddy-a0.43.zip",
+                    "browser_download_url": "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.43/AnimalBuddy-a0.43.zip",
                     "size": 5242880
                 }
             ]
         }
         """
         let release = try JSONDecoder().decode(GitHubRelease.self, from: Data(json.utf8))
-        XCTAssertEqual(release.tagName, "a0.42")
-        XCTAssertEqual(release.name, "Animal Buddy a0.42")
-        XCTAssertEqual(release.displayTitle, "Animal Buddy a0.42")
-        XCTAssertEqual(release.primaryDownloadURL?.absoluteString, "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.42/AnimalBuddy-a0.42.zip")
+        XCTAssertEqual(release.tagName, "a0.43")
+        XCTAssertEqual(release.name, "Animal Buddy a0.43")
+        XCTAssertEqual(release.displayTitle, "Animal Buddy a0.43")
+        XCTAssertEqual(release.primaryDownloadURL?.absoluteString, "https://github.com/ewanp1997/AnimalBuddy/releases/download/a0.43/AnimalBuddy-a0.43.zip")
     }
 
     func testVersionComparisonDetectsUpdate() {
-        XCTAssertTrue(VersionComparator.isVersion("a0.42", greaterThan: "a0.41"))
-        XCTAssertTrue(VersionComparator.isVersion("a0.42", greaterThan: "a0.27"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.42", greaterThan: "a0.42"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.41", greaterThan: "a0.42"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.43", greaterThan: "a0.42"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.43", greaterThan: "a0.27"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.43", greaterThan: "a0.43"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.42", greaterThan: "a0.43"))
     }
 }
 

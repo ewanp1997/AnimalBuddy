@@ -13,9 +13,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>a0.42</string>
+	<string>a0.43</string>
 	<key>CFBundleVersion</key>
-	<string>0.4.2</string>
+	<string>0.4.3</string>
 	<key>CFBundleIconFile</key>
 	<string>AnimalBuddy</string>
 	<key>LSUIElement</key>
