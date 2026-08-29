@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, Bool, MinimizeDestination) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, Bool, Bool, MinimizeDestination) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onShowTipPreview: (() -> Void)?
@@ -21,6 +21,7 @@ import UniformTypeIdentifiers
     private var automaticallyCheckForUpdates: Bool
     private var helpfulTipsEnabled: Bool
     private var destinationFolderPath: String?
+    private var organizeInboxByFileType: Bool
     private var alwaysOnTop: Bool
     private var snappingEnabled: Bool
     private var minimizeDestination: MinimizeDestination
@@ -84,6 +85,7 @@ import UniformTypeIdentifiers
         automaticallyCheckForUpdates = settings.automaticallyCheckForUpdates
         helpfulTipsEnabled = settings.helpfulTipsEnabled
         destinationFolderPath = settings.destinationFolderPath
+        organizeInboxByFileType = settings.organizeInboxByFileType
         alwaysOnTop = settings.alwaysOnTop
         snappingEnabled = settings.snappingEnabled
         minimizeDestination = settings.minimizeDestination
@@ -514,7 +516,15 @@ import UniformTypeIdentifiers
         btnRow.orientation = .horizontal
         btnRow.spacing = 10
 
-        let stack = NSStackView(views: [title, desc, folderPathLabel, btnRow])
+        let organizeToggle = NSButton(checkboxWithTitle: "Sort dropped files into subfolders by type", target: self, action: #selector(toggleOrganizeSubfolders(_:)))
+        organizeToggle.state = organizeInboxByFileType ? .on : .off
+        organizeToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let organizeDesc = NSTextField(wrappingLabelWithString: "When enabled, Animal Buddy automatically sorts items into Images, Documents, Audio, Videos, Archives, Code, Applications, Notes, and Links subfolders inside your inbox.")
+        organizeDesc.font = .systemFont(ofSize: 11)
+        organizeDesc.textColor = .secondaryLabelColor
+
+        let stack = NSStackView(views: [title, desc, folderPathLabel, btnRow, organizeToggle, organizeDesc])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -526,10 +536,14 @@ import UniformTypeIdentifiers
         desc.translatesAutoresizingMaskIntoConstraints = false
         folderPathLabel.translatesAutoresizingMaskIntoConstraints = false
         btnRow.translatesAutoresizingMaskIntoConstraints = false
+        organizeToggle.translatesAutoresizingMaskIntoConstraints = false
+        organizeDesc.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             folderPathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            btnRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+            btnRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            organizeToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            organizeDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
         return stack
     }
@@ -701,6 +715,10 @@ import UniformTypeIdentifiers
     @objc private func resetFolderPressed() {
         destinationFolderPath = nil
         updateFolderPathDisplay()
+    }
+
+    @objc private func toggleOrganizeSubfolders(_ sender: NSButton) {
+        organizeInboxByFileType = (sender.state == .on)
     }
 
     @objc private func toggleAlwaysOnTop(_ sender: NSButton) {
@@ -1160,6 +1178,7 @@ import UniformTypeIdentifiers
             automaticallyCheckForUpdates,
             helpfulTipsEnabled,
             destinationFolderPath,
+            organizeInboxByFileType,
             alwaysOnTop,
             snappingEnabled,
             minimizeDestination

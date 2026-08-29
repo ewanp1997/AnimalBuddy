@@ -518,5 +518,79 @@ import UniformTypeIdentifiers
         XCTAssertFalse(VersionComparator.isVersion("a0.43", greaterThan: "a0.43"))
         XCTAssertFalse(VersionComparator.isVersion("a0.42", greaterThan: "a0.43"))
     }
+
+    func testFileTypeOrganizerSortsKnownFileTypesIntoCorrectSubfolders() {
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/photo.png")), "Images")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/picture.HEIC")), "Images")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/doc.pdf")), "Documents")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/sheet.xlsx")), "Documents")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/notes.txt")), "Documents")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/track.mp3")), "Audio")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/movie.mp4")), "Videos")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/bundle.zip")), "Archives")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/installer.dmg")), "Archives")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/script.swift")), "Code")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/app.py")), "Code")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/config.json")), "Code")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/Calculator.app")), "Applications")
+    }
+
+    func testStoreActionOrganizesFilesIntoSubfoldersWhenEnabled() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("AnimalBuddyInboxTest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let imageFile = tempDir.appendingPathComponent("sample.png")
+        let docFile = tempDir.appendingPathComponent("report.pdf")
+        let codeFile = tempDir.appendingPathComponent("main.swift")
+
+        try Data("png-content".utf8).write(to: imageFile)
+        try Data("pdf-content".utf8).write(to: docFile)
+        try Data("swift-code".utf8).write(to: codeFile)
+
+        let inboxDir = tempDir.appendingPathComponent("Inbox")
+        let action = StoreAction()
+        let dropInput = DropInput(urls: [imageFile, docFile, codeFile], category: .mixed)
+        let context = ActionContext(input: dropInput, destinationFolder: inboxDir, organizeByFileType: true)
+
+        try await action.execute(context: context)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("Images/sample.png").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("Documents/report.pdf").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("Code/main.swift").path))
+    }
+
+    func testStoreActionFlatStorageWhenOrganizeDisabled() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("AnimalBuddyInboxTestFlat-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let imageFile = tempDir.appendingPathComponent("photo.jpg")
+        try Data("jpg-content".utf8).write(to: imageFile)
+
+        let inboxDir = tempDir.appendingPathComponent("Inbox")
+        let action = StoreAction()
+        let dropInput = DropInput(urls: [imageFile], category: .image)
+        let context = ActionContext(input: dropInput, destinationFolder: inboxDir, organizeByFileType: false)
+
+        try await action.execute(context: context)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("photo.jpg").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("Images/photo.jpg").path))
+    }
+
+    func testAppSettingsPreservesOrganizeInboxByFileTypeOnRoundTrip() throws {
+        var settings = AppSettings()
+        settings.organizeInboxByFileType = true
+
+        let data1 = try JSONEncoder().encode(settings)
+        let restored1 = try JSONDecoder().decode(AppSettings.self, from: data1)
+        XCTAssertTrue(restored1.organizeInboxByFileType)
+
+        settings.organizeInboxByFileType = false
+        let data2 = try JSONEncoder().encode(settings)
+        let restored2 = try JSONDecoder().decode(AppSettings.self, from: data2)
+        XCTAssertFalse(restored2.organizeInboxByFileType)
+    }
 }
 

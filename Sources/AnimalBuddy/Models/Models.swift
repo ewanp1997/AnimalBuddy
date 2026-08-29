@@ -964,10 +964,111 @@ public enum MacroPresets {
     }
 }
 
+public enum FileTypeCategory: String, Sendable, CaseIterable {
+    case images = "Images"
+    case documents = "Documents"
+    case audio = "Audio"
+    case videos = "Videos"
+    case archives = "Archives"
+    case code = "Code"
+    case applications = "Applications"
+    case folders = "Folders"
+    case notes = "Notes"
+    case links = "Links"
+    case files = "Files"
+}
+
+public enum FileTypeOrganizer {
+    private static let imageExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "heif", "tiff", "tif",
+        "bmp", "ico", "psd", "ai", "raw", "cr2", "nef", "eps", "icns", "avif"
+    ]
+
+    private static let documentExtensions: Set<String> = [
+        "pdf", "doc", "docx", "txt", "rtf", "pages", "numbers", "key", "keynote",
+        "odt", "ods", "odp", "xls", "xlsx", "csv", "tsv", "ppt", "pptx", "epub",
+        "mobi", "djvu", "tex"
+    ]
+
+    private static let audioExtensions: Set<String> = [
+        "mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "aiff", "aif", "wma",
+        "alac", "opus", "mid", "midi"
+    ]
+
+    private static let videoExtensions: Set<String> = [
+        "mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "flv", "mpg", "mpeg",
+        "3gp", "ts"
+    ]
+
+    private static let archiveExtensions: Set<String> = [
+        "zip", "tar", "gz", "tgz", "dmg", "pkg", "7z", "rar", "iso", "bz2", "xz",
+        "z", "cab"
+    ]
+
+    private static let codeExtensions: Set<String> = [
+        "swift", "py", "js", "jsx", "ts", "tsx", "html", "htm", "css", "scss",
+        "sass", "less", "json", "c", "h", "cpp", "hpp", "cc", "rs", "go", "java",
+        "kt", "kts", "rb", "php", "sh", "zsh", "bash", "yaml", "yml", "xml",
+        "sql", "md", "markdown", "toml", "env", "proto", "graphql"
+    ]
+
+    public static func category(for url: URL) -> FileTypeCategory {
+        let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        let ext = url.pathExtension.lowercased()
+
+        if ext == "app" {
+            return .applications
+        }
+        if isDir {
+            return .folders
+        }
+
+        if imageExtensions.contains(ext) {
+            return .images
+        }
+        if documentExtensions.contains(ext) {
+            return .documents
+        }
+        if audioExtensions.contains(ext) {
+            return .audio
+        }
+        if videoExtensions.contains(ext) {
+            return .videos
+        }
+        if archiveExtensions.contains(ext) {
+            return .archives
+        }
+        if codeExtensions.contains(ext) {
+            return .code
+        }
+
+        let extType = UTType(filenameExtension: ext)
+        if let type = extType {
+            if type.conforms(to: .image) { return .images }
+            if type.conforms(to: .audio) { return .audio }
+            if type.conforms(to: .movie) || type.conforms(to: .video) { return .videos }
+            if type.conforms(to: .archive) || type.conforms(to: .diskImage) { return .archives }
+            if type.conforms(to: .sourceCode) || type.conforms(to: .script) { return .code }
+            if type.conforms(to: .pdf) || type.conforms(to: .text) || type.conforms(to: .spreadsheet) || type.conforms(to: .presentation) { return .documents }
+        }
+
+        return .files
+    }
+
+    public static func subfolderName(for url: URL) -> String {
+        category(for: url).rawValue
+    }
+}
+
 public struct ActionContext: Sendable {
     public let input: DropInput
     public let destinationFolder: URL?
-    public init(input: DropInput, destinationFolder: URL? = nil) { self.input = input; self.destinationFolder = destinationFolder }
+    public let organizeByFileType: Bool
+    public init(input: DropInput, destinationFolder: URL? = nil, organizeByFileType: Bool = false) {
+        self.input = input
+        self.destinationFolder = destinationFolder
+        self.organizeByFileType = organizeByFileType
+    }
 }
 
 public struct ActionDescriptor: Sendable {
@@ -1223,6 +1324,7 @@ public struct AppSettings: Codable, Sendable {
     public var rightBlushMacro = UserMacro()
     public var dragMacros: [DragMacroBinding] = []
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
+    public var organizeInboxByFileType: Bool = true
     public var minimizeDestination: MinimizeDestination = .menubar
     public var themePreset: PetThemePreset = .classic
     public var customPalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic)
@@ -1247,7 +1349,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, bindings
     }
 
     public init() {}
@@ -1262,6 +1364,7 @@ public struct AppSettings: Codable, Sendable {
         rightBlushMacro = try values.decodeIfPresent(UserMacro.self, forKey: .rightBlushMacro) ?? UserMacro()
         dragMacros = try values.decodeIfPresent([DragMacroBinding].self, forKey: .dragMacros) ?? []
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
+        organizeInboxByFileType = try values.decodeIfPresent(Bool.self, forKey: .organizeInboxByFileType) ?? true
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         themePreset = try values.decodeIfPresent(PetThemePreset.self, forKey: .themePreset) ?? .classic
         customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? AnimalKind.bird.defaultPalette(for: .classic)
@@ -1370,6 +1473,13 @@ public enum HelpfulTipsCatalog {
             emoji: "📥",
             title: "Smart Desktop Inbox",
             message: "Drop files, links, or text snippets onto me anytime to safely store them in your Animal Buddy Inbox.",
+            settingsTarget: .general
+        ),
+        AppTip(
+            id: "inbox-subfolders",
+            emoji: "🗂️",
+            title: "Subfolder Auto-Sorting",
+            message: "Animal Buddy can automatically organize your inbox into Images, Documents, Audio, Videos, Code, and Archives subfolders!",
             settingsTarget: .general
         )
     ]

@@ -66,7 +66,7 @@ import UniformTypeIdentifiers
         }
 
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, alwaysOnTop, snapping, minDest in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, alwaysOnTop, snapping, minDest in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -79,6 +79,7 @@ import UniformTypeIdentifiers
             self.settings.automaticallyCheckForUpdates = autoUpdates
             self.settings.helpfulTipsEnabled = helpfulTips
             self.settings.destinationFolderPath = destinationFolder
+            self.settings.organizeInboxByFileType = organizeSubfolders
             self.settings.alwaysOnTop = alwaysOnTop
             self.settings.snappingEnabled = snapping
             self.settings.minimizeDestination = minDest

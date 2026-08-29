@@ -547,7 +547,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         let destination = settings.destinationFolderPath.map { URL(fileURLWithPath: $0, isDirectory: true) }
         Task {
             do {
-                try await action.execute(context: ActionContext(input: context.input, destinationFolder: destination))
+                try await action.execute(context: ActionContext(input: context.input, destinationFolder: destination, organizeByFileType: settings.organizeInboxByFileType))
                 await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
             } catch {
                 await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }

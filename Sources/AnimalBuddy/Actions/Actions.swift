@@ -51,17 +51,67 @@ struct StoreAction: Action {
         identifier: "store",
         displayName: "Store in folder",
         symbolName: "folder",
-        acceptedCategories: [.file, .image, .directory, .application, .mixed]
+        acceptedCategories: [.file, .image, .directory, .application, .mixed, .url, .text]
     )
 
     func execute(context: ActionContext) async throws {
-        guard let folder = context.destinationFolder else {
+        guard let baseFolder = context.destinationFolder else {
             throw ActionError.noDestination
         }
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: baseFolder, withIntermediateDirectories: true)
+
+        let organize = context.organizeByFileType
+
         for url in context.input.urls {
-            let uniqueURL = SafeFileOperations.uniqueURL(for: url, in: folder)
+            let targetFolder: URL
+            if organize {
+                let subfolderName = FileTypeOrganizer.subfolderName(for: url)
+                targetFolder = baseFolder.appendingPathComponent(subfolderName, isDirectory: true)
+                try FileManager.default.createDirectory(at: targetFolder, withIntermediateDirectories: true)
+            } else {
+                targetFolder = baseFolder
+            }
+            let uniqueURL = SafeFileOperations.uniqueURL(for: url, in: targetFolder)
             try FileManager.default.copyItem(at: url, to: uniqueURL)
+        }
+
+        if context.input.urls.isEmpty {
+            if let text = context.input.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let isURL = (URL(string: trimmed)?.scheme != nil)
+                let targetFolder: URL
+                if organize {
+                    let subfolderName = isURL ? "Links" : "Notes"
+                    targetFolder = baseFolder.appendingPathComponent(subfolderName, isDirectory: true)
+                    try FileManager.default.createDirectory(at: targetFolder, withIntermediateDirectories: true)
+                } else {
+                    targetFolder = baseFolder
+                }
+
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+                let timestamp = formatter.string(from: Date())
+
+                if isURL {
+                    let weblocData = """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                    <plist version="1.0">
+                    <dict>
+                        <key>URL</key>
+                        <string>\(trimmed)</string>
+                    </dict>
+                    </plist>
+                    """
+                    let filename = "Link \(timestamp).webloc"
+                    let fileURL = SafeFileOperations.uniqueURL(for: URL(fileURLWithPath: filename), in: targetFolder)
+                    try weblocData.write(to: fileURL, atomically: true, encoding: .utf8)
+                } else {
+                    let filename = "Note \(timestamp).txt"
+                    let fileURL = SafeFileOperations.uniqueURL(for: URL(fileURLWithPath: filename), in: targetFolder)
+                    try trimmed.write(to: fileURL, atomically: true, encoding: .utf8)
+                }
+            }
         }
     }
 }
