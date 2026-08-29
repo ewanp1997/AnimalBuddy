@@ -438,8 +438,12 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
 
     func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
         beginExternalDragHover()
-        _ = updateDragContext(from: sender)
-        petView.state = .waitingForDrop
+        let context = updateDragContext(from: sender)
+        if containsDiscoTrigger(in: context) {
+            petView.startDiscoMode(duration: 9.0)
+        } else {
+            petView.state = .waitingForDrop
+        }
         return .copy
     }
 
@@ -447,12 +451,19 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         guard !isAwaitingActionChoice, petView.state != .processing else { return }
         endExternalDragHover()
         clearDragContext()
-        petView.state = .idle
+        if !petView.isDiscoMode {
+            petView.state = .idle
+        }
     }
 
     func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { true }
     func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let context = updateDragContext(from: sender)
+        let isDisco = containsDiscoTrigger(in: context)
+        if isDisco {
+            petView.startDiscoMode(duration: 9.0)
+        }
+
         if let macro = settings.dragMacros.first(where: { $0.category == context.category })?.macro, macro.isConfigured {
             isAwaitingActionChoice = false
             endExternalDragHover()
@@ -542,15 +553,49 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         }
     }
 
+    private func containsDiscoTrigger(in context: DropContext) -> Bool {
+        for item in context.items {
+            if let name = item.url?.lastPathComponent, name.localizedCaseInsensitiveContains("disco") {
+                return true
+            }
+            if let name = item.displayName, name.localizedCaseInsensitiveContains("disco") {
+                return true
+            }
+        }
+        if let text = context.text, text.localizedCaseInsensitiveContains("disco") {
+            return true
+        }
+        return false
+    }
+
     private func execute(_ action: any Action, for context: DropContext) {
-        petView.state = .processing
+        if !petView.isDiscoMode {
+            petView.state = .processing
+        }
         let destination = settings.destinationFolderPath.map { URL(fileURLWithPath: $0, isDirectory: true) }
         Task {
             do {
-                try await action.execute(context: ActionContext(input: context.input, destinationFolder: destination, organizeByFileType: settings.organizeInboxByFileType))
-                await MainActor.run { [weak self] in self?.petView.state = .success; self?.resetSoon() }
+                try await action.execute(context: ActionContext(
+                    input: context.input,
+                    destinationFolder: destination,
+                    organizeByFileType: settings.organizeInboxByFileType,
+                    subfolderRules: settings.inboxSubfolderRules
+                ))
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if !self.petView.isDiscoMode {
+                        self.petView.state = .success
+                    }
+                    self.resetSoon()
+                }
             } catch {
-                await MainActor.run { [weak self] in self?.petView.state = .failure; self?.resetSoon() }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if !self.petView.isDiscoMode {
+                        self.petView.state = .failure
+                    }
+                    self.resetSoon()
+                }
             }
         }
     }

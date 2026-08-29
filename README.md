@@ -63,8 +63,10 @@ sudo xattr -rd com.apple.quarantine "/Applications/Animal Buddy.app"
 
 ## Current functionality
 
-The `a0.43` release includes:
+The `a0.50` release includes:
 
+- **HD 3D Gradient Sprites**: All 6 companions (Bird, Dog, Cat, Monkey, Giraffe, Slinky) upgraded with multi-stop 3D lighting, specular highlights, Disney/anime sparkle eyes, and species-specific physical accents (feather crests, collar pendants, tabby stripes, paw beans, horn spheres, wire reflection highlights).
+- **Full-Name Animal & Theme Selectors**: Replaced cramped horizontal segmented buttons in Settings with clean native vertical dropdown pickers that clearly show full animal and theme titles without truncation.
 - **Streamlined Menu Bar**: Clean, lightweight status menu with dynamic Show/Hide and direct access to Settings without visual clutter.
 - **General Settings Tab**: Centralized hub for configuring the Desktop Inbox storage directory, window behavior, floating and snapping rules, helpful tips, and software updates.
 - **Custom Desktop Inbox Location**: Choose any directory on your Mac for dropped files and snippets, with instant **Reveal in Finder** and **Reset to Default** actions.

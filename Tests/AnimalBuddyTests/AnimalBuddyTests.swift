@@ -350,26 +350,26 @@ import UniformTypeIdentifiers
     func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.42"
+        settings.lastSeenAppVersion = "a0.43"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.43")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.50")
         guard case .whatsNew(let version, let releases)? = presentation else {
             XCTFail("Expected .whatsNew presentation on update")
             return
         }
-        XCTAssertEqual(version, "a0.43")
+        XCTAssertEqual(version, "a0.50")
         XCTAssertEqual(releases.count, 1)
-        XCTAssertEqual(releases.first?.version, "a0.43")
-        XCTAssertEqual(releases.first?.releaseTitle, "Streamlined Menu Bar & Settings Integration")
-        XCTAssertTrue(releases.first?.features.contains { $0.title == "Streamlined Menu Bar" } == true)
+        XCTAssertEqual(releases.first?.version, "a0.50")
+        XCTAssertEqual(releases.first?.releaseTitle, "HD 3D Sprites & Refined Settings")
+        XCTAssertTrue(releases.first?.features.contains { $0.title == "HD 3D Gradient Sprites" } == true)
     }
 
     func testWelcomeEvaluatorSameVersionReturnsNil() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.43"
+        settings.lastSeenAppVersion = "a0.50"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.43")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.50")
         XCTAssertNil(presentation, "Expected nil when version matches last seen")
     }
 
@@ -378,12 +378,12 @@ import UniformTypeIdentifiers
         settings.hasCompletedWelcome = true
         settings.lastSeenAppVersion = "a0.25"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.43")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.50")
         guard case .whatsNew(_, let releases)? = presentation else {
             XCTFail("Expected .whatsNew for multi-version upgrade")
             return
         }
-        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43"])
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50"])
     }
 
     func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
@@ -513,10 +513,10 @@ import UniformTypeIdentifiers
     }
 
     func testVersionComparisonDetectsUpdate() {
-        XCTAssertTrue(VersionComparator.isVersion("a0.43", greaterThan: "a0.42"))
-        XCTAssertTrue(VersionComparator.isVersion("a0.43", greaterThan: "a0.27"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.43", greaterThan: "a0.43"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.42", greaterThan: "a0.43"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.50", greaterThan: "a0.43"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.50", greaterThan: "a0.27"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.50", greaterThan: "a0.50"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.43", greaterThan: "a0.50"))
     }
 
     func testFileTypeOrganizerSortsKnownFileTypesIntoCorrectSubfolders() {
@@ -582,15 +582,89 @@ import UniformTypeIdentifiers
     func testAppSettingsPreservesOrganizeInboxByFileTypeOnRoundTrip() throws {
         var settings = AppSettings()
         settings.organizeInboxByFileType = true
+        settings.inboxSubfolderRules = [
+            InboxSubfolderRule(categoryName: "Holiday", folderName: "Holiday", regexPattern: "^holiday_.*")
+        ]
 
         let data1 = try JSONEncoder().encode(settings)
         let restored1 = try JSONDecoder().decode(AppSettings.self, from: data1)
         XCTAssertTrue(restored1.organizeInboxByFileType)
+        XCTAssertEqual(restored1.inboxSubfolderRules.first?.categoryName, "Holiday")
+        XCTAssertEqual(restored1.inboxSubfolderRules.first?.regexPattern, "^holiday_.*")
 
         settings.organizeInboxByFileType = false
         let data2 = try JSONEncoder().encode(settings)
         let restored2 = try JSONDecoder().decode(AppSettings.self, from: data2)
         XCTAssertFalse(restored2.organizeInboxByFileType)
+    }
+
+    func testInboxSubfolderRuleMatchesRegexPatterns() {
+        let holidayRule = InboxSubfolderRule(
+            categoryName: "Holiday",
+            folderName: "Holiday",
+            regexPattern: "^holiday_.*"
+        )
+        XCTAssertTrue(holidayRule.matches(url: URL(fileURLWithPath: "/tmp/holiday_image.png")))
+        XCTAssertTrue(holidayRule.matches(url: URL(fileURLWithPath: "/tmp/Holiday_beach.jpg")))
+        XCTAssertFalse(holidayRule.matches(url: URL(fileURLWithPath: "/tmp/work_holiday.png")))
+
+        let receiptRule = InboxSubfolderRule(
+            categoryName: "Receipts",
+            folderName: "Receipts",
+            regexPattern: ".*_receipt.*"
+        )
+        XCTAssertTrue(receiptRule.matches(url: URL(fileURLWithPath: "/tmp/2026-08_receipt_coffee.pdf")))
+        XCTAssertFalse(receiptRule.matches(url: URL(fileURLWithPath: "/tmp/invoice.pdf")))
+    }
+
+    func testFileTypeOrganizerUsesCustomRegexRules() {
+        let rules: [InboxSubfolderRule] = [
+            InboxSubfolderRule(categoryName: "Holiday", folderName: "Holiday", regexPattern: "^holiday_.*"),
+            InboxSubfolderRule(id: "images", categoryName: "Images", folderName: "Images", extensions: ["png", "jpg"])
+        ]
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/holiday_image.png"), customRules: rules), "Holiday")
+        XCTAssertEqual(FileTypeOrganizer.subfolderName(for: URL(fileURLWithPath: "/tmp/standard_photo.png"), customRules: rules), "Images")
+    }
+
+    func testStoreActionRoutesRegexMatchedFilesIntoCustomFolder() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("AnimalBuddyRegexInboxTest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let holidayFile = tempDir.appendingPathComponent("holiday_image.png")
+        let standardFile = tempDir.appendingPathComponent("normal_doc.pdf")
+        try Data("img".utf8).write(to: holidayFile)
+        try Data("doc".utf8).write(to: standardFile)
+
+        let rules: [InboxSubfolderRule] = [
+            InboxSubfolderRule(categoryName: "Holiday", folderName: "Holiday", regexPattern: "^holiday_.*"),
+            InboxSubfolderRule(id: "documents", categoryName: "Documents", folderName: "Documents", extensions: ["pdf"])
+        ]
+
+        let inboxDir = tempDir.appendingPathComponent("Inbox")
+        let action = StoreAction()
+        let dropInput = DropInput(urls: [holidayFile, standardFile], category: .mixed)
+        let context = ActionContext(input: dropInput, destinationFolder: inboxDir, organizeByFileType: true, subfolderRules: rules)
+
+        try await action.execute(context: context)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("Holiday/holiday_image.png").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inboxDir.appendingPathComponent("Documents/normal_doc.pdf").path))
+    }
+
+    @MainActor
+    func testPetDiscoEasterEggModeActivation() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+        XCTAssertFalse(petView.isDiscoMode)
+        XCTAssertNotEqual(petView.state, .disco)
+
+        petView.startDiscoMode(duration: 5.0)
+        XCTAssertTrue(petView.isDiscoMode)
+        XCTAssertEqual(petView.state, .disco)
+
+        petView.stopDiscoMode()
+        XCTAssertFalse(petView.isDiscoMode)
+        XCTAssertEqual(petView.state, .idle)
     }
 }
 

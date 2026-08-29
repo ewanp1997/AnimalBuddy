@@ -61,11 +61,12 @@ struct StoreAction: Action {
         try FileManager.default.createDirectory(at: baseFolder, withIntermediateDirectories: true)
 
         let organize = context.organizeByFileType
+        let rules = context.subfolderRules
 
         for url in context.input.urls {
             let targetFolder: URL
             if organize {
-                let subfolderName = FileTypeOrganizer.subfolderName(for: url)
+                let subfolderName = FileTypeOrganizer.subfolderName(for: url, customRules: rules)
                 targetFolder = baseFolder.appendingPathComponent(subfolderName, isDirectory: true)
                 try FileManager.default.createDirectory(at: targetFolder, withIntermediateDirectories: true)
             } else {
@@ -81,7 +82,7 @@ struct StoreAction: Action {
                 let isURL = (URL(string: trimmed)?.scheme != nil)
                 let targetFolder: URL
                 if organize {
-                    let subfolderName = isURL ? "Links" : "Notes"
+                    let subfolderName = FileTypeOrganizer.textSubfolderName(text: trimmed, isURL: isURL, customRules: rules)
                     targetFolder = baseFolder.appendingPathComponent(subfolderName, isDirectory: true)
                     try FileManager.default.createDirectory(at: targetFolder, withIntermediateDirectories: true)
                 } else {

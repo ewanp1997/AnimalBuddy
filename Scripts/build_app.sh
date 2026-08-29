@@ -43,7 +43,8 @@ if [ -f "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServ
 fi
 
 # Package zip for GitHub release
-ZIP_NAME="AnimalBuddy-a0.43.zip"
+APP_VERSION="$(grep -A 1 "CFBundleShortVersionString" App/Info.plist | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')"
+ZIP_NAME="AnimalBuddy-${APP_VERSION:-a0.50}.zip"
 echo "🗜️ Creating release archive $ZIP_NAME..."
 rm -f "$ZIP_NAME" ".build/$ZIP_NAME"
 ditto -c -k --sequesterRsrc --keepParent "$PRIMARY_APP" "$ZIP_NAME"

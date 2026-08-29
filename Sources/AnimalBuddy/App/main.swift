@@ -39,7 +39,7 @@ import UniformTypeIdentifiers
         NSApp.setActivationPolicy(.regular)
         petWindow?.showPet()
 
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.43"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
         if let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: currentVersion) {
             showWelcome(presentation: presentation, currentVersion: currentVersion)
         }
@@ -66,7 +66,7 @@ import UniformTypeIdentifiers
         }
 
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, alwaysOnTop, snapping, minDest in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -80,6 +80,7 @@ import UniformTypeIdentifiers
             self.settings.helpfulTipsEnabled = helpfulTips
             self.settings.destinationFolderPath = destinationFolder
             self.settings.organizeInboxByFileType = organizeSubfolders
+            self.settings.inboxSubfolderRules = subfolderRules
             self.settings.alwaysOnTop = alwaysOnTop
             self.settings.snappingEnabled = snapping
             self.settings.minimizeDestination = minDest
@@ -124,7 +125,7 @@ import UniformTypeIdentifiers
     }
 
     private func showWelcomeFromMenu() {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.43"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
         let presentation: WelcomePresentationKind
         if let latestRelease = AppChangelog.releases.last {
             presentation = .whatsNew(currentVersion: currentVersion, unseenReleases: [latestRelease])
@@ -135,7 +136,7 @@ import UniformTypeIdentifiers
     }
 
     private func checkForUpdates(silent: Bool) {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.43"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
         let skipped = settings.skippedAppVersion
 
         Task { @MainActor [weak self] in

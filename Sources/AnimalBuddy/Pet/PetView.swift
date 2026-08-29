@@ -125,7 +125,25 @@ final class PetView: NSView {
     private var idleLeftWingPhase: Double = 0
     private var idleRightWingPhase: Double = 1.7
     private var bobPhase: Double = 0
+    private(set) var isDiscoMode: Bool = false
+    private var discoEndsAt: Date = .distantPast
+    private var discoPhase: Double = 0
     override var isFlipped: Bool { true }
+
+    func startDiscoMode(duration: TimeInterval = 8.5) {
+        isDiscoMode = true
+        discoEndsAt = Date().addingTimeInterval(duration)
+        state = .disco
+        needsDisplay = true
+    }
+
+    func stopDiscoMode() {
+        isDiscoMode = false
+        if state == .disco {
+            state = .idle
+        }
+        needsDisplay = true
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -352,6 +370,15 @@ final class PetView: NSView {
         idleRightWingPhase += dt * 4.4
         bobPhase += dt * 1.8
         
+        if isDiscoMode {
+            if now >= discoEndsAt {
+                isDiscoMode = false
+                if state == .disco { state = .idle }
+            } else {
+                discoPhase += dt * 8.0
+            }
+        }
+
         if flightIntensity > 0.01 {
             let flapAmplitude: CGFloat = 34.0 * flightIntensity + 8.0 * (1.0 - flightIntensity)
             let wingCycle = CGFloat(sin(wingPhase))
@@ -374,6 +401,13 @@ final class PetView: NSView {
             if isFlying && now.timeIntervalSince(lastMovementTime) > 0.12 {
                 targetFlightTilt *= 0.88
             }
+        } else if isDiscoMode {
+            // Groovy dancing movements during Disco Mode!
+            let discoBob = CGFloat(sin(discoPhase * 2.0)) * (animalKind == .slinky ? 7.0 : 4.5)
+            bobOffset = discoBob
+            leftWingFlap = CGFloat(sin(discoPhase * 2.5)) * 32.0
+            rightWingFlap = CGFloat(cos(discoPhase * 2.5)) * 32.0
+            flightTiltAngle = CGFloat(sin(discoPhase * 1.2)) * 14.0
         } else {
             if animalKind == .slinky {
                 bobOffset = CGFloat(sin(bobPhase * 1.4)) * 2.5
@@ -603,8 +637,21 @@ final class PetView: NSView {
         transform.concat()
         drawCreatureShadow()
         let defaultBodyColor = themePalette.bodyColor.nsColor
-        let bodyColor: NSColor = switch state { case .idle, .sleeping: defaultBodyColor; case .noticingDrag, .waitingForDrop: .systemOrange; case .dragAccepted, .processing: .systemPurple; case .success: .systemGreen; case .dragRejected, .failure: .systemRed }
-        let bellyColor = themePalette.bellyColor.nsColor
+        let discoRainbowColor = NSColor(
+            calibratedHue: CGFloat(fmod(discoPhase * 0.15, 1.0)),
+            saturation: 0.85,
+            brightness: 0.95,
+            alpha: 1.0
+        )
+        let bodyColor: NSColor = switch state {
+        case .idle, .sleeping: defaultBodyColor
+        case .noticingDrag, .waitingForDrop: .systemOrange
+        case .dragAccepted, .processing: .systemPurple
+        case .success: .systemGreen
+        case .dragRejected, .failure: .systemRed
+        case .disco: isDiscoMode ? discoRainbowColor : defaultBodyColor
+        }
+        let bellyColor = isDiscoMode ? themePalette.bellyColor.nsColor.blended(withFraction: 0.25, of: discoRainbowColor) ?? themePalette.bellyColor.nsColor : themePalette.bellyColor.nsColor
         let accentColor = themePalette.beakColor.nsColor
 
         switch animalKind {
@@ -624,60 +671,204 @@ final class PetView: NSView {
 
         drawRimHighlight()
         if flightIntensity > 0.25 { drawFlightBreeze(intensity: flightIntensity) }
+        if isDiscoMode { drawDiscoMode(discoPhase: discoPhase) }
         if let dragPresentation { drawDragPresentation(dragPresentation) }
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
         if state != .idle {
-            let title = state.rawValue.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).capitalized
-            title.draw(at: NSPoint(x: 12, y: bounds.height - 28), withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white])
+            let title = (state == .disco) ? "🪩 Disco!" : state.rawValue.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).capitalized
+            title.draw(at: NSPoint(x: 12, y: bounds.height - 28), withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .bold), .foregroundColor: NSColor.white])
         }
         NSGraphicsContext.current?.restoreGraphicsState()
     }
 
+    private func drawDiscoMode(discoPhase: Double) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        // 1. Rotating Disco Spotlights
+        let ballCenter = NSPoint(x: 75, y: 22)
+        let beamColors: [NSColor] = [
+            NSColor(calibratedRed: 1.0, green: 0.15, blue: 0.80, alpha: 0.26), // Neon Magenta
+            NSColor(calibratedRed: 0.0, green: 0.90, blue: 1.00, alpha: 0.26), // Cyan
+            NSColor(calibratedRed: 1.0, green: 0.85, blue: 0.10, alpha: 0.24), // Gold
+            NSColor(calibratedRed: 0.65, green: 0.20, blue: 1.00, alpha: 0.26), // Purple
+            NSColor(calibratedRed: 0.20, green: 1.00, blue: 0.40, alpha: 0.24)  // Neon Green
+        ]
+
+        for i in 0..<5 {
+            let beamAngle = discoPhase * 1.5 + Double(i) * (.pi * 2.0 / 5.0)
+            let length: CGFloat = 160
+            let spread: CGFloat = 0.32
+
+            let leftAngle = beamAngle - Double(spread)
+            let rightAngle = beamAngle + Double(spread)
+
+            let p1 = NSPoint(x: ballCenter.x + CGFloat(sin(leftAngle)) * length, y: ballCenter.y + CGFloat(cos(leftAngle)) * length)
+            let p2 = NSPoint(x: ballCenter.x + CGFloat(sin(rightAngle)) * length, y: ballCenter.y + CGFloat(cos(rightAngle)) * length)
+
+            let beamPath = NSBezierPath()
+            beamPath.move(to: ballCenter)
+            beamPath.line(to: p1)
+            beamPath.line(to: p2)
+            beamPath.close()
+
+            beamColors[i % beamColors.count].setFill()
+            beamPath.fill()
+        }
+
+        // 2. Disco Ball Chain
+        let chain = NSBezierPath()
+        chain.move(to: NSPoint(x: ballCenter.x, y: 0))
+        chain.line(to: NSPoint(x: ballCenter.x, y: ballCenter.y - 12))
+        chain.lineWidth = 1.8
+        chain.lineCapStyle = .round
+        NSColor(white: 0.88, alpha: 0.95).setStroke()
+        chain.stroke()
+
+        // 3. Disco Ball Sphere
+        let ballRadius: CGFloat = 13.0
+        let ballRect = NSRect(x: ballCenter.x - ballRadius, y: ballCenter.y - ballRadius, width: ballRadius * 2, height: ballRadius * 2)
+
+        let ballBase = NSGradient(starting: NSColor(white: 0.98, alpha: 1.0), ending: NSColor(white: 0.38, alpha: 1.0))
+        ballBase?.draw(in: NSBezierPath(ovalIn: ballRect), angle: 45)
+
+        // Shimmering facets on disco ball
+        let facetCols = 6
+        let facetRows = 5
+        for r in 0..<facetRows {
+            for c in 0..<facetCols {
+                let u = Double(c) / Double(facetCols)
+                let v = Double(r) / Double(facetRows)
+                let sparkleVal = sin(discoPhase * 4.5 + u * 10.0 + v * 7.0)
+                let facetAlpha = CGFloat(0.35 + max(0, sparkleVal) * 0.65)
+                let facetColor = (sparkleVal > 0.35) ? NSColor.white.withAlphaComponent(facetAlpha) : NSColor(white: 0.22, alpha: 0.35)
+
+                let fx = ballRect.minX + CGFloat(u) * (ballRect.width - 4) + 1.8
+                let fy = ballRect.minY + CGFloat(v) * (ballRect.height - 4) + 1.8
+                let facetPath = NSBezierPath(roundedRect: NSRect(x: fx, y: fy, width: 3.2, height: 3.2), xRadius: 0.6, yRadius: 0.6)
+                facetColor.setFill()
+                facetPath.fill()
+            }
+        }
+
+        // Glint on top corner of disco ball
+        NSColor.white.withAlphaComponent(0.9).setFill()
+        NSBezierPath(ovalIn: NSRect(x: ballCenter.x - 7, y: ballCenter.y - 8, width: 4.5, height: 3.5)).fill()
+
+        // Outer ring
+        NSColor.white.withAlphaComponent(0.7).setStroke()
+        let ringPath = NSBezierPath(ovalIn: ballRect.insetBy(dx: 0.5, dy: 0.5))
+        ringPath.lineWidth = 1.0
+        ringPath.stroke()
+
+        // 4. Floating Musical Notes & Party Sparkles
+        let icons = ["🪩", "✨", "🎵", "🎶", "⭐️"]
+        let positions: [(CGFloat, CGFloat)] = [
+            (18, 38), (116, 34), (12, 88), (118, 92), (92, 24)
+        ]
+
+        for (idx, pos) in positions.enumerated() {
+            let offsetPhase = discoPhase * 2.2 + Double(idx) * 1.4
+            let floatY = pos.1 + CGFloat(sin(offsetPhase)) * 5.5
+            let icon = icons[idx % icons.count]
+            let str = NSAttributedString(string: icon, attributes: [.font: NSFont.systemFont(ofSize: 13)])
+            str.draw(at: NSPoint(x: pos.0, y: floatY))
+        }
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawGradientPath(_ path: NSBezierPath, topColor: NSColor, bottomColor: NSColor, angle: CGFloat = 90) {
+        let gradient = NSGradient(starting: topColor, ending: bottomColor)
+        gradient?.draw(in: path, angle: angle)
+    }
+
     private func drawBird(bodyColor: NSColor, bellyColor: NSColor, accentColor: NSColor) {
-        let highlight = bodyColor.blended(withFraction: 0.20, of: .white) ?? bodyColor
+        let bodyTop = bodyColor.blended(withFraction: 0.28, of: .white) ?? bodyColor
+        let bodyBottom = bodyColor.blended(withFraction: 0.18, of: .black) ?? bodyColor
 
-        bodyColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 17, y: 23, width: 116, height: 113), xRadius: 45, yRadius: 45).fill()
-        highlight.setFill()
-        drawWing(in: NSRect(x: 5 + leftWingFlap * 0.22, y: 73, width: 34, height: 53), angle: leftWingFlap, isLeft: true)
-        drawWing(in: NSRect(x: 111 - rightWingFlap * 0.22, y: 73, width: 34, height: 53), angle: -rightWingFlap, isLeft: false)
-        drawBirdFeathers(color: bodyColor.withAlphaComponent(0.32))
-        NSBezierPath(ovalIn: NSRect(x: 43, y: 3, width: 27, height: 27)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 61, y: 0, width: 29, height: 34)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 81, y: 4, width: 27, height: 27)).fill()
+        // Bouncy Head Feather Crest (3 tufts)
+        let crestColor = bodyTop.blended(withFraction: 0.15, of: .white) ?? bodyTop
+        crestColor.setFill()
+        let crest1 = NSBezierPath(ovalIn: NSRect(x: 43, y: 1, width: 27, height: 28))
+        let crest2 = NSBezierPath(ovalIn: NSRect(x: 61, y: -3, width: 29, height: 35))
+        let crest3 = NSBezierPath(ovalIn: NSRect(x: 81, y: 2, width: 27, height: 28))
+        crest1.fill(); crest2.fill(); crest3.fill()
 
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 19, y: 29, width: 112, height: 83)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 42, y: 88, width: 66, height: 47)).fill()
+        // Soft crest shine highlight
+        NSColor.white.withAlphaComponent(0.25).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 66, y: 2, width: 18, height: 12)).fill()
 
+        // Wings (layered wing rendering with feather tip highlights)
+        drawWing(in: NSRect(x: 5 + leftWingFlap * 0.22, y: 73, width: 34, height: 53), angle: leftWingFlap, isLeft: true, bodyColor: bodyColor)
+        drawWing(in: NSRect(x: 111 - rightWingFlap * 0.22, y: 73, width: 34, height: 53), angle: -rightWingFlap, isLeft: false, bodyColor: bodyColor)
+
+        // Main Bird Body Gradient
+        let bodyRect = NSRect(x: 17, y: 23, width: 116, height: 113)
+        let bodyPath = NSBezierPath(roundedRect: bodyRect, xRadius: 45, yRadius: 45)
+        drawGradientPath(bodyPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
+
+        // Feathers texture lines on side body
+        drawBirdFeathers(color: bodyTop.withAlphaComponent(0.40))
+
+        // Belly Patch Gradient (plush 3D chest)
+        let bellyTop = bellyColor.blended(withFraction: 0.10, of: .white) ?? bellyColor
+        let bellyBottom = bellyColor.blended(withFraction: 0.12, of: .black) ?? bellyColor
+        let bellyPath1 = NSBezierPath(ovalIn: NSRect(x: 19, y: 29, width: 112, height: 83))
+        let bellyPath2 = NSBezierPath(ovalIn: NSRect(x: 42, y: 88, width: 66, height: 47))
+        drawGradientPath(bellyPath1, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+        drawGradientPath(bellyPath2, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+
+        // Eyes
         drawStandardEyes(leftEyeRect: NSRect(x: 29, y: 38, width: 39, height: 45), rightEyeRect: NSRect(x: 82, y: 38, width: 39, height: 45))
 
+        // Brows
         NSColor(calibratedRed: 0.10, green: 0.28, blue: 0.72, alpha: 1).setStroke()
         let brows = NSBezierPath(); brows.lineWidth = 3.5; brows.lineCapStyle = .round
         brows.move(to: NSPoint(x: 38, y: 31)); brows.curve(to: NSPoint(x: 53, y: 29), controlPoint1: NSPoint(x: 42, y: 27), controlPoint2: NSPoint(x: 49, y: 27))
         brows.move(to: NSPoint(x: 97, y: 29)); brows.curve(to: NSPoint(x: 112, y: 31), controlPoint1: NSPoint(x: 101, y: 27), controlPoint2: NSPoint(x: 108, y: 27)); brows.stroke()
 
+        // Blush Cheeks
         themePalette.blushColor.nsColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 49, y: 82, width: 18, height: 10)).fill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX + 31, y: 82, width: 18, height: 10)).fill()
 
-        accentColor.setFill()
-        let beak = NSBezierPath(); beak.move(to: NSPoint(x: bounds.midX, y: 68)); beak.curve(to: NSPoint(x: bounds.midX + 11, y: 76), controlPoint1: NSPoint(x: bounds.midX + 7, y: 68), controlPoint2: NSPoint(x: bounds.midX + 11, y: 72)); beak.curve(to: NSPoint(x: bounds.midX, y: 82), controlPoint1: NSPoint(x: bounds.midX + 7, y: 80), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82)); beak.curve(to: NSPoint(x: bounds.midX - 11, y: 76), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX - 7, y: 80)); beak.close(); beak.fill()
+        // 3D Beak with Specular Catchlight
+        let beakTop = accentColor.blended(withFraction: 0.25, of: .white) ?? accentColor
+        let beakBottom = accentColor.blended(withFraction: 0.22, of: .black) ?? accentColor
+        let beak = NSBezierPath()
+        beak.move(to: NSPoint(x: bounds.midX, y: 68))
+        beak.curve(to: NSPoint(x: bounds.midX + 11, y: 76), controlPoint1: NSPoint(x: bounds.midX + 7, y: 68), controlPoint2: NSPoint(x: bounds.midX + 11, y: 72))
+        beak.curve(to: NSPoint(x: bounds.midX, y: 82), controlPoint1: NSPoint(x: bounds.midX + 7, y: 80), controlPoint2: NSPoint(x: bounds.midX + 3, y: 82))
+        beak.curve(to: NSPoint(x: bounds.midX - 11, y: 76), controlPoint1: NSPoint(x: bounds.midX - 3, y: 82), controlPoint2: NSPoint(x: bounds.midX - 7, y: 80))
+        beak.close()
+        drawGradientPath(beak, topColor: beakTop, bottomColor: beakBottom, angle: 90)
+
+        // Beak Mouth line & Gloss
         NSColor(calibratedRed: 0.72, green: 0.20, blue: 0.25, alpha: 1).setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 5, y: 76, width: 10, height: 7)).fill()
-        NSColor.white.withAlphaComponent(0.38).setFill()
-        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 4, y: 77, width: 4, height: 2)).fill()
+        NSColor.white.withAlphaComponent(0.55).setFill()
+        NSBezierPath(ovalIn: NSRect(x: bounds.midX - 4, y: 71, width: 6, height: 3)).fill()
 
-        accentColor.setFill()
+        // Feet / Claws with highlights
         let feetTuck = flightIntensity * 6.0
+        accentColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 30, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
         NSBezierPath(ovalIn: NSRect(x: 44, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
         NSBezierPath(ovalIn: NSRect(x: 84, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
         NSBezierPath(ovalIn: NSRect(x: 98, y: 123 - feetTuck, width: 22, height: 15 - flightIntensity * 3)).fill()
+
+        // Toe Highlights
+        NSColor.white.withAlphaComponent(0.40).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 35, y: 125 - feetTuck, width: 6, height: 4)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 89, y: 125 - feetTuck, width: 6, height: 4)).fill()
     }
 
     private func drawDog(bodyColor: NSColor, bellyColor: NSColor, accentColor: NSColor) {
-        // Wagging tail at back
+        let bodyTop = bodyColor.blended(withFraction: 0.22, of: .white) ?? bodyColor
+        let bodyBottom = bodyColor.blended(withFraction: 0.16, of: .black) ?? bodyColor
+
+        // Wagging Tail with Gradient Shading
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
         let tailAnchor = NSPoint(x: 116, y: 94)
@@ -686,45 +877,50 @@ final class PetView: NSView {
         tailTransform.rotate(byDegrees: rightWingFlap * 1.1)
         tailTransform.translateX(by: -tailAnchor.x, yBy: -tailAnchor.y)
         tailTransform.concat()
-        bodyColor.setFill()
+
         let tailPath = NSBezierPath()
         tailPath.move(to: NSPoint(x: 114, y: 92))
         tailPath.curve(to: NSPoint(x: 136, y: 68), controlPoint1: NSPoint(x: 124, y: 88), controlPoint2: NSPoint(x: 136, y: 78))
         tailPath.curve(to: NSPoint(x: 118, y: 100), controlPoint1: NSPoint(x: 130, y: 78), controlPoint2: NSPoint(x: 124, y: 96))
         tailPath.close()
-        tailPath.fill()
+        drawGradientPath(tailPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 45)
         context.restoreGraphicsState()
 
-        // Puppy Body
-        bodyColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 18, y: 24, width: 114, height: 110), xRadius: 46, yRadius: 46).fill()
+        // Puppy Body Gradient
+        let bodyPath = NSBezierPath(roundedRect: NSRect(x: 18, y: 24, width: 114, height: 110), xRadius: 46, yRadius: 46)
+        drawGradientPath(bodyPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
 
-        // Cream Chest
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 34, y: 58, width: 82, height: 72)).fill()
+        // Cream Chest Patch (soft gradient)
+        let bellyTop = bellyColor.blended(withFraction: 0.08, of: .white) ?? bellyColor
+        let bellyBottom = bellyColor.blended(withFraction: 0.12, of: .black) ?? bellyColor
+        let chestPath = NSBezierPath(ovalIn: NSRect(x: 34, y: 58, width: 82, height: 72))
+        drawGradientPath(chestPath, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
-        // Floppy Puppy Ears
+        // Floppy Puppy Ears with Soft Ear Shadow
         drawDogEar(in: NSRect(x: 10 + leftWingFlap * 0.18, y: 24, width: 34, height: 60), angle: leftWingFlap * 0.7, color: accentColor, isLeft: true)
         drawDogEar(in: NSRect(x: 106 - rightWingFlap * 0.18, y: 24, width: 34, height: 60), angle: -rightWingFlap * 0.7, color: accentColor, isLeft: false)
 
-        // Cream Muzzle
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 44, y: 64, width: 62, height: 46)).fill()
+        // Cream Muzzle Patch
+        let muzzlePath = NSBezierPath(ovalIn: NSRect(x: 44, y: 64, width: 62, height: 46))
+        drawGradientPath(muzzlePath, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
         // Puppy Eyes
         drawStandardEyes(leftEyeRect: NSRect(x: 32, y: 38, width: 37, height: 43), rightEyeRect: NSRect(x: 81, y: 38, width: 37, height: 43))
 
         // Puppy Brows
-        accentColor.withAlphaComponent(0.8).setStroke()
+        accentColor.withAlphaComponent(0.85).setStroke()
         let brows = NSBezierPath(); brows.lineWidth = 3; brows.lineCapStyle = .round
         brows.move(to: NSPoint(x: 40, y: 32)); brows.curve(to: NSPoint(x: 54, y: 30), controlPoint1: NSPoint(x: 44, y: 28), controlPoint2: NSPoint(x: 50, y: 28))
         brows.move(to: NSPoint(x: 96, y: 30)); brows.curve(to: NSPoint(x: 110, y: 32), controlPoint1: NSPoint(x: 100, y: 28), controlPoint2: NSPoint(x: 106, y: 28)); brows.stroke()
 
-        // Cute Button Nose
-        accentColor.setFill()
-        let nose = NSBezierPath(roundedRect: NSRect(x: 67, y: 68, width: 16, height: 12), xRadius: 5, yRadius: 5)
-        nose.fill()
-        NSColor.white.withAlphaComponent(0.7).setFill()
+        // 3D Wet Button Nose
+        let noseTop = accentColor.blended(withFraction: 0.25, of: .white) ?? accentColor
+        let noseBottom = accentColor.blended(withFraction: 0.30, of: .black) ?? accentColor
+        let nosePath = NSBezierPath(roundedRect: NSRect(x: 67, y: 68, width: 16, height: 12), xRadius: 5, yRadius: 5)
+        drawGradientPath(nosePath, topColor: noseTop, bottomColor: noseBottom, angle: 90)
+
+        // Specular Catchlight on Nose
+        NSColor.white.withAlphaComponent(0.85).setFill()
         NSBezierPath(ovalIn: NSRect(x: 70, y: 69, width: 5, height: 3)).fill()
 
         // Puppy Smile & Tongue
@@ -734,25 +930,38 @@ final class PetView: NSView {
         mouth.move(to: NSPoint(x: 66, y: 84)); mouth.curve(to: NSPoint(x: 75, y: 86), controlPoint1: NSPoint(x: 68, y: 87), controlPoint2: NSPoint(x: 72, y: 87))
         mouth.curve(to: NSPoint(x: 84, y: 84), controlPoint1: NSPoint(x: 78, y: 87), controlPoint2: NSPoint(x: 82, y: 87)); mouth.stroke()
 
+        // Cute Pink Tongue
         NSColor(calibratedRed: 0.98, green: 0.42, blue: 0.55, alpha: 1).setFill()
         NSBezierPath(ovalIn: NSRect(x: 72, y: 85, width: 7, height: 8)).fill()
+        NSColor.white.withAlphaComponent(0.40).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 74, y: 86, width: 3, height: 3)).fill()
 
-        accentColor.withAlphaComponent(0.82).setStroke()
-        let collar = NSBezierPath(); collar.lineWidth = 4; collar.lineCapStyle = .round
+        // Glossy Leather Collar & Medal Pendant
+        let collarColor = NSColor(calibratedRed: 0.88, green: 0.22, blue: 0.28, alpha: 1.0)
+        collarColor.setStroke()
+        let collar = NSBezierPath(); collar.lineWidth = 4.2; collar.lineCapStyle = .round
         collar.move(to: NSPoint(x: 47, y: 103)); collar.curve(to: NSPoint(x: 103, y: 103), controlPoint1: NSPoint(x: 62, y: 109), controlPoint2: NSPoint(x: 88, y: 109)); collar.stroke()
-        accentColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 71, y: 101, width: 8, height: 8)).fill()
+
+        // Gold Shiny Medal
+        NSColor(calibratedRed: 0.98, green: 0.82, blue: 0.20, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 71, y: 101, width: 9, height: 9)).fill()
+        NSColor.white.withAlphaComponent(0.70).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 73, y: 102, width: 3, height: 3)).fill()
 
         // Blush Cheeks
         themePalette.blushColor.nsColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 48, y: 80, width: 18, height: 10)).fill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX + 30, y: 80, width: 18, height: 10)).fill()
 
-        // Paws
+        // Paws with Paw Pads
         let feetTuck = flightIntensity * 6.0
-        accentColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 36, y: 123 - feetTuck, width: 26, height: 16), xRadius: 8, yRadius: 8).fill()
-        NSBezierPath(roundedRect: NSRect(x: 88, y: 123 - feetTuck, width: 26, height: 16), xRadius: 8, yRadius: 8).fill()
+        let pawTop = accentColor.blended(withFraction: 0.15, of: .white) ?? accentColor
+        let pawBottom = accentColor.blended(withFraction: 0.15, of: .black) ?? accentColor
+        let leftPaw = NSBezierPath(roundedRect: NSRect(x: 36, y: 123 - feetTuck, width: 26, height: 16), xRadius: 8, yRadius: 8)
+        let rightPaw = NSBezierPath(roundedRect: NSRect(x: 88, y: 123 - feetTuck, width: 26, height: 16), xRadius: 8, yRadius: 8)
+        drawGradientPath(leftPaw, topColor: pawTop, bottomColor: pawBottom, angle: 90)
+        drawGradientPath(rightPaw, topColor: pawTop, bottomColor: pawBottom, angle: 90)
+
         bellyColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 42, y: 128 - feetTuck, width: 14, height: 8)).fill()
         NSBezierPath(ovalIn: NSRect(x: 94, y: 128 - feetTuck, width: 14, height: 8)).fill()
@@ -767,15 +976,23 @@ final class PetView: NSView {
         transform.rotate(byDegrees: angle)
         transform.translateX(by: -anchor.x, yBy: -anchor.y)
         transform.concat()
-        color.setFill()
-        NSBezierPath(roundedRect: frame, xRadius: 16, yRadius: 16).fill()
-        color.blended(withFraction: 0.20, of: .white)?.setFill()
+
+        let earTop = color.blended(withFraction: 0.25, of: .white) ?? color
+        let earBottom = color.blended(withFraction: 0.20, of: .black) ?? color
+        let earPath = NSBezierPath(roundedRect: frame, xRadius: 16, yRadius: 16)
+        drawGradientPath(earPath, topColor: earTop, bottomColor: earBottom, angle: 90)
+
+        // Inner ear fold highlight
+        color.blended(withFraction: 0.35, of: .white)?.setFill()
         NSBezierPath(ovalIn: NSRect(x: frame.minX + 7, y: frame.minY + 8, width: 8, height: 12)).fill()
         context.restoreGraphicsState()
     }
 
     private func drawCat(bodyColor: NSColor, bellyColor: NSColor, accentColor: NSColor) {
-        // Swishing Cat Tail
+        let bodyTop = bodyColor.blended(withFraction: 0.25, of: .white) ?? bodyColor
+        let bodyBottom = bodyColor.blended(withFraction: 0.18, of: .black) ?? bodyColor
+
+        // Swishing Cat Tail with Gradient Shading
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
         let tailAnchor = NSPoint(x: 114, y: 96)
@@ -784,32 +1001,41 @@ final class PetView: NSView {
         tailTransform.rotate(byDegrees: rightWingFlap * 0.9)
         tailTransform.translateX(by: -tailAnchor.x, yBy: -tailAnchor.y)
         tailTransform.concat()
-        bodyColor.setStroke()
+
+        bodyTop.setStroke()
         let tail = NSBezierPath()
         tail.lineWidth = 11; tail.lineCapStyle = .round
         tail.move(to: NSPoint(x: 112, y: 94))
         tail.curve(to: NSPoint(x: 136, y: 58), controlPoint1: NSPoint(x: 128, y: 90), controlPoint2: NSPoint(x: 140, y: 74))
         tail.stroke()
+
+        // Tail tip highlight
+        bodyTop.blended(withFraction: 0.40, of: .white)?.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 131, y: 54, width: 8, height: 8)).fill()
         context.restoreGraphicsState()
 
         // Pointy Cat Ears
         drawCatEar(tip: NSPoint(x: 36 + leftWingFlap * 0.12, y: 6), baseLeft: NSPoint(x: 18, y: 40), baseRight: NSPoint(x: 54, y: 30), bodyColor: bodyColor, innerColor: accentColor)
         drawCatEar(tip: NSPoint(x: 114 - rightWingFlap * 0.12, y: 6), baseLeft: NSPoint(x: 96, y: 30), baseRight: NSPoint(x: 132, y: 40), bodyColor: bodyColor, innerColor: accentColor)
 
-        // Cat Body
-        bodyColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 20, y: 28, width: 110, height: 106), xRadius: 44, yRadius: 44).fill()
+        // Cat Body Gradient
+        let bodyPath = NSBezierPath(roundedRect: NSRect(x: 20, y: 28, width: 110, height: 106), xRadius: 44, yRadius: 44)
+        drawGradientPath(bodyPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
 
         // Cream Chest
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 36, y: 62, width: 78, height: 68)).fill()
+        let bellyTop = bellyColor.blended(withFraction: 0.08, of: .white) ?? bellyColor
+        let bellyBottom = bellyColor.blended(withFraction: 0.10, of: .black) ?? bellyColor
+        let chestPath = NSBezierPath(ovalIn: NSRect(x: 36, y: 62, width: 78, height: 68))
+        drawGradientPath(chestPath, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
         // Muzzle Mounds
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 48, y: 68, width: 28, height: 22)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 74, y: 68, width: 28, height: 22)).fill()
+        let muzzleLeft = NSBezierPath(ovalIn: NSRect(x: 48, y: 68, width: 28, height: 22))
+        let muzzleRight = NSBezierPath(ovalIn: NSRect(x: 74, y: 68, width: 28, height: 22))
+        drawGradientPath(muzzleLeft, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+        drawGradientPath(muzzleRight, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
-        let catHighlight = bodyColor.blended(withFraction: 0.24, of: .white) ?? bodyColor
+        // Forehead Tuft
+        let catHighlight = bodyColor.blended(withFraction: 0.28, of: .white) ?? bodyColor
         catHighlight.setFill()
         let foreheadTuft = NSBezierPath()
         foreheadTuft.move(to: NSPoint(x: 65, y: 28))
@@ -822,16 +1048,23 @@ final class PetView: NSView {
         // Cat Eyes
         drawStandardEyes(leftEyeRect: NSRect(x: 30, y: 38, width: 38, height: 43), rightEyeRect: NSRect(x: 82, y: 38, width: 38, height: 43))
 
-        // Pink Triangle Nose
-        accentColor.setFill()
+        // Pink Heart/Triangle Nose with Specular Highlight
+        let noseTop = accentColor.blended(withFraction: 0.25, of: .white) ?? accentColor
+        let noseBottom = accentColor.blended(withFraction: 0.20, of: .black) ?? accentColor
         let nose = NSBezierPath()
-        nose.move(to: NSPoint(x: 70, y: 70)); nose.curve(to: NSPoint(x: 75, y: 76), controlPoint1: NSPoint(x: 71, y: 74), controlPoint2: NSPoint(x: 73, y: 76)); nose.curve(to: NSPoint(x: 80, y: 70), controlPoint1: NSPoint(x: 77, y: 76), controlPoint2: NSPoint(x: 79, y: 74)); nose.curve(to: NSPoint(x: 75, y: 69), controlPoint1: NSPoint(x: 79, y: 68), controlPoint2: NSPoint(x: 76, y: 68)); nose.curve(to: NSPoint(x: 70, y: 70), controlPoint1: NSPoint(x: 74, y: 68), controlPoint2: NSPoint(x: 71, y: 68)); nose.fill()
+        nose.move(to: NSPoint(x: 70, y: 70)); nose.curve(to: NSPoint(x: 75, y: 76), controlPoint1: NSPoint(x: 71, y: 74), controlPoint2: NSPoint(x: 73, y: 76)); nose.curve(to: NSPoint(x: 80, y: 70), controlPoint1: NSPoint(x: 77, y: 76), controlPoint2: NSPoint(x: 79, y: 74)); nose.curve(to: NSPoint(x: 75, y: 69), controlPoint1: NSPoint(x: 79, y: 68), controlPoint2: NSPoint(x: 76, y: 68)); nose.curve(to: NSPoint(x: 70, y: 70), controlPoint1: NSPoint(x: 74, y: 68), controlPoint2: NSPoint(x: 71, y: 68))
+        drawGradientPath(nose, topColor: noseTop, bottomColor: noseBottom, angle: 90)
 
+        NSColor.white.withAlphaComponent(0.70).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 73.5, y: 70, width: 3, height: 2)).fill()
+
+        // Mouth & Whisker Dots
         accentColor.setStroke()
         let mouth = NSBezierPath(); mouth.lineWidth = 2; mouth.lineCapStyle = .round
         mouth.move(to: NSPoint(x: 75, y: 76)); mouth.line(to: NSPoint(x: 75, y: 80))
         mouth.move(to: NSPoint(x: 75, y: 80)); mouth.curve(to: NSPoint(x: 67, y: 80), controlPoint1: NSPoint(x: 72, y: 84), controlPoint2: NSPoint(x: 69, y: 83))
         mouth.move(to: NSPoint(x: 75, y: 80)); mouth.curve(to: NSPoint(x: 83, y: 80), controlPoint1: NSPoint(x: 81, y: 83), controlPoint2: NSPoint(x: 78, y: 84)); mouth.stroke()
+
         accentColor.withAlphaComponent(0.62).setFill()
         for point in [NSPoint(x: 49, y: 77), NSPoint(x: 54, y: 81), NSPoint(x: 101, y: 77), NSPoint(x: 96, y: 81)] {
             NSBezierPath(ovalIn: NSRect(x: point.x, y: point.y, width: 2.5, height: 2.5)).fill()
@@ -845,6 +1078,7 @@ final class PetView: NSView {
         whiskers.move(to: NSPoint(x: 126, y: 74)); whiskers.line(to: NSPoint(x: 100, y: 76))
         whiskers.move(to: NSPoint(x: 128, y: 82)); whiskers.line(to: NSPoint(x: 101, y: 80)); whiskers.stroke()
 
+        // Tabby Stripes
         accentColor.withAlphaComponent(0.58).setStroke()
         let stripes = NSBezierPath(); stripes.lineWidth = 2.2; stripes.lineCapStyle = .round
         stripes.move(to: NSPoint(x: 61, y: 31)); stripes.line(to: NSPoint(x: 65, y: 40))
@@ -856,11 +1090,15 @@ final class PetView: NSView {
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 48, y: 86, width: 18, height: 10)).fill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX + 30, y: 86, width: 18, height: 10)).fill()
 
-        // Dainty Cat Paws
+        // Dainty Cat Paws & Toe Beans
         let feetTuck = flightIntensity * 6.0
-        accentColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 38, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7).fill()
-        NSBezierPath(roundedRect: NSRect(x: 88, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7).fill()
+        let pawTop = accentColor.blended(withFraction: 0.15, of: .white) ?? accentColor
+        let pawBottom = accentColor.blended(withFraction: 0.15, of: .black) ?? accentColor
+        let leftPaw = NSBezierPath(roundedRect: NSRect(x: 38, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7)
+        let rightPaw = NSBezierPath(roundedRect: NSRect(x: 88, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7)
+        drawGradientPath(leftPaw, topColor: pawTop, bottomColor: pawBottom, angle: 90)
+        drawGradientPath(rightPaw, topColor: pawTop, bottomColor: pawBottom, angle: 90)
+
         bellyColor.withAlphaComponent(0.85).setFill()
         NSBezierPath(ovalIn: NSRect(x: 44, y: 128 - feetTuck, width: 6, height: 4)).fill()
         NSBezierPath(ovalIn: NSRect(x: 100, y: 128 - feetTuck, width: 6, height: 4)).fill()
@@ -869,20 +1107,27 @@ final class PetView: NSView {
     }
 
     private func drawCatEar(tip: NSPoint, baseLeft: NSPoint, baseRight: NSPoint, bodyColor: NSColor, innerColor: NSColor) {
-        bodyColor.setFill()
+        let earTop = bodyColor.blended(withFraction: 0.25, of: .white) ?? bodyColor
+        let earBottom = bodyColor.blended(withFraction: 0.15, of: .black) ?? bodyColor
         let ear = NSBezierPath()
-        ear.move(to: baseLeft); ear.line(to: tip); ear.line(to: baseRight); ear.close(); ear.fill()
+        ear.move(to: baseLeft); ear.line(to: tip); ear.line(to: baseRight); ear.close()
+        drawGradientPath(ear, topColor: earTop, bottomColor: earBottom, angle: 90)
 
-        innerColor.setFill()
+        let innerTop = innerColor.blended(withFraction: 0.20, of: .white) ?? innerColor
+        let innerBottom = innerColor.blended(withFraction: 0.10, of: .black) ?? innerColor
         let inner = NSBezierPath()
         let innerTip = NSPoint(x: tip.x, y: tip.y + 7)
         let innerLeft = NSPoint(x: baseLeft.x + (tip.x - baseLeft.x) * 0.3 + 3, y: baseLeft.y - 3)
         let innerRight = NSPoint(x: baseRight.x + (tip.x - baseRight.x) * 0.3 - 3, y: baseRight.y - 3)
-        inner.move(to: innerLeft); inner.line(to: innerTip); inner.line(to: innerRight); inner.close(); inner.fill()
+        inner.move(to: innerLeft); inner.line(to: innerTip); inner.line(to: innerRight); inner.close()
+        drawGradientPath(inner, topColor: innerTop, bottomColor: innerBottom, angle: 90)
     }
 
     private func drawMonkey(bodyColor: NSColor, bellyColor: NSColor, accentColor: NSColor) {
-        // Curled Monkey Tail
+        let bodyTop = bodyColor.blended(withFraction: 0.25, of: .white) ?? bodyColor
+        let bodyBottom = bodyColor.blended(withFraction: 0.18, of: .black) ?? bodyColor
+
+        // Curled Monkey Tail with Gradient Stroke
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
         let tailAnchor = NSPoint(x: 112, y: 92)
@@ -891,7 +1136,8 @@ final class PetView: NSView {
         tailTransform.rotate(byDegrees: rightWingFlap * 0.9)
         tailTransform.translateX(by: -tailAnchor.x, yBy: -tailAnchor.y)
         tailTransform.concat()
-        bodyColor.setStroke()
+
+        bodyTop.setStroke()
         let tail = NSBezierPath()
         tail.lineWidth = 9; tail.lineCapStyle = .round
         tail.move(to: NSPoint(x: 110, y: 90))
@@ -901,31 +1147,39 @@ final class PetView: NSView {
         context.restoreGraphicsState()
 
         // Big Round Monkey Ears
-        bodyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 8 + leftWingFlap * 0.15, y: 42, width: 32, height: 32)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 110 - rightWingFlap * 0.15, y: 42, width: 32, height: 32)).fill()
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 14 + leftWingFlap * 0.15, y: 47, width: 20, height: 20)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 116 - rightWingFlap * 0.15, y: 47, width: 20, height: 20)).fill()
+        let earLeftPath = NSBezierPath(ovalIn: NSRect(x: 8 + leftWingFlap * 0.15, y: 42, width: 32, height: 32))
+        let earRightPath = NSBezierPath(ovalIn: NSRect(x: 110 - rightWingFlap * 0.15, y: 42, width: 32, height: 32))
+        drawGradientPath(earLeftPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
+        drawGradientPath(earRightPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
+
+        let bellyTop = bellyColor.blended(withFraction: 0.10, of: .white) ?? bellyColor
+        let bellyBottom = bellyColor.blended(withFraction: 0.10, of: .black) ?? bellyColor
+        let innerEarLeft = NSBezierPath(ovalIn: NSRect(x: 14 + leftWingFlap * 0.15, y: 47, width: 20, height: 20))
+        let innerEarRight = NSBezierPath(ovalIn: NSRect(x: 116 - rightWingFlap * 0.15, y: 47, width: 20, height: 20))
+        drawGradientPath(innerEarLeft, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+        drawGradientPath(innerEarRight, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+
         accentColor.withAlphaComponent(0.28).setStroke()
         let earDetail = NSBezierPath(); earDetail.lineWidth = 1.5
         earDetail.appendArc(withCenter: NSPoint(x: 24 + leftWingFlap * 0.15, y: 57), radius: 7, startAngle: 205, endAngle: 335)
         earDetail.appendArc(withCenter: NSPoint(x: 126 - rightWingFlap * 0.15, y: 57), radius: 7, startAngle: 25, endAngle: 155)
         earDetail.stroke()
 
-        // Body
-        bodyColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 22, y: 26, width: 106, height: 108), xRadius: 44, yRadius: 44).fill()
+        // Monkey Body Gradient
+        let bodyPath = NSBezierPath(roundedRect: NSRect(x: 22, y: 26, width: 106, height: 108), xRadius: 44, yRadius: 44)
+        drawGradientPath(bodyPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
 
-        // Peach Heart Face Mask
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 28, y: 28, width: 50, height: 50)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 72, y: 28, width: 50, height: 50)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 36, y: 52, width: 78, height: 52)).fill()
+        // Peach Heart Face Mask (Soft Gradient)
+        let maskCircleL = NSBezierPath(ovalIn: NSRect(x: 28, y: 28, width: 50, height: 50))
+        let maskCircleR = NSBezierPath(ovalIn: NSRect(x: 72, y: 28, width: 50, height: 50))
+        let maskLower = NSBezierPath(ovalIn: NSRect(x: 36, y: 52, width: 78, height: 52))
+        drawGradientPath(maskCircleL, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+        drawGradientPath(maskCircleR, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
+        drawGradientPath(maskLower, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
-        // Belly
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 42, y: 84, width: 66, height: 46)).fill()
+        // Belly Patch Gradient
+        let bellyPath = NSBezierPath(ovalIn: NSRect(x: 42, y: 84, width: 66, height: 46))
+        drawGradientPath(bellyPath, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
         // Monkey Eyes
         drawStandardEyes(leftEyeRect: NSRect(x: 34, y: 38, width: 35, height: 40), rightEyeRect: NSRect(x: 81, y: 38, width: 35, height: 40))
@@ -946,36 +1200,51 @@ final class PetView: NSView {
 
         // Monkey Hands / Paws
         let feetTuck = flightIntensity * 6.0
-        accentColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 36, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7).fill()
-        NSBezierPath(roundedRect: NSRect(x: 90, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7).fill()
+        let pawTop = accentColor.blended(withFraction: 0.15, of: .white) ?? accentColor
+        let pawBottom = accentColor.blended(withFraction: 0.15, of: .black) ?? accentColor
+        let leftPaw = NSBezierPath(roundedRect: NSRect(x: 36, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7)
+        let rightPaw = NSBezierPath(roundedRect: NSRect(x: 90, y: 123 - feetTuck, width: 24, height: 15), xRadius: 7, yRadius: 7)
+        drawGradientPath(leftPaw, topColor: pawTop, bottomColor: pawBottom, angle: 90)
+        drawGradientPath(rightPaw, topColor: pawTop, bottomColor: pawBottom, angle: 90)
     }
 
     private func drawGiraffe(bodyColor: NSColor, bellyColor: NSColor, accentColor: NSColor) {
-        // Giraffe Ossicones (Horns)
-        accentColor.setFill()
+        let bodyTop = bodyColor.blended(withFraction: 0.25, of: .white) ?? bodyColor
+        let bodyBottom = bodyColor.blended(withFraction: 0.18, of: .black) ?? bodyColor
+
+        // Giraffe Ossicones (3D Horns with Specular Ball Tops)
+        let hornColor = accentColor
+        hornColor.setFill()
         NSBezierPath(roundedRect: NSRect(x: 52, y: 8, width: 7, height: 22), xRadius: 3, yRadius: 3).fill()
         NSBezierPath(roundedRect: NSRect(x: 91, y: 8, width: 7, height: 22), xRadius: 3, yRadius: 3).fill()
-        accentColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 48, y: 3, width: 15, height: 15)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 87, y: 3, width: 15, height: 15)).fill()
+
+        let ballTop = accentColor.blended(withFraction: 0.30, of: .white) ?? accentColor
+        let ballBottom = accentColor.blended(withFraction: 0.20, of: .black) ?? accentColor
+        let leftBall = NSBezierPath(ovalIn: NSRect(x: 48, y: 3, width: 15, height: 15))
+        let rightBall = NSBezierPath(ovalIn: NSRect(x: 87, y: 3, width: 15, height: 15))
+        drawGradientPath(leftBall, topColor: ballTop, bottomColor: ballBottom, angle: 90)
+        drawGradientPath(rightBall, topColor: ballTop, bottomColor: ballBottom, angle: 90)
+
+        NSColor.white.withAlphaComponent(0.60).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 51, y: 5, width: 4, height: 4)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 90, y: 5, width: 4, height: 4)).fill()
 
         // Gentle Leaf Ears
         drawGiraffeEar(at: NSPoint(x: 24 + leftWingFlap * 0.15, y: 28), angle: leftWingFlap * 0.5, color: bodyColor, isLeft: true)
         drawGiraffeEar(at: NSPoint(x: 112 - rightWingFlap * 0.15, y: 28), angle: -rightWingFlap * 0.5, color: bodyColor, isLeft: false)
 
-        // Long Neck & Head
-        bodyColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 46, y: 64, width: 58, height: 72), xRadius: 20, yRadius: 20).fill()
-        NSBezierPath(roundedRect: NSRect(x: 30, y: 18, width: 90, height: 74), xRadius: 36, yRadius: 36).fill()
+        // Long Neck & Head Gradient
+        let neckPath = NSBezierPath(roundedRect: NSRect(x: 46, y: 64, width: 58, height: 72), xRadius: 20, yRadius: 20)
+        let headPath = NSBezierPath(roundedRect: NSRect(x: 30, y: 18, width: 90, height: 74), xRadius: 36, yRadius: 36)
+        drawGradientPath(neckPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
+        drawGradientPath(headPath, topColor: bodyTop, bottomColor: bodyBottom, angle: 90)
 
-        accentColor.withAlphaComponent(0.72).setFill()
-        let mane = NSBezierPath()
-        mane.move(to: NSPoint(x: 45, y: 34)); mane.line(to: NSPoint(x: 40, y: 40)); mane.line(to: NSPoint(x: 45, y: 45)); mane.line(to: NSPoint(x: 40, y: 51)); mane.line(to: NSPoint(x: 46, y: 57)); mane.close(); mane.fill()
-        mane.move(to: NSPoint(x: 105, y: 34)); mane.line(to: NSPoint(x: 110, y: 40)); mane.line(to: NSPoint(x: 105, y: 45)); mane.line(to: NSPoint(x: 110, y: 51)); mane.line(to: NSPoint(x: 104, y: 57)); mane.close(); mane.fill()
+        // Fluffy Layered Mane
+        drawGiraffeMane(color: accentColor.withAlphaComponent(0.85))
 
         // Giraffe Spots on Neck & Cheeks
-        accentColor.setFill()
+        let spotColor = accentColor.blended(withFraction: 0.10, of: .white) ?? accentColor
+        spotColor.setFill()
         NSBezierPath(roundedRect: NSRect(x: 52, y: 76, width: 18, height: 16), xRadius: 6, yRadius: 6).fill()
         NSBezierPath(roundedRect: NSRect(x: 78, y: 88, width: 20, height: 18), xRadius: 7, yRadius: 7).fill()
         NSBezierPath(roundedRect: NSRect(x: 54, y: 108, width: 18, height: 16), xRadius: 6, yRadius: 6).fill()
@@ -983,8 +1252,10 @@ final class PetView: NSView {
         NSBezierPath(ovalIn: NSRect(x: 108, y: 44, width: 10, height: 10)).fill()
 
         // Soft Cream Muzzle
-        bellyColor.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 42, y: 52, width: 66, height: 42)).fill()
+        let bellyTop = bellyColor.blended(withFraction: 0.08, of: .white) ?? bellyColor
+        let bellyBottom = bellyColor.blended(withFraction: 0.10, of: .black) ?? bellyColor
+        let muzzlePath = NSBezierPath(ovalIn: NSRect(x: 42, y: 52, width: 66, height: 42))
+        drawGradientPath(muzzlePath, topColor: bellyTop, bottomColor: bellyBottom, angle: 90)
 
         // Eyes
         drawStandardEyes(leftEyeRect: NSRect(x: 34, y: 32, width: 35, height: 40), rightEyeRect: NSRect(x: 81, y: 32, width: 35, height: 40))
@@ -993,9 +1264,9 @@ final class PetView: NSView {
         accentColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 66, y: 62, width: 5, height: 4)).fill()
         NSBezierPath(ovalIn: NSRect(x: 79, y: 62, width: 5, height: 4)).fill()
-        NSColor.white.withAlphaComponent(0.32).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 68, y: 63, width: 2, height: 1.5)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 81, y: 63, width: 2, height: 1.5)).fill()
+        NSColor.white.withAlphaComponent(0.40).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 67.5, y: 62.5, width: 2, height: 1.5)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 80.5, y: 62.5, width: 2, height: 1.5)).fill()
 
         accentColor.setStroke()
         let smile = NSBezierPath(); smile.lineWidth = 2.2; smile.lineCapStyle = .round
@@ -1006,11 +1277,14 @@ final class PetView: NSView {
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - 45, y: 66, width: 17, height: 9)).fill()
         NSBezierPath(ovalIn: NSRect(x: bounds.midX + 28, y: 66, width: 17, height: 9)).fill()
 
-        // Hooves
+        // Cute Hooves
         let feetTuck = flightIntensity * 6.0
-        accentColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 48, y: 124 - feetTuck, width: 22, height: 14), xRadius: 5, yRadius: 5).fill()
-        NSBezierPath(roundedRect: NSRect(x: 80, y: 124 - feetTuck, width: 22, height: 14), xRadius: 5, yRadius: 5).fill()
+        let hoofTop = accentColor.blended(withFraction: 0.20, of: .white) ?? accentColor
+        let hoofBottom = accentColor.blended(withFraction: 0.20, of: .black) ?? accentColor
+        let leftHoof = NSBezierPath(roundedRect: NSRect(x: 48, y: 124 - feetTuck, width: 22, height: 14), xRadius: 5, yRadius: 5)
+        let rightHoof = NSBezierPath(roundedRect: NSRect(x: 80, y: 124 - feetTuck, width: 22, height: 14), xRadius: 5, yRadius: 5)
+        drawGradientPath(leftHoof, topColor: hoofTop, bottomColor: hoofBottom, angle: 90)
+        drawGradientPath(rightHoof, topColor: hoofTop, bottomColor: hoofBottom, angle: 90)
     }
 
     private func drawGiraffeEar(at point: NSPoint, angle: CGFloat, color: NSColor, isLeft: Bool) {
@@ -1021,9 +1295,10 @@ final class PetView: NSView {
         transform.rotate(byDegrees: angle)
         transform.translateX(by: -point.x, yBy: -point.y)
         transform.concat()
-        color.setFill()
+        let earTop = color.blended(withFraction: 0.25, of: .white) ?? color
+        let earBottom = color.blended(withFraction: 0.15, of: .black) ?? color
         let ear = NSBezierPath(ovalIn: NSRect(x: point.x - 14, y: point.y - 8, width: 28, height: 16))
-        ear.fill()
+        drawGradientPath(ear, topColor: earTop, bottomColor: earBottom, angle: 90)
         context.restoreGraphicsState()
     }
 
@@ -1069,6 +1344,7 @@ final class PetView: NSView {
         coil.curve(to: NSPoint(x: 110, y: y4), controlPoint1: NSPoint(x: 126, y: y4), controlPoint2: NSPoint(x: 25, y: y4 + 1))
         coil.curve(to: NSPoint(x: 48, y: y5), controlPoint1: NSPoint(x: 119, y: y5), controlPoint2: NSPoint(x: 80, y: y5 + 10))
         coil.stroke()
+
         let seg0 = NSBezierPath()
         seg0.move(to: NSPoint(x: 39, y: y0))
         seg0.curve(to: NSPoint(x: 111, y: y0), controlPoint1: NSPoint(x: 55, y: y0 - 13), controlPoint2: NSPoint(x: 95, y: y0 - 13))
@@ -1106,24 +1382,21 @@ final class PetView: NSView {
             seg.stroke()
         }
 
-        // Extra inner turns give the spring its playful, unmistakable swirl.
+        // Tubular Specular Highlight line on coils
+        for (_, seg) in segments.enumerated() {
+            seg.lineWidth = 2.8
+            seg.lineCapStyle = .round
+            NSColor.white.withAlphaComponent(0.35).setStroke()
+            seg.stroke()
+        }
+
+        // Extra inner turns give the spring its playful swirl.
         let iy0: CGFloat = 39
         let iy1: CGFloat = 55 + bounce * 0.25
         let iy2: CGFloat = 72 + bounce * 0.5
         let iy3: CGFloat = 89 + bounce * 0.75
         let iy4: CGFloat = 105 + bounce * 1.0
 
-        let innerCoils = NSBezierPath()
-        innerCoils.lineWidth = 4.2
-        innerCoils.lineCapStyle = .round
-        highlight.withAlphaComponent(0.58).setStroke()
-        innerCoils.move(to: NSPoint(x: 45, y: iy0))
-        innerCoils.curve(to: NSPoint(x: 105, y: iy0), controlPoint1: NSPoint(x: 59, y: iy0 - 10), controlPoint2: NSPoint(x: 91, y: iy0 - 10))
-        innerCoils.curve(to: NSPoint(x: 47, y: iy1), controlPoint1: NSPoint(x: 116, y: iy1 - 2), controlPoint2: NSPoint(x: 34, y: iy1))
-        innerCoils.curve(to: NSPoint(x: 104, y: iy2), controlPoint1: NSPoint(x: 116, y: iy2), controlPoint2: NSPoint(x: 34, y: iy2 + 1))
-        innerCoils.curve(to: NSPoint(x: 47, y: iy3), controlPoint1: NSPoint(x: 116, y: iy3), controlPoint2: NSPoint(x: 34, y: iy3 + 1))
-        innerCoils.curve(to: NSPoint(x: 101, y: iy4), controlPoint1: NSPoint(x: 116, y: iy4), controlPoint2: NSPoint(x: 69, y: iy4 + 10))
-        innerCoils.stroke()
         let iseg0 = NSBezierPath()
         iseg0.move(to: NSPoint(x: 45, y: iy0))
         iseg0.curve(to: NSPoint(x: 105, y: iy0), controlPoint1: NSPoint(x: 59, y: iy0 - 10), controlPoint2: NSPoint(x: 91, y: iy0 - 10))
@@ -1156,8 +1429,7 @@ final class PetView: NSView {
             iseg.stroke()
         }
 
-        // Curled tips peek out from either side and wobble with the vertical bounce.
-        accentColor.withAlphaComponent(0.7).setStroke()
+        // Curled tips peek out from either side
         if isRainbow {
             rainbowCoilColors[0].withAlphaComponent(0.85).setStroke()
         } else {
@@ -1170,10 +1442,13 @@ final class PetView: NSView {
         curls.appendArc(withCenter: NSPoint(x: 122, y: 37 + bounce * 0.1), radius: 8, startAngle: 115, endAngle: 300)
         curls.stroke()
 
-        // A soft face plate keeps the eyes readable against the winding spring.
+        // Soft face plate
         let faceYOffset = bounce * 0.45
-        bellyColor.withAlphaComponent(0.96).setFill()
-        NSBezierPath(roundedRect: NSRect(x: 29, y: 27 + faceYOffset, width: 92, height: 67), xRadius: 30, yRadius: 30).fill()
+        let facePath = NSBezierPath(roundedRect: NSRect(x: 29, y: 27 + faceYOffset, width: 92, height: 67), xRadius: 30, yRadius: 30)
+        let faceTop = bellyColor.blended(withFraction: 0.05, of: .white) ?? bellyColor
+        let faceBottom = bellyColor.blended(withFraction: 0.08, of: .black) ?? bellyColor
+        drawGradientPath(facePath, topColor: faceTop, bottomColor: faceBottom, angle: 90)
+
         highlight.withAlphaComponent(0.42).setStroke()
         let shine = NSBezierPath(); shine.lineWidth = 3; shine.lineCapStyle = .round
         shine.move(to: NSPoint(x: 42, y: 111 + bounce * 1.0))
@@ -1190,7 +1465,7 @@ final class PetView: NSView {
             drawStandardEyes(leftEyeRect: leftEyeRect, rightEyeRect: rightEyeRect)
         }
 
-        // Tiny center nub and a happy smile.
+        // Tiny center nub and a happy smile
         accentColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 70, y: 72 + faceYOffset, width: 10, height: 7)).fill()
         accentColor.setStroke()
@@ -1204,9 +1479,6 @@ final class PetView: NSView {
         NSBezierPath(ovalIn: NSRect(x: 104, y: 76 + faceYOffset, width: 18, height: 10)).fill()
 
         let feetTuck = flightIntensity * 6.0
-        shadow.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 38, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 86, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
         if isRainbow {
             rainbowCoilColors[4].setFill()
             NSBezierPath(ovalIn: NSRect(x: 38, y: 119 + bounce * 1.1 - feetTuck, width: 26, height: 17)).fill()
@@ -1362,29 +1634,52 @@ final class PetView: NSView {
 
     private func drawStandardEyes(leftEyeRect: NSRect, rightEyeRect: NSRect) {
         if eyesAreOpen {
+            // Soft eye socket background shadow
             NSColor(calibratedRed: 0.05, green: 0.12, blue: 0.28, alpha: 0.48).setStroke()
             let eyeOutline = NSBezierPath(); eyeOutline.lineWidth = 1.8
             eyeOutline.appendOval(in: leftEyeRect.insetBy(dx: 0.9, dy: 0.9))
             eyeOutline.appendOval(in: rightEyeRect.insetBy(dx: 0.9, dy: 0.9)); eyeOutline.stroke()
-            NSColor(calibratedWhite: 1, alpha: 1).setFill()
-            NSBezierPath(ovalIn: leftEyeRect).fill()
-            NSBezierPath(ovalIn: rightEyeRect).fill()
 
-            NSColor(calibratedRed: 0.03, green: 0.12, blue: 0.38, alpha: 1).setFill()
+            // Eyeball Base Fill (soft gradient from bright white down)
+            let eyeBaseTop = NSColor(white: 1.0, alpha: 1.0)
+            let eyeBaseBottom = NSColor(white: 0.92, alpha: 1.0)
+            drawGradientPath(NSBezierPath(ovalIn: leftEyeRect), topColor: eyeBaseTop, bottomColor: eyeBaseBottom, angle: 90)
+            drawGradientPath(NSBezierPath(ovalIn: rightEyeRect), topColor: eyeBaseTop, bottomColor: eyeBaseBottom, angle: 90)
+
+            // Upper Eyelid Soft Shadow
+            NSColor(white: 0.0, alpha: 0.08).setFill()
+            NSBezierPath(ovalIn: NSRect(x: leftEyeRect.minX, y: leftEyeRect.minY, width: leftEyeRect.width, height: leftEyeRect.height * 0.35)).fill()
+            NSBezierPath(ovalIn: NSRect(x: rightEyeRect.minX, y: rightEyeRect.minY, width: rightEyeRect.width, height: rightEyeRect.height * 0.35)).fill()
+
+            // Rich Pupil Fill with Iris Gradient Depth
+            let pupilTop = NSColor(calibratedRed: 0.02, green: 0.08, blue: 0.26, alpha: 1.0)
+            let pupilBottom = NSColor(calibratedRed: 0.08, green: 0.20, blue: 0.52, alpha: 1.0)
             let pw = leftEyeRect.width * 0.64
             let ph = leftEyeRect.height * 0.68
-            NSBezierPath(ovalIn: NSRect(x: leftEyeRect.minX + 7 + pupilOffset.x, y: leftEyeRect.minY + 8 + pupilOffset.y, width: pw, height: ph)).fill()
-            NSBezierPath(ovalIn: NSRect(x: rightEyeRect.minX + 7 + pupilOffset.x, y: rightEyeRect.minY + 8 + pupilOffset.y, width: pw, height: ph)).fill()
 
+            let leftPupilRect = NSRect(x: leftEyeRect.minX + 7 + pupilOffset.x, y: leftEyeRect.minY + 8 + pupilOffset.y, width: pw, height: ph)
+            let rightPupilRect = NSRect(x: rightEyeRect.minX + 7 + pupilOffset.x, y: rightEyeRect.minY + 8 + pupilOffset.y, width: pw, height: ph)
+            drawGradientPath(NSBezierPath(ovalIn: leftPupilRect), topColor: pupilTop, bottomColor: pupilBottom, angle: 90)
+            drawGradientPath(NSBezierPath(ovalIn: rightPupilRect), topColor: pupilTop, bottomColor: pupilBottom, angle: 90)
+
+            // Eye Highlight Arc / Gradient
             themePalette.eyeHighlightColor.nsColor.setFill()
             NSBezierPath(ovalIn: NSRect(x: leftEyeRect.minX + 9 + pupilOffset.x, y: leftEyeRect.maxY - 20 + pupilOffset.y, width: pw * 0.8, height: ph * 0.45)).fill()
             NSBezierPath(ovalIn: NSRect(x: rightEyeRect.minX + 9 + pupilOffset.x, y: rightEyeRect.maxY - 20 + pupilOffset.y, width: pw * 0.8, height: ph * 0.45)).fill()
 
+            // Primary & Secondary Catchlight Sparkles (anime/Disney style sparkle eyes)
             NSColor.white.setFill()
             NSBezierPath(ovalIn: NSRect(x: leftEyeRect.minX + 11 + pupilOffset.x, y: leftEyeRect.minY + 10 + pupilOffset.y, width: pw * 0.45, height: ph * 0.42)).fill()
             NSBezierPath(ovalIn: NSRect(x: rightEyeRect.minX + 11 + pupilOffset.x, y: rightEyeRect.minY + 10 + pupilOffset.y, width: pw * 0.45, height: ph * 0.42)).fill()
+
+            // Secondary cute catchlight dot
             NSBezierPath(ovalIn: NSRect(x: leftEyeRect.minX + 22 + pupilOffset.x, y: leftEyeRect.maxY - 19 + pupilOffset.y, width: 5, height: 6)).fill()
             NSBezierPath(ovalIn: NSRect(x: rightEyeRect.minX + 22 + pupilOffset.x, y: rightEyeRect.maxY - 19 + pupilOffset.y, width: 5, height: 6)).fill()
+
+            // Extra micro sparkle dot bottom right
+            NSColor.white.withAlphaComponent(0.75).setFill()
+            NSBezierPath(ovalIn: NSRect(x: leftEyeRect.minX + 24 + pupilOffset.x, y: leftEyeRect.minY + 14 + pupilOffset.y, width: 3.5, height: 3.5)).fill()
+            NSBezierPath(ovalIn: NSRect(x: rightEyeRect.minX + 24 + pupilOffset.x, y: rightEyeRect.minY + 14 + pupilOffset.y, width: 3.5, height: 3.5)).fill()
         } else {
             NSColor(calibratedRed: 0.12, green: 0.20, blue: 0.55, alpha: 1).setStroke()
             let blink = NSBezierPath(); blink.lineWidth = 3; blink.lineCapStyle = .round
@@ -1400,17 +1695,17 @@ final class PetView: NSView {
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
         let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.20)
-        shadow.shadowBlurRadius = 7
-        shadow.shadowOffset = NSSize(width: 0, height: -2)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.24)
+        shadow.shadowBlurRadius = 8
+        shadow.shadowOffset = NSSize(width: 0, height: -3)
         shadow.set()
-        NSColor.black.withAlphaComponent(0.10).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 28, y: 127, width: 94, height: 13)).fill()
+        NSColor.black.withAlphaComponent(0.12).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 26, y: 126, width: 98, height: 14)).fill()
         context.restoreGraphicsState()
     }
 
     private func drawRimHighlight() {
-        NSColor.white.withAlphaComponent(0.12).setFill()
+        NSColor.white.withAlphaComponent(0.18).setFill()
         let highlight = NSBezierPath()
         highlight.move(to: NSPoint(x: 42, y: 24))
         highlight.curve(to: NSPoint(x: 108, y: 24), controlPoint1: NSPoint(x: 58, y: 17), controlPoint2: NSPoint(x: 92, y: 17))
@@ -1457,7 +1752,7 @@ final class PetView: NSView {
         sparkle.move(to: NSPoint(x: point.x - 6, y: point.y)); sparkle.line(to: NSPoint(x: point.x + 6, y: point.y)); sparkle.stroke()
     }
 
-    private func drawWing(in frame: NSRect, angle: CGFloat, isLeft: Bool) {
+    private func drawWing(in frame: NSRect, angle: CGFloat, isLeft: Bool, bodyColor: NSColor = .systemBlue) {
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
         let anchor = isLeft ? NSPoint(x: frame.maxX - 4, y: frame.minY + 12) : NSPoint(x: frame.minX + 4, y: frame.minY + 12)
@@ -1466,7 +1761,18 @@ final class PetView: NSView {
         transform.rotate(byDegrees: angle)
         transform.translateX(by: -anchor.x, yBy: -anchor.y)
         transform.concat()
-        NSBezierPath(ovalIn: frame).fill()
+
+        let wingTop = bodyColor.blended(withFraction: 0.35, of: .white) ?? bodyColor
+        let wingBottom = bodyColor.blended(withFraction: 0.15, of: .black) ?? bodyColor
+
+        let wingPath = NSBezierPath(ovalIn: frame)
+        drawGradientPath(wingPath, topColor: wingTop, bottomColor: wingBottom, angle: 90)
+
+        let innerFrame = frame.insetBy(dx: 4, dy: 6)
+        let innerWing = NSBezierPath(ovalIn: innerFrame)
+        wingTop.withAlphaComponent(0.45).setFill()
+        innerWing.fill()
+
         context.restoreGraphicsState()
     }
 

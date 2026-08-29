@@ -536,7 +536,7 @@ public struct ModifierCombination: OptionSet, Hashable, Sendable {
     }
 }
 
-public enum PetState: String, Sendable { case idle, sleeping, noticingDrag, dragAccepted, dragRejected, waitingForDrop, processing, success, failure }
+public enum PetState: String, Sendable { case idle, sleeping, noticingDrag, dragAccepted, dragRejected, waitingForDrop, processing, success, failure, disco }
 
 public enum MinimizeDestination: String, Codable, CaseIterable, Sendable {
     case dock
@@ -978,85 +978,202 @@ public enum FileTypeCategory: String, Sendable, CaseIterable {
     case files = "Files"
 }
 
-public enum FileTypeOrganizer {
-    private static let imageExtensions: Set<String> = [
-        "png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "heif", "tiff", "tif",
-        "bmp", "ico", "psd", "ai", "raw", "cr2", "nef", "eps", "icns", "avif"
-    ]
+public struct InboxSubfolderRule: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var categoryName: String
+    public var folderName: String
+    public var extensions: [String]
+    public var regexPattern: String?
+    public var isEnabled: Bool
 
-    private static let documentExtensions: Set<String> = [
-        "pdf", "doc", "docx", "txt", "rtf", "pages", "numbers", "key", "keynote",
-        "odt", "ods", "odp", "xls", "xlsx", "csv", "tsv", "ppt", "pptx", "epub",
-        "mobi", "djvu", "tex"
-    ]
-
-    private static let audioExtensions: Set<String> = [
-        "mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "aiff", "aif", "wma",
-        "alac", "opus", "mid", "midi"
-    ]
-
-    private static let videoExtensions: Set<String> = [
-        "mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "flv", "mpg", "mpeg",
-        "3gp", "ts"
-    ]
-
-    private static let archiveExtensions: Set<String> = [
-        "zip", "tar", "gz", "tgz", "dmg", "pkg", "7z", "rar", "iso", "bz2", "xz",
-        "z", "cab"
-    ]
-
-    private static let codeExtensions: Set<String> = [
-        "swift", "py", "js", "jsx", "ts", "tsx", "html", "htm", "css", "scss",
-        "sass", "less", "json", "c", "h", "cpp", "hpp", "cc", "rs", "go", "java",
-        "kt", "kts", "rb", "php", "sh", "zsh", "bash", "yaml", "yml", "xml",
-        "sql", "md", "markdown", "toml", "env", "proto", "graphql"
-    ]
-
-    public static func category(for url: URL) -> FileTypeCategory {
-        let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-        let ext = url.pathExtension.lowercased()
-
-        if ext == "app" {
-            return .applications
-        }
-        if isDir {
-            return .folders
-        }
-
-        if imageExtensions.contains(ext) {
-            return .images
-        }
-        if documentExtensions.contains(ext) {
-            return .documents
-        }
-        if audioExtensions.contains(ext) {
-            return .audio
-        }
-        if videoExtensions.contains(ext) {
-            return .videos
-        }
-        if archiveExtensions.contains(ext) {
-            return .archives
-        }
-        if codeExtensions.contains(ext) {
-            return .code
-        }
-
-        let extType = UTType(filenameExtension: ext)
-        if let type = extType {
-            if type.conforms(to: .image) { return .images }
-            if type.conforms(to: .audio) { return .audio }
-            if type.conforms(to: .movie) || type.conforms(to: .video) { return .videos }
-            if type.conforms(to: .archive) || type.conforms(to: .diskImage) { return .archives }
-            if type.conforms(to: .sourceCode) || type.conforms(to: .script) { return .code }
-            if type.conforms(to: .pdf) || type.conforms(to: .text) || type.conforms(to: .spreadsheet) || type.conforms(to: .presentation) { return .documents }
-        }
-
-        return .files
+    public init(
+        id: String = UUID().uuidString,
+        categoryName: String,
+        folderName: String,
+        extensions: [String] = [],
+        regexPattern: String? = nil,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.categoryName = categoryName
+        self.folderName = folderName
+        self.extensions = extensions
+        self.regexPattern = regexPattern
+        self.isEnabled = isEnabled
     }
 
-    public static func subfolderName(for url: URL) -> String {
-        category(for: url).rawValue
+    public var extensionsString: String {
+        get { extensions.joined(separator: ", ") }
+        set {
+            extensions = newValue
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased() }
+                .filter { !$0.isEmpty }
+        }
+    }
+
+    public func matches(url: URL) -> Bool {
+        guard isEnabled else { return false }
+        let filename = url.lastPathComponent
+        let ext = url.pathExtension.lowercased()
+
+        if let pattern = regexPattern?.trimmingCharacters(in: .whitespacesAndNewlines), !pattern.isEmpty {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                let range = NSRange(filename.startIndex..<filename.endIndex, in: filename)
+                if regex.firstMatch(in: filename, options: [], range: range) != nil {
+                    if !extensions.isEmpty {
+                        return extensions.contains(ext)
+                    }
+                    return true
+                }
+            }
+            return false
+        }
+
+        if !extensions.isEmpty {
+            return extensions.contains(ext)
+        }
+
+        return false
+    }
+
+    public func matches(text: String) -> Bool {
+        guard isEnabled else { return false }
+        if let pattern = regexPattern?.trimmingCharacters(in: .whitespacesAndNewlines), !pattern.isEmpty {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                let range = NSRange(text.startIndex..<text.endIndex, in: text)
+                return regex.firstMatch(in: text, options: [], range: range) != nil
+            }
+        }
+        return false
+    }
+
+    public static let defaultRules: [InboxSubfolderRule] = [
+        InboxSubfolderRule(
+            id: "images",
+            categoryName: "Images",
+            folderName: "Images",
+            extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "heif", "tiff", "tif", "bmp", "ico", "psd", "ai", "raw", "cr2", "nef", "eps", "icns", "avif"]
+        ),
+        InboxSubfolderRule(
+            id: "documents",
+            categoryName: "Documents",
+            folderName: "Documents",
+            extensions: ["pdf", "doc", "docx", "txt", "rtf", "pages", "numbers", "key", "keynote", "odt", "ods", "odp", "xls", "xlsx", "csv", "tsv", "ppt", "pptx", "epub", "mobi", "djvu", "tex"]
+        ),
+        InboxSubfolderRule(
+            id: "audio",
+            categoryName: "Audio",
+            folderName: "Audio",
+            extensions: ["mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "aiff", "aif", "wma", "alac", "opus", "mid", "midi"]
+        ),
+        InboxSubfolderRule(
+            id: "videos",
+            categoryName: "Videos",
+            folderName: "Videos",
+            extensions: ["mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "flv", "mpg", "mpeg", "3gp", "ts"]
+        ),
+        InboxSubfolderRule(
+            id: "archives",
+            categoryName: "Archives",
+            folderName: "Archives",
+            extensions: ["zip", "tar", "gz", "tgz", "dmg", "pkg", "7z", "rar", "iso", "bz2", "xz", "z", "cab"]
+        ),
+        InboxSubfolderRule(
+            id: "code",
+            categoryName: "Code & Scripts",
+            folderName: "Code",
+            extensions: ["swift", "py", "js", "jsx", "ts", "tsx", "html", "htm", "css", "scss", "sass", "less", "json", "c", "h", "cpp", "hpp", "cc", "rs", "go", "java", "kt", "kts", "rb", "php", "sh", "zsh", "bash", "yaml", "yml", "xml", "sql", "md", "markdown", "toml", "env", "proto", "graphql"]
+        ),
+        InboxSubfolderRule(
+            id: "applications",
+            categoryName: "Applications",
+            folderName: "Applications",
+            extensions: ["app"]
+        ),
+        InboxSubfolderRule(
+            id: "folders",
+            categoryName: "Directories & Folders",
+            folderName: "Folders",
+            extensions: []
+        ),
+        InboxSubfolderRule(
+            id: "notes",
+            categoryName: "Text Notes & Snippets",
+            folderName: "Notes",
+            extensions: ["text", "snippet"]
+        ),
+        InboxSubfolderRule(
+            id: "links",
+            categoryName: "Web Links & URLs",
+            folderName: "Links",
+            extensions: ["url", "webloc", "http", "https"]
+        )
+    ]
+}
+
+public enum FileTypeOrganizer {
+    public static func subfolderName(for url: URL, customRules: [InboxSubfolderRule]? = nil) -> String {
+        let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        let ext = url.pathExtension.lowercased()
+        let rules = customRules ?? InboxSubfolderRule.defaultRules
+
+        // 1. Evaluate custom / regex rules in order
+        for rule in rules where rule.isEnabled {
+            if rule.matches(url: url) {
+                return rule.folderName
+            }
+        }
+
+        // 2. Special built-in checks
+        if ext == "app" {
+            if let appRule = rules.first(where: { $0.id == "applications" && $0.isEnabled }) {
+                return appRule.folderName
+            }
+            return "Applications"
+        }
+
+        if isDir {
+            if let folderRule = rules.first(where: { $0.id == "folders" && $0.isEnabled }) {
+                return folderRule.folderName
+            }
+            return "Folders"
+        }
+
+        // 3. Fallback to UTType conformance
+        let extType = UTType(filenameExtension: ext)
+        if let type = extType {
+            if type.conforms(to: .image), let r = rules.first(where: { $0.id == "images" && $0.isEnabled }) { return r.folderName }
+            if type.conforms(to: .audio), let r = rules.first(where: { $0.id == "audio" && $0.isEnabled }) { return r.folderName }
+            if (type.conforms(to: .movie) || type.conforms(to: .video)), let r = rules.first(where: { $0.id == "videos" && $0.isEnabled }) { return r.folderName }
+            if (type.conforms(to: .archive) || type.conforms(to: .diskImage)), let r = rules.first(where: { $0.id == "archives" && $0.isEnabled }) { return r.folderName }
+            if (type.conforms(to: .sourceCode) || type.conforms(to: .script)), let r = rules.first(where: { $0.id == "code" && $0.isEnabled }) { return r.folderName }
+            if (type.conforms(to: .pdf) || type.conforms(to: .text) || type.conforms(to: .spreadsheet) || type.conforms(to: .presentation)), let r = rules.first(where: { $0.id == "documents" && $0.isEnabled }) { return r.folderName }
+        }
+
+        return "Files"
+    }
+
+    public static func textSubfolderName(text: String, isURL: Bool, customRules: [InboxSubfolderRule]? = nil) -> String {
+        let rules = customRules ?? InboxSubfolderRule.defaultRules
+
+        for rule in rules where rule.isEnabled {
+            if rule.matches(text: text) {
+                return rule.folderName
+            }
+        }
+
+        if isURL {
+            if let linkRule = rules.first(where: { $0.id == "links" && $0.isEnabled }) {
+                return linkRule.folderName
+            }
+            return "Links"
+        } else {
+            if let noteRule = rules.first(where: { $0.id == "notes" && $0.isEnabled }) {
+                return noteRule.folderName
+            }
+            return "Notes"
+        }
     }
 }
 
@@ -1064,10 +1181,12 @@ public struct ActionContext: Sendable {
     public let input: DropInput
     public let destinationFolder: URL?
     public let organizeByFileType: Bool
-    public init(input: DropInput, destinationFolder: URL? = nil, organizeByFileType: Bool = false) {
+    public let subfolderRules: [InboxSubfolderRule]?
+    public init(input: DropInput, destinationFolder: URL? = nil, organizeByFileType: Bool = false, subfolderRules: [InboxSubfolderRule]? = nil) {
         self.input = input
         self.destinationFolder = destinationFolder
         self.organizeByFileType = organizeByFileType
+        self.subfolderRules = subfolderRules
     }
 }
 
@@ -1268,6 +1387,22 @@ public enum AppChangelog {
                     description: "All animal choices, appearance palettes, snapping rules, updates, and macros now live neatly inside Settings."
                 )
             ]
+        ),
+        VersionRelease(
+            version: "a0.50",
+            releaseTitle: "HD 3D Sprites & Refined Settings",
+            features: [
+                FeatureItem(
+                    iconName: "sparkles",
+                    title: "HD 3D Gradient Sprites",
+                    description: "All 6 animal companions upgraded with 3D gradient lighting, specular highlights, anime sparkle eyes, and unique physical accents."
+                ),
+                FeatureItem(
+                    iconName: "rectangle.stack.fill",
+                    title: "Full Name Animal & Theme Selector",
+                    description: "Replaced segmented bars with native vertical dropdown pickers, showing the full names for all pets and themes without truncation."
+                )
+            ]
         )
     ]
 }
@@ -1325,6 +1460,7 @@ public struct AppSettings: Codable, Sendable {
     public var dragMacros: [DragMacroBinding] = []
     public var destinationFolderPath: String? = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
     public var organizeInboxByFileType: Bool = true
+    public var inboxSubfolderRules: [InboxSubfolderRule] = InboxSubfolderRule.defaultRules
     public var minimizeDestination: MinimizeDestination = .menubar
     public var themePreset: PetThemePreset = .classic
     public var customPalette: PetThemePalette = AnimalKind.bird.defaultPalette(for: .classic)
@@ -1349,7 +1485,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, bindings
     }
 
     public init() {}
@@ -1365,6 +1501,7 @@ public struct AppSettings: Codable, Sendable {
         dragMacros = try values.decodeIfPresent([DragMacroBinding].self, forKey: .dragMacros) ?? []
         destinationFolderPath = try values.decodeIfPresent(String.self, forKey: .destinationFolderPath) ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.appendingPathComponent("Animal Buddy Inbox", isDirectory: true).path
         organizeInboxByFileType = try values.decodeIfPresent(Bool.self, forKey: .organizeInboxByFileType) ?? true
+        inboxSubfolderRules = try values.decodeIfPresent([InboxSubfolderRule].self, forKey: .inboxSubfolderRules) ?? InboxSubfolderRule.defaultRules
         minimizeDestination = try values.decodeIfPresent(MinimizeDestination.self, forKey: .minimizeDestination) ?? .menubar
         themePreset = try values.decodeIfPresent(PetThemePreset.self, forKey: .themePreset) ?? .classic
         customPalette = try values.decodeIfPresent(PetThemePalette.self, forKey: .customPalette) ?? AnimalKind.bird.defaultPalette(for: .classic)

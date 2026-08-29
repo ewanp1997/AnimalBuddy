@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, Bool, Bool, MinimizeDestination) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onShowTipPreview: (() -> Void)?
@@ -22,16 +22,17 @@ import UniformTypeIdentifiers
     private var helpfulTipsEnabled: Bool
     private var destinationFolderPath: String?
     private var organizeInboxByFileType: Bool
+    private var inboxSubfolderRules: [InboxSubfolderRule]
+    private var subfolderSheetController: SubfolderRulesSheetController?
     private var alwaysOnTop: Bool
     private var snappingEnabled: Bool
     private var minimizeDestination: MinimizeDestination
-    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.43")
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.50")
     private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
 
-    private let animalSegment = NSSegmentedControl(labels: AnimalKind.allCases.map { $0.displayName }, trackingMode: .selectOne, target: nil, action: nil)
-    private let themeSegment = NSSegmentedControl(labels: ["Classic", "Dark", "Light", "Custom", "Rainbow"], trackingMode: .selectOne, target: nil, action: nil)
+    private let animalPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let themePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themeDescription = NSTextField(wrappingLabelWithString: "")
-
     private let bodyLabel = NSTextField(labelWithString: "Body & Feathers")
     private let bellyLabel = NSTextField(labelWithString: "Belly & Face")
     private let beakLabel = NSTextField(labelWithString: "Beak & Feet")
@@ -86,6 +87,7 @@ import UniformTypeIdentifiers
         helpfulTipsEnabled = settings.helpfulTipsEnabled
         destinationFolderPath = settings.destinationFolderPath
         organizeInboxByFileType = settings.organizeInboxByFileType
+        inboxSubfolderRules = settings.inboxSubfolderRules
         alwaysOnTop = settings.alwaysOnTop
         snappingEnabled = settings.snappingEnabled
         minimizeDestination = settings.minimizeDestination
@@ -152,10 +154,9 @@ import UniformTypeIdentifiers
         ])
 
         switchTab(to: initialTab)
-        updateThemeSegmentLabels()
+        updateThemePopUpItems()
         updateColorLabels()
         updateColorWellsFromActivePalette()
-        updateThemeDescription()
         updateMacroTabLabels()
         updateFolderPathDisplay()
     }
@@ -316,30 +317,26 @@ import UniformTypeIdentifiers
         let animalTitle = NSTextField(labelWithString: "Animal Choice")
         animalTitle.font = .systemFont(ofSize: 15, weight: .semibold)
 
-        animalSegment.target = self
-        animalSegment.action = #selector(animalSegmentChanged)
-        animalSegment.segmentStyle = .texturedRounded
-        animalSegment.selectedSegment = AnimalKind.allCases.firstIndex(of: selectedAnimal) ?? 0
+        animalPopUp.removeAllItems()
+        animalPopUp.addItems(withTitles: AnimalKind.allCases.map { $0.displayName })
+        animalPopUp.target = self
+        animalPopUp.action = #selector(animalPopUpChanged)
+        if let idx = AnimalKind.allCases.firstIndex(of: selectedAnimal) {
+            animalPopUp.selectItem(at: idx)
+        }
 
         let themeTitle = NSTextField(labelWithString: "Theme Preset")
         themeTitle.font = .systemFont(ofSize: 15, weight: .semibold)
 
-        themeSegment.target = self
-        themeSegment.action = #selector(themeSegmentChanged)
-        themeSegment.segmentStyle = .texturedRounded
-        switch selectedTheme {
-        case .classic: themeSegment.selectedSegment = 0
-        case .dark: themeSegment.selectedSegment = 1
-        case .light: themeSegment.selectedSegment = 2
-        case .custom: themeSegment.selectedSegment = 3
-        case .rainbow: themeSegment.selectedSegment = 4
-        }
+        themePopUp.target = self
+        themePopUp.action = #selector(themePopUpChanged)
+        updateThemePopUpItems()
 
         themeDescription.font = .systemFont(ofSize: 12)
         themeDescription.textColor = .secondaryLabelColor
         themeDescription.maximumNumberOfLines = 3
 
-        let stack = NSStackView(views: [animalTitle, animalSegment, themeTitle, themeSegment, themeDescription])
+        let stack = NSStackView(views: [animalTitle, animalPopUp, themeTitle, themePopUp, themeDescription])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -348,12 +345,12 @@ import UniformTypeIdentifiers
         stack.layer?.cornerRadius = 12
         stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 
-        animalSegment.translatesAutoresizingMaskIntoConstraints = false
-        themeSegment.translatesAutoresizingMaskIntoConstraints = false
+        animalPopUp.translatesAutoresizingMaskIntoConstraints = false
+        themePopUp.translatesAutoresizingMaskIntoConstraints = false
         themeDescription.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            animalSegment.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            themeSegment.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            animalPopUp.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            themePopUp.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             themeDescription.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
         return stack
@@ -524,7 +521,11 @@ import UniformTypeIdentifiers
         organizeDesc.font = .systemFont(ofSize: 11)
         organizeDesc.textColor = .secondaryLabelColor
 
-        let stack = NSStackView(views: [title, desc, folderPathLabel, btnRow, organizeToggle, organizeDesc])
+        let customizeRulesBtn = NSButton(title: "⚙️ Customize Subfolder Types & Regex Rules…", target: self, action: #selector(customizeRulesPressed))
+        customizeRulesBtn.bezelStyle = .rounded
+        customizeRulesBtn.font = .systemFont(ofSize: 12, weight: .medium)
+
+        let stack = NSStackView(views: [title, desc, folderPathLabel, btnRow, organizeToggle, organizeDesc, customizeRulesBtn])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -538,12 +539,14 @@ import UniformTypeIdentifiers
         btnRow.translatesAutoresizingMaskIntoConstraints = false
         organizeToggle.translatesAutoresizingMaskIntoConstraints = false
         organizeDesc.translatesAutoresizingMaskIntoConstraints = false
+        customizeRulesBtn.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             folderPathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             btnRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
             organizeToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            organizeDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+            organizeDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            customizeRulesBtn.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor, constant: -36)
         ])
         return stack
     }
@@ -721,6 +724,18 @@ import UniformTypeIdentifiers
         organizeInboxByFileType = (sender.state == .on)
     }
 
+    @objc private func customizeRulesPressed() {
+        guard let window else { return }
+        let sheet = SubfolderRulesSheetController(rules: inboxSubfolderRules)
+        sheet.onSave = { [weak self] updated in
+            self?.inboxSubfolderRules = updated
+        }
+        self.subfolderSheetController = sheet
+        window.beginSheet(sheet.window!) { [weak self] _ in
+            self?.subfolderSheetController = nil
+        }
+    }
+
     @objc private func toggleAlwaysOnTop(_ sender: NSButton) {
         alwaysOnTop = (sender.state == .on)
     }
@@ -774,19 +789,21 @@ import UniformTypeIdentifiers
         }
     }
 
-    @objc private func animalSegmentChanged() {
-        let idx = animalSegment.selectedSegment
+    @objc private func animalPopUpChanged() {
+        let idx = animalPopUp.indexOfSelectedItem
         guard idx >= 0 && idx < AnimalKind.allCases.count else { return }
         selectedAnimal = AnimalKind.allCases[idx]
         googlyEyesRow?.isHidden = (selectedAnimal != .slinky)
-        updateThemeSegmentLabels()
+        updateThemePopUpItems()
         updateColorLabels()
         updateColorWellsFromActivePalette()
         updateThemeDescription()
         updateMacroTabLabels()
         if !selectedAnimal.themePresets.contains(selectedTheme) {
             selectedTheme = .classic
-            themeSegment.selectedSegment = 0
+            if let classicIdx = selectedAnimal.themePresets.firstIndex(of: .classic) {
+                themePopUp.selectItem(at: classicIdx)
+            }
         }
         previewPetView.animalKind = selectedAnimal
         previewPetView.themePreset = selectedTheme
@@ -795,10 +812,11 @@ import UniformTypeIdentifiers
         onThemeChanged?(selectedAnimal, selectedTheme, customPalette, googlyEyesEnabled)
     }
 
-    @objc private func themeSegmentChanged() {
+    @objc private func themePopUpChanged() {
         let presets = selectedAnimal.themePresets
-        guard themeSegment.selectedSegment >= 0, themeSegment.selectedSegment < presets.count else { return }
-        selectedTheme = presets[themeSegment.selectedSegment]
+        let idx = themePopUp.indexOfSelectedItem
+        guard idx >= 0 && idx < presets.count else { return }
+        selectedTheme = presets[idx]
         updateColorWellsFromActivePalette()
         updateThemeDescription()
         previewPetView.animalKind = selectedAnimal
@@ -810,7 +828,7 @@ import UniformTypeIdentifiers
 
     @objc private func colorWellChanged(_ sender: NSColorWell) {
         selectedTheme = .custom
-        themeSegment.selectedSegment = 3
+        updateThemePopUpItems()
         customPalette = PetThemePalette(
             bodyColor: CodableColor(nsColor: bodyColorWell.color),
             bellyColor: CodableColor(nsColor: bellyColorWell.color),
@@ -827,7 +845,7 @@ import UniformTypeIdentifiers
 
     @objc private func resetColorsPressed() {
         selectedTheme = .classic
-        themeSegment.selectedSegment = 0
+        updateThemePopUpItems()
         customPalette = selectedAnimal.defaultPalette(for: .classic)
         updateColorWellsFromActivePalette()
         updateThemeDescription()
@@ -883,12 +901,13 @@ import UniformTypeIdentifiers
                 let data = try Data(contentsOf: url)
                 let (animal, name, importedPalette) = try ThemeDocument.decode(from: data)
                 self.selectedAnimal = animal
-                self.animalSegment.selectedSegment = AnimalKind.allCases.firstIndex(of: animal) ?? 0
+                if let animalIdx = AnimalKind.allCases.firstIndex(of: animal) {
+                    self.animalPopUp.selectItem(at: animalIdx)
+                }
                 self.googlyEyesRow?.isHidden = (animal != .slinky)
                 self.customPalette = importedPalette
                 self.selectedTheme = .custom
-                self.themeSegment.selectedSegment = 3
-                self.updateThemeSegmentLabels()
+                self.updateThemePopUpItems()
                 self.updateColorLabels()
                 self.updateColorWellsFromActivePalette()
                 self.updateThemeDescription()
@@ -914,12 +933,14 @@ import UniformTypeIdentifiers
         selectedTheme == .custom ? customPalette : selectedAnimal.defaultPalette(for: selectedTheme)
     }
 
-    private func updateThemeSegmentLabels() {
+    private func updateThemePopUpItems() {
+        themePopUp.removeAllItems()
         let presets = selectedAnimal.themePresets
-        for (i, p) in presets.enumerated() {
-            if i < themeSegment.segmentCount {
-                themeSegment.setLabel(p.displayName(for: selectedAnimal), forSegment: i)
-            }
+        themePopUp.addItems(withTitles: presets.map { $0.displayName(for: selectedAnimal) })
+        if let idx = presets.firstIndex(of: selectedTheme) {
+            themePopUp.selectItem(at: idx)
+        } else if !presets.isEmpty {
+            themePopUp.selectItem(at: 0)
         }
     }
 
@@ -954,13 +975,13 @@ import UniformTypeIdentifiers
             bellyLabel.stringValue = "Muzzle & Belly"
             beakLabel.stringValue = "Spots & Horns"
             blushLabel.stringValue = "Blush Cheeks"
-            eyeLabel.stringValue = "Eye Iris"
-        case .slinky:
-            bodyLabel.stringValue = "Coils & Spring"
-            bellyLabel.stringValue = "Face Plate"
-            beakLabel.stringValue = "Nub & Feet"
-            blushLabel.stringValue = "Blush Cheeks"
             eyeLabel.stringValue = "Eye Glow"
+        case .slinky:
+            bodyLabel.stringValue = "Front Coil & Base"
+            bellyLabel.stringValue = "Middle Coil Spring"
+            beakLabel.stringValue = "Rear Coil Spring"
+            blushLabel.stringValue = "Cheek Accent Rings"
+            eyeLabel.stringValue = "Eye Pupils & Metal"
         }
     }
 
@@ -1179,6 +1200,7 @@ import UniformTypeIdentifiers
             helpfulTipsEnabled,
             destinationFolderPath,
             organizeInboxByFileType,
+            inboxSubfolderRules,
             alwaysOnTop,
             snappingEnabled,
             minimizeDestination
@@ -1533,5 +1555,326 @@ import UniformTypeIdentifiers
         } catch {
             choicePicker.removeAllItems(); choicePicker.addItem(withTitle: "No Shortcuts Found")
         }
+    }
+}
+
+@MainActor final class SubfolderRulesSheetController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate {
+    var onSave: (([InboxSubfolderRule]) -> Void)?
+    private var rules: [InboxSubfolderRule]
+    private let stackView = NSStackView()
+
+    init(rules: [InboxSubfolderRule]) {
+        self.rules = rules
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 600),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Customize Inbox Subfolder Rules & Patterns"
+        window.isReleasedWhenClosed = false
+        super.init(window: window)
+        window.delegate = self
+        buildContent()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private func buildContent() {
+        guard let content = window?.contentView else { return }
+
+        let title = NSTextField(labelWithString: "📁 Inbox Subfolder Rules & Patterns")
+        title.font = .systemFont(ofSize: 16, weight: .bold)
+
+        let subtitle = NSTextField(wrappingLabelWithString: "Define which subfolders dropped items are saved into. You can specify file extensions, regular expression patterns (regex) for matching filenames, or both. Rules are evaluated in top-to-bottom priority order.")
+        subtitle.font = .systemFont(ofSize: 11.5)
+        subtitle.textColor = .secondaryLabelColor
+
+        let headerStack = NSStackView(views: [title, subtitle])
+        headerStack.orientation = .vertical
+        headerStack.alignment = .leading
+        headerStack.spacing = 4
+
+        stackView.orientation = .vertical
+        stackView.alignment = .leading
+        stackView.spacing = 10
+        refreshRulesList()
+
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .bezelBorder
+
+        let clip = NSClipView()
+        clip.documentView = stackView
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.contentView = clip
+
+        NSLayoutConstraint.activate([
+            stackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -24),
+            stackView.topAnchor.constraint(equalTo: clip.topAnchor, constant: 12),
+            stackView.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: 12)
+        ])
+
+        let addRuleBtn = NSButton(title: "➕ Add Custom Rule", target: self, action: #selector(addRulePressed))
+        addRuleBtn.bezelStyle = .rounded
+        addRuleBtn.font = .systemFont(ofSize: 12, weight: .medium)
+
+        let resetDefaultsBtn = NSButton(title: "🔄 Reset to Defaults", target: self, action: #selector(resetDefaultsPressed))
+        resetDefaultsBtn.bezelStyle = .rounded
+        resetDefaultsBtn.font = .systemFont(ofSize: 12)
+
+        let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
+        cancelBtn.bezelStyle = .rounded
+        cancelBtn.keyEquivalent = "\u{1b}" // Escape key
+        cancelBtn.font = .systemFont(ofSize: 12)
+
+        let doneBtn = NSButton(title: "Done", target: self, action: #selector(donePressed))
+        doneBtn.bezelStyle = .rounded
+        doneBtn.keyEquivalent = "\r" // Enter key
+        doneBtn.font = .systemFont(ofSize: 12, weight: .semibold)
+
+        let leftBtns = NSStackView(views: [addRuleBtn, resetDefaultsBtn])
+        leftBtns.orientation = .horizontal
+        leftBtns.spacing = 10
+
+        let rightBtns = NSStackView(views: [cancelBtn, doneBtn])
+        rightBtns.orientation = .horizontal
+        rightBtns.spacing = 10
+
+        let bottomRow = NSStackView(views: [leftBtns, rightBtns])
+        bottomRow.orientation = .horizontal
+        bottomRow.distribution = .equalSpacing
+        bottomRow.alignment = .centerY
+
+        let mainStack = NSStackView(views: [headerStack, scrollView, bottomRow])
+        mainStack.orientation = .vertical
+        mainStack.alignment = .leading
+        mainStack.spacing = 14
+        mainStack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 18, right: 20)
+
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        bottomRow.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(mainStack)
+
+        NSLayoutConstraint.activate([
+            mainStack.topAnchor.constraint(equalTo: content.topAnchor),
+            mainStack.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            mainStack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            mainStack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            headerStack.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -40),
+            scrollView.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -40),
+            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
+            bottomRow.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -40)
+        ])
+    }
+
+    private func refreshRulesList() {
+        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for (idx, rule) in rules.enumerated() {
+            let row = makeRuleRow(rule: rule, index: idx)
+            stackView.addArrangedSubview(row)
+            row.translatesAutoresizingMaskIntoConstraints = false
+            row.widthAnchor.constraint(equalTo: stackView.widthAnchor).isActive = true
+        }
+    }
+
+    private func makeRuleRow(rule: InboxSubfolderRule, index: Int) -> NSView {
+        let card = NSStackView()
+        card.orientation = .vertical
+        card.alignment = .leading
+        card.spacing = 8
+        card.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
+        card.wantsLayer = true
+        card.layer?.cornerRadius = 8
+        card.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        let toggle = NSButton(checkboxWithTitle: "", target: self, action: #selector(ruleToggled(_:)))
+        toggle.state = rule.isEnabled ? .on : .off
+        toggle.tag = index
+
+        let catLabel = NSTextField(labelWithString: "Rule:")
+        catLabel.font = .systemFont(ofSize: 11.5, weight: .medium)
+
+        let catField = NSTextField(string: rule.categoryName)
+        catField.font = .systemFont(ofSize: 11.5)
+        catField.placeholderString = "Category Name"
+        catField.tag = index
+        catField.target = self
+        catField.action = #selector(catFieldChanged(_:))
+        catField.delegate = self
+
+        let folderLabel = NSTextField(labelWithString: "Folder:")
+        folderLabel.font = .systemFont(ofSize: 11.5, weight: .medium)
+
+        let folderField = NSTextField(string: rule.folderName)
+        folderField.font = .systemFont(ofSize: 11.5)
+        folderField.placeholderString = "Subfolder name"
+        folderField.tag = index
+        folderField.target = self
+        folderField.action = #selector(folderFieldChanged(_:))
+        folderField.delegate = self
+
+        let deleteBtn = NSButton(title: "✕", target: self, action: #selector(deleteRulePressed(_:)))
+        deleteBtn.bezelStyle = .inline
+        deleteBtn.font = .systemFont(ofSize: 12, weight: .bold)
+        deleteBtn.tag = index
+        deleteBtn.contentTintColor = .systemRed
+
+        let topRow = NSStackView(views: [toggle, catLabel, catField, folderLabel, folderField, deleteBtn])
+        topRow.orientation = .horizontal
+        topRow.spacing = 8
+        topRow.alignment = .centerY
+
+        let regexLabel = NSTextField(labelWithString: "Regex:")
+        regexLabel.font = .systemFont(ofSize: 11)
+        regexLabel.textColor = .secondaryLabelColor
+
+        let regexField = NSTextField(string: rule.regexPattern ?? "")
+        regexField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        regexField.placeholderString = "e.g. ^holiday_.* or .*_receipt"
+        regexField.tag = index
+        regexField.target = self
+        regexField.action = #selector(regexFieldChanged(_:))
+        regexField.delegate = self
+
+        let extLabel = NSTextField(labelWithString: "Extensions:")
+        extLabel.font = .systemFont(ofSize: 11)
+        extLabel.textColor = .secondaryLabelColor
+
+        let extField = NSTextField(string: rule.extensionsString)
+        extField.font = .systemFont(ofSize: 11)
+        extField.placeholderString = "e.g. png, jpg, pdf (comma separated)"
+        extField.tag = index
+        extField.target = self
+        extField.action = #selector(extFieldChanged(_:))
+        extField.delegate = self
+
+        let bottomRow = NSStackView(views: [regexLabel, regexField, extLabel, extField])
+        bottomRow.orientation = .horizontal
+        bottomRow.spacing = 8
+        bottomRow.alignment = .centerY
+
+        catField.translatesAutoresizingMaskIntoConstraints = false
+        folderField.translatesAutoresizingMaskIntoConstraints = false
+        regexField.translatesAutoresizingMaskIntoConstraints = false
+        extField.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            catField.widthAnchor.constraint(equalToConstant: 140),
+            folderField.widthAnchor.constraint(equalToConstant: 140),
+            regexField.widthAnchor.constraint(equalToConstant: 180),
+            extField.widthAnchor.constraint(greaterThanOrEqualToConstant: 180)
+        ])
+
+        card.addArrangedSubview(topRow)
+        card.addArrangedSubview(bottomRow)
+        topRow.translatesAutoresizingMaskIntoConstraints = false
+        bottomRow.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            topRow.widthAnchor.constraint(equalTo: card.widthAnchor, constant: -28),
+            bottomRow.widthAnchor.constraint(equalTo: card.widthAnchor, constant: -28)
+        ])
+
+        return card
+    }
+
+    @objc private func catFieldChanged(_ sender: NSTextField) {
+        let idx = sender.tag
+        guard idx < rules.count else { return }
+        rules[idx].categoryName = sender.stringValue
+    }
+
+    @objc private func folderFieldChanged(_ sender: NSTextField) {
+        let idx = sender.tag
+        guard idx < rules.count else { return }
+        rules[idx].folderName = sender.stringValue
+    }
+
+    @objc private func regexFieldChanged(_ sender: NSTextField) {
+        let idx = sender.tag
+        guard idx < rules.count else { return }
+        let val = sender.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        rules[idx].regexPattern = val.isEmpty ? nil : val
+    }
+
+    @objc private func extFieldChanged(_ sender: NSTextField) {
+        let idx = sender.tag
+        guard idx < rules.count else { return }
+        rules[idx].extensionsString = sender.stringValue
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        guard let field = obj.object as? NSTextField else { return }
+        let idx = field.tag
+        guard idx < rules.count else { return }
+        if field.placeholderString == "Category Name" {
+            rules[idx].categoryName = field.stringValue
+        } else if field.placeholderString == "Subfolder name" {
+            rules[idx].folderName = field.stringValue
+        } else if field.placeholderString?.starts(with: "e.g. ^holiday") == true {
+            let val = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            rules[idx].regexPattern = val.isEmpty ? nil : val
+        } else if field.placeholderString?.starts(with: "e.g. png") == true {
+            rules[idx].extensionsString = field.stringValue
+        }
+    }
+
+    @objc private func ruleToggled(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx < rules.count else { return }
+        rules[idx].isEnabled = (sender.state == .on)
+    }
+
+    @objc private func deleteRulePressed(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx < rules.count else { return }
+        rules.remove(at: idx)
+        refreshRulesList()
+    }
+
+    @objc private func addRulePressed() {
+        let newRule = InboxSubfolderRule(
+            id: UUID().uuidString,
+            categoryName: "Custom Pattern",
+            folderName: "Custom",
+            extensions: [],
+            regexPattern: "^holiday_.*",
+            isEnabled: true
+        )
+        rules.insert(newRule, at: 0)
+        refreshRulesList()
+    }
+
+    @objc private func resetDefaultsPressed() {
+        rules = InboxSubfolderRule.defaultRules
+        refreshRulesList()
+    }
+
+    @objc private func donePressed() {
+        onSave?(rules)
+        dismissSheet(returnCode: .OK)
+    }
+
+    @objc private func cancelPressed() {
+        dismissSheet(returnCode: .cancel)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        dismissSheet(returnCode: .cancel)
+        return true
+    }
+
+    private func dismissSheet(returnCode: NSApplication.ModalResponse) {
+        guard let sheetWindow = self.window else { return }
+        if let parent = sheetWindow.sheetParent {
+            parent.endSheet(sheetWindow, returnCode: returnCode)
+        } else if let parent = NSApp.keyWindow, parent != sheetWindow {
+            parent.endSheet(sheetWindow, returnCode: returnCode)
+        }
+        sheetWindow.orderOut(nil)
     }
 }
