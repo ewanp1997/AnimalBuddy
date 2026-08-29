@@ -2,27 +2,13 @@ import AppKit
 
 @MainActor final class StatusBarController: NSObject {
     var onShowPet: (() -> Void)?
-    var onMinimizeDestinationChanged: ((MinimizeDestination) -> Void)?
-    var onSnappingChanged: ((Bool) -> Void)?
-    var onAnimalAndThemeChanged: ((AnimalKind, PetThemePreset) -> Void)?
-    var onImportThemeJSON: (() -> Void)?
-    var onExportThemeJSON: (() -> Void)?
-    var onOpenAppearanceSettings: (() -> Void)?
-    var onConfigureMacros: (() -> Void)?
+    var onHidePet: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onOpenWelcome: (() -> Void)?
-    var onShowHelpfulTip: (() -> Void)?
-    var onCheckForUpdates: (() -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let destinationMenu = NSMenu(title: "Minimize To")
-    private let dockItem = NSMenuItem(title: "Dock", action: #selector(selectDock), keyEquivalent: "")
-    private let menubarItem = NSMenuItem(title: "Menu Bar", action: #selector(selectMenubar), keyEquivalent: "")
-    private let snappingItem = NSMenuItem(title: "Snap to Screen Edges", action: #selector(toggleSnapping), keyEquivalent: "")
-
-    private let animalMenu = NSMenu(title: "Animal Selector")
-    private var animalSubmenuItems: [AnimalKind: [PetThemePreset: NSMenuItem]] = [:]
+    private let togglePetItem = NSMenuItem(title: "Show Animal Buddy", action: #selector(togglePet), keyEquivalent: "")
 
     override init() {
         super.init()
@@ -31,108 +17,42 @@ import AppKit
         statusItem.button?.toolTip = "Animal Buddy"
 
         let menu = NSMenu(title: "Animal Buddy")
-        let showItem = NSMenuItem(title: "Show Animal Buddy", action: #selector(showPet), keyEquivalent: "")
-        showItem.target = self
-        menu.addItem(showItem)
+
+        togglePetItem.target = self
+        menu.addItem(togglePetItem)
         menu.addItem(.separator())
 
-        // Build Animal Selector submenus for each animal
-        for animal in AnimalKind.allCases {
-            let animalSubmenu = NSMenu(title: animal.displayName)
-            var presetMap: [PetThemePreset: NSMenuItem] = [:]
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
-            for preset in animal.themePresets {
-                let itemTitle = preset.displayName(for: animal)
-                let item = NSMenuItem(title: itemTitle, action: #selector(themePresetSelected(_:)), keyEquivalent: "")
-                item.target = self
-                item.representedObject = (animal, preset)
-                animalSubmenu.addItem(item)
-                presetMap[preset] = item
-            }
-
-            animalSubmenuItems[animal] = presetMap
-
-            let animalItem = NSMenuItem(title: animal.displayName, action: nil, keyEquivalent: "")
-            animalItem.submenu = animalSubmenu
-            animalMenu.addItem(animalItem)
-        }
-
-        animalMenu.addItem(.separator())
-        let importItem = NSMenuItem(title: "📥 Import Theme JSON…", action: #selector(importTheme), keyEquivalent: "")
-        importItem.target = self
-        animalMenu.addItem(importItem)
-        let exportItem = NSMenuItem(title: "📤 Export Theme JSON…", action: #selector(exportTheme), keyEquivalent: "")
-        exportItem.target = self
-        animalMenu.addItem(exportItem)
-        animalMenu.addItem(.separator())
-        let customColorsItem = NSMenuItem(title: "Customize Plumage & Appearance…", action: #selector(openAppearance), keyEquivalent: "")
-        customColorsItem.target = self
-        animalMenu.addItem(customColorsItem)
-
-        let animalSelectorRootItem = NSMenuItem(title: "Animal Selector", action: nil, keyEquivalent: "")
-        animalSelectorRootItem.submenu = animalMenu
-        menu.addItem(animalSelectorRootItem)
-
-        dockItem.target = self
-        menubarItem.target = self
-        destinationMenu.addItem(dockItem)
-        destinationMenu.addItem(menubarItem)
-        let destinationItem = NSMenuItem(title: "Minimize To", action: nil, keyEquivalent: "")
-        destinationItem.submenu = destinationMenu
-        menu.addItem(destinationItem)
-        snappingItem.target = self
-        menu.addItem(snappingItem)
         let welcomeItem = NSMenuItem(title: "Welcome & What's New…", action: #selector(openWelcome), keyEquivalent: "")
         welcomeItem.target = self
         menu.addItem(welcomeItem)
-        let tipItem = NSMenuItem(title: "Show Helpful Tip…", action: #selector(showHelpfulTip), keyEquivalent: "")
-        tipItem.target = self
-        menu.addItem(tipItem)
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
-        updateItem.target = self
-        menu.addItem(updateItem)
+
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "")
+        let quitItem = NSMenuItem(title: "Quit Animal Buddy", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+
         statusItem.menu = menu
     }
 
-    func update(destination: MinimizeDestination) {
-        dockItem.state = destination == .dock ? .on : .off
-        menubarItem.state = destination == .menubar ? .on : .off
+    func update(isPetVisible: Bool) {
+        togglePetItem.title = isPetVisible ? "Hide Animal Buddy" : "Show Animal Buddy"
     }
 
-    func update(snappingEnabled: Bool) { snappingItem.state = snappingEnabled ? .on : .off }
-
-    func update(animal: AnimalKind, theme: PetThemePreset) {
-        for (aKind, presetDict) in animalSubmenuItems {
-            for (preset, menuItem) in presetDict {
-                menuItem.state = (aKind == animal && preset == theme) ? .on : .off
-            }
+    @objc private func togglePet() {
+        if togglePetItem.title == "Hide Animal Buddy" {
+            onHidePet?()
+        } else {
+            onShowPet?()
         }
     }
 
-    @objc private func themePresetSelected(_ sender: NSMenuItem) {
-        guard let (animal, preset) = sender.representedObject as? (AnimalKind, PetThemePreset) else { return }
-        onAnimalAndThemeChanged?(animal, preset)
-    }
-
-    @objc private func showPet() { onShowPet?() }
-    @objc private func importTheme() { onImportThemeJSON?() }
-    @objc private func exportTheme() { onExportThemeJSON?() }
-    @objc private func openAppearance() { onOpenAppearanceSettings?() }
-    @objc private func selectDock() { onMinimizeDestinationChanged?(.dock) }
-    @objc private func selectMenubar() { onMinimizeDestinationChanged?(.menubar) }
-    @objc private func toggleSnapping() { onSnappingChanged?(snappingItem.state != .on) }
+    @objc private func openSettings() { onOpenSettings?() }
     @objc private func openWelcome() { onOpenWelcome?() }
-    @objc private func showHelpfulTip() { onShowHelpfulTip?() }
-    @objc private func openSettings() { (onOpenSettings ?? onConfigureMacros)?() }
-    @objc private func checkForUpdates() { onCheckForUpdates?() }
     @objc private func quit() { onQuit?() }
 
     private static func logoImage() -> NSImage {

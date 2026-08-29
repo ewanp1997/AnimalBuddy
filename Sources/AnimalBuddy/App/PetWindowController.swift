@@ -8,6 +8,8 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private static let expandedPetSize: CGFloat = 210
     private static let restingAlpha: CGFloat = 0.35
     private static let activeAlpha: CGFloat = 1.0
+    var onOpenSettings: ((Int) -> Void)?
+    var onVisibilityChanged: ((Bool) -> Void)?
     private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
     private let registry: ActionRegistry
     private var settings: AppSettings
@@ -121,6 +123,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
                     window?.setFrame(originalFrame, display: false)
                     window?.alphaValue = 1
                     self?.isMinimizing = false
+                    self?.onVisibilityChanged?(false)
                 }
             }
             return
@@ -155,6 +158,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
                             window?.alphaValue = 1
                             self?.petView.setFlying(false)
                             self?.isMinimizing = false
+                            self?.onVisibilityChanged?(false)
                         }
                     }
                 }
@@ -175,6 +179,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
 
         if window.isVisible && !isMinimizing && window.alphaValue > 0.8 {
             window.orderFrontRegardless()
+            onVisibilityChanged?(true)
             return
         }
 
@@ -184,6 +189,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
             window.setFrame(destinationFrame, display: true)
             window.alphaValue = 1
             window.orderFrontRegardless()
+            onVisibilityChanged?(true)
             return
         }
 
@@ -208,6 +214,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         window.setFrame(startFrame, display: false)
         window.alphaValue = 1.0
         window.orderFrontRegardless()
+        onVisibilityChanged?(true)
 
         let totalDeltaX = destinationFrame.midX - startFrame.midX
         let dest = destinationFrame
@@ -245,7 +252,10 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
             }
         }
     }
-    private func closePet() { window?.orderOut(nil) }
+    private func closePet() {
+        window?.orderOut(nil)
+        onVisibilityChanged?(false)
+    }
 
     private func updateHoverOpacity() {
         guard let window, window.isVisible, !isMinimizing else { return }
