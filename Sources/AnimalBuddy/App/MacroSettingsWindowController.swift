@@ -2,10 +2,11 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onShowTipPreview: (() -> Void)?
+    var onShowFocusSoundPreview: (() -> Void)?
 
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
@@ -20,6 +21,10 @@ import UniformTypeIdentifiers
     private var googlyEyesEnabled: Bool
     private var automaticallyCheckForUpdates: Bool
     private var helpfulTipsEnabled: Bool
+    private var focusModeEnabled: Bool
+    private var focusModeWorkRemindersEnabled: Bool
+    private var focusModeIntervalMinutes: Int
+    private var soundEffectsEnabled: Bool
     private var destinationFolderPath: String?
     private var organizeInboxByFileType: Bool
     private var inboxSubfolderRules: [InboxSubfolderRule]
@@ -29,6 +34,12 @@ import UniformTypeIdentifiers
     private var minimizeDestination: MinimizeDestination
     private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.50")
     private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
+
+    private let focusModeToggle = NSButton(checkboxWithTitle: "Enable Focus Mode & Cute Sounds (off by default)", target: nil, action: nil)
+    private let focusModeSegment = NSSegmentedControl(labels: ["🎯 Help Me Focus", "💖 Just Cute (For Nothing)"], trackingMode: .selectOne, target: nil, action: nil)
+    private let focusModeDesc = NSTextField(wrappingLabelWithString: "")
+    private let soundEffectsToggle = NSButton(checkboxWithTitle: "Play audio sound effects with bubble", target: nil, action: nil)
+    private let focusIntervalPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
 
     private let animalPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
@@ -85,6 +96,10 @@ import UniformTypeIdentifiers
         googlyEyesEnabled = settings.googlyEyesEnabled
         automaticallyCheckForUpdates = settings.automaticallyCheckForUpdates
         helpfulTipsEnabled = settings.helpfulTipsEnabled
+        focusModeEnabled = settings.focusModeEnabled
+        focusModeWorkRemindersEnabled = settings.focusModeWorkRemindersEnabled
+        focusModeIntervalMinutes = settings.focusModeIntervalMinutes
+        soundEffectsEnabled = settings.soundEffectsEnabled
         destinationFolderPath = settings.destinationFolderPath
         organizeInboxByFileType = settings.organizeInboxByFileType
         inboxSubfolderRules = settings.inboxSubfolderRules
@@ -211,9 +226,10 @@ import UniformTypeIdentifiers
         let inboxCard = makeInboxFolderCard()
         let windowCard = makeWindowBehaviorCard()
         let tipsCard = makeHelpfulTipsCard()
+        let focusCard = makeFocusModeCard()
         let updatesCard = makeSoftwareUpdatesCard()
 
-        let mainStack = NSStackView(views: [heading, note, inboxCard, windowCard, tipsCard, updatesCard])
+        let mainStack = NSStackView(views: [heading, note, inboxCard, windowCard, tipsCard, focusCard, updatesCard])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -224,6 +240,7 @@ import UniformTypeIdentifiers
         inboxCard.translatesAutoresizingMaskIntoConstraints = false
         windowCard.translatesAutoresizingMaskIntoConstraints = false
         tipsCard.translatesAutoresizingMaskIntoConstraints = false
+        focusCard.translatesAutoresizingMaskIntoConstraints = false
         updatesCard.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -239,6 +256,7 @@ import UniformTypeIdentifiers
             inboxCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             windowCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             tipsCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            focusCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             updatesCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56)
         ])
 
@@ -640,6 +658,85 @@ import UniformTypeIdentifiers
         return stack
     }
 
+    private func makeFocusModeCard() -> NSView {
+        let title = NSTextField(labelWithString: "🎯 Focus Mode & Cute Sounds")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        focusModeToggle.target = self
+        focusModeToggle.action = #selector(toggleFocusModeCheckbox(_:))
+        focusModeToggle.state = focusModeEnabled ? .on : .off
+        focusModeToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let introDesc = NSTextField(wrappingLabelWithString: "Your animal companion periodically makes adorable noises in a speech bubble to keep you company while working at your desk.")
+        introDesc.font = .systemFont(ofSize: 11)
+        introDesc.textColor = .secondaryLabelColor
+
+        focusModeSegment.selectedSegment = focusModeWorkRemindersEnabled ? 0 : 1
+        focusModeSegment.target = self
+        focusModeSegment.action = #selector(focusModeSegmentChanged)
+        focusModeSegment.segmentStyle = .texturedRounded
+
+        updateFocusModeDesc()
+        focusModeDesc.font = .systemFont(ofSize: 11)
+        focusModeDesc.textColor = .secondaryLabelColor
+
+        soundEffectsToggle.target = self
+        soundEffectsToggle.action = #selector(toggleSoundEffectsCheckbox(_:))
+        soundEffectsToggle.state = soundEffectsEnabled ? .on : .off
+        soundEffectsToggle.font = .systemFont(ofSize: 12)
+
+        let intervalLabel = NSTextField(labelWithString: "Sound & Bubble Interval:")
+        intervalLabel.font = .systemFont(ofSize: 12, weight: .medium)
+
+        focusIntervalPopUp.removeAllItems()
+        let intervalOptions = [5, 10, 15, 20, 30]
+        for m in intervalOptions {
+            focusIntervalPopUp.addItem(withTitle: "Every \(m) minutes")
+        }
+        focusIntervalPopUp.target = self
+        focusIntervalPopUp.action = #selector(focusIntervalChanged)
+        if let idx = intervalOptions.firstIndex(of: focusModeIntervalMinutes) {
+            focusIntervalPopUp.selectItem(at: idx)
+        } else {
+            focusIntervalPopUp.selectItem(at: 1)
+        }
+
+        let intervalRow = NSStackView(views: [intervalLabel, focusIntervalPopUp])
+        intervalRow.orientation = .horizontal
+        intervalRow.alignment = .centerY
+        intervalRow.spacing = 10
+
+        let tryBtn = NSButton(title: "Try Sound & Bubble Now", target: self, action: #selector(tryFocusSoundPressed))
+        tryBtn.bezelStyle = .rounded
+        tryBtn.font = .systemFont(ofSize: 12)
+
+        let stack = NSStackView(views: [title, focusModeToggle, introDesc, focusModeSegment, focusModeDesc, soundEffectsToggle, intervalRow, tryBtn])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        focusModeToggle.translatesAutoresizingMaskIntoConstraints = false
+        introDesc.translatesAutoresizingMaskIntoConstraints = false
+        focusModeSegment.translatesAutoresizingMaskIntoConstraints = false
+        focusModeDesc.translatesAutoresizingMaskIntoConstraints = false
+        soundEffectsToggle.translatesAutoresizingMaskIntoConstraints = false
+        intervalRow.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            focusModeToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            introDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            focusModeSegment.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            focusModeDesc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            soundEffectsToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            intervalRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
     private func makeSoftwareUpdatesCard() -> NSView {
         let title = NSTextField(labelWithString: "🚀 Software Updates")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -766,6 +863,39 @@ import UniformTypeIdentifiers
 
     @objc private func showTipNowPressed() {
         onShowTipPreview?()
+    }
+
+    private func updateFocusModeDesc() {
+        if focusModeWorkRemindersEnabled {
+            focusModeDesc.stringValue = "🎯 Help Me Focus: Clicking the sound bubble prompts you with an encouraging reminder to stay in the zone and get back to work!"
+        } else {
+            focusModeDesc.stringValue = "💖 Just Cute (For Nothing): Clicking the sound bubble triggers a warm loving reaction (*purrs happily*) without any work reminders."
+        }
+    }
+
+    @objc private func toggleFocusModeCheckbox(_ sender: NSButton) {
+        focusModeEnabled = (sender.state == .on)
+    }
+
+    @objc private func focusModeSegmentChanged(_ sender: NSSegmentedControl) {
+        focusModeWorkRemindersEnabled = (sender.selectedSegment == 0)
+        updateFocusModeDesc()
+    }
+
+    @objc private func toggleSoundEffectsCheckbox(_ sender: NSButton) {
+        soundEffectsEnabled = (sender.state == .on)
+    }
+
+    @objc private func focusIntervalChanged(_ sender: NSPopUpButton) {
+        let intervalOptions = [5, 10, 15, 20, 30]
+        let idx = sender.indexOfSelectedItem
+        if idx >= 0 && idx < intervalOptions.count {
+            focusModeIntervalMinutes = intervalOptions[idx]
+        }
+    }
+
+    @objc private func tryFocusSoundPressed() {
+        onShowFocusSoundPreview?()
     }
 
     @objc private func toggleGooglyEyes(_ sender: NSButton) {
@@ -1203,7 +1333,11 @@ import UniformTypeIdentifiers
             inboxSubfolderRules,
             alwaysOnTop,
             snappingEnabled,
-            minimizeDestination
+            minimizeDestination,
+            focusModeEnabled,
+            focusModeWorkRemindersEnabled,
+            focusModeIntervalMinutes,
+            soundEffectsEnabled
         )
         close()
     }

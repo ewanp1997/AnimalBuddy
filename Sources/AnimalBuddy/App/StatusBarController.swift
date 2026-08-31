@@ -3,12 +3,16 @@ import AppKit
 @MainActor final class StatusBarController: NSObject {
     var onShowPet: (() -> Void)?
     var onHidePet: (() -> Void)?
+    var onToggleFocusMode: (() -> Void)?
+    var onToggleSoundEffects: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onOpenWelcome: (() -> Void)?
     var onQuit: (() -> Void)?
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let togglePetItem = NSMenuItem(title: "Show Animal Buddy", action: #selector(togglePet), keyEquivalent: "")
+    private let focusModeItem = NSMenuItem(title: "🎯 Focus Mode", action: #selector(toggleFocusMode), keyEquivalent: "")
+    private let soundEffectsItem = NSMenuItem(title: "🔊 Sound Effects", action: #selector(toggleSoundEffects), keyEquivalent: "")
 
     override init() {
         super.init()
@@ -20,6 +24,14 @@ import AppKit
 
         togglePetItem.target = self
         menu.addItem(togglePetItem)
+        menu.addItem(.separator())
+
+        focusModeItem.target = self
+        menu.addItem(focusModeItem)
+
+        soundEffectsItem.target = self
+        menu.addItem(soundEffectsItem)
+
         menu.addItem(.separator())
 
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
@@ -39,8 +51,11 @@ import AppKit
         statusItem.menu = menu
     }
 
-    func update(isPetVisible: Bool) {
+    func update(isPetVisible: Bool, isFocusModeEnabled: Bool = false, isSoundEffectsEnabled: Bool = true) {
         togglePetItem.title = isPetVisible ? "Hide Animal Buddy" : "Show Animal Buddy"
+        focusModeItem.state = isFocusModeEnabled ? .on : .off
+        soundEffectsItem.state = isSoundEffectsEnabled ? .on : .off
+        soundEffectsItem.title = isSoundEffectsEnabled ? "🔊 Sound Effects" : "🔇 Sound Effects (Muted)"
     }
 
     @objc private func togglePet() {
@@ -49,6 +64,14 @@ import AppKit
         } else {
             onShowPet?()
         }
+    }
+
+    @objc private func toggleFocusMode() {
+        onToggleFocusMode?()
+    }
+
+    @objc private func toggleSoundEffects() {
+        onToggleSoundEffects?()
     }
 
     @objc private func openSettings() { onOpenSettings?() }

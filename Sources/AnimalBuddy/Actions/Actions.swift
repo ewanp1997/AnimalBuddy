@@ -220,7 +220,14 @@ struct OpenURLAction: Action {
     )
 
     func execute(context: ActionContext) async throws {
-        guard let text = context.input.text, let url = URL(string: text) else {
+        let url: URL? = if let text = context.input.text, let parsed = URL(string: text) {
+            parsed
+        } else if let firstURL = context.input.urls.first {
+            firstURL
+        } else {
+            nil
+        }
+        guard let url else {
             throw ActionError.noInput
         }
         NSWorkspace.shared.open(url)

@@ -107,6 +107,7 @@ public enum SpeechBubbleTailPosition: Sendable {
 
 @MainActor final class SpeechBubbleWindowController: NSWindowController {
     var onDismiss: (() -> Void)?
+    var onFocusBubbleClicked: ((_ isWorkReminder: Bool) -> Void)?
 
     private let backgroundView = SpeechBubbleBackgroundView()
     private let emojiLabel = NSTextField(labelWithString: "💡")
@@ -115,6 +116,10 @@ public enum SpeechBubbleTailPosition: Sendable {
     private let closeButton = NSButton()
     private var autoDismissTimer: Timer?
     private(set) var isVisible = false
+    private var activeFocusSoundItem: FocusSoundItem?
+    private var isFocusSoundReminderMode: Bool = false
+    private var currentPetFrame: NSRect = .zero
+    private var currentScreen: NSScreen?
 
     private static let bubbleWidth: CGFloat = 236
     private static let bubbleHeight: CGFloat = 86
@@ -204,7 +209,7 @@ public enum SpeechBubbleTailPosition: Sendable {
             messageLabel.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -22)
         ])
 
-        // Add gesture recognizer to dismiss when clicking anywhere on the bubble
+        // Add gesture recognizer to handle click anywhere on the bubble
         let clickRecognizer = NSClickGestureRecognizer(target: self, action: #selector(bubbleClicked))
         backgroundView.addGestureRecognizer(clickRecognizer)
     }
@@ -212,6 +217,10 @@ public enum SpeechBubbleTailPosition: Sendable {
     func show(tip: AppTip, relativeTo petFrame: NSRect, in screen: NSScreen?, duration: TimeInterval = 7.0) {
         autoDismissTimer?.invalidate()
         autoDismissTimer = nil
+        activeFocusSoundItem = nil
+
+        currentPetFrame = petFrame
+        currentScreen = screen
 
         emojiLabel.stringValue = tip.emoji
         titleLabel.stringValue = tip.title
@@ -239,8 +248,46 @@ public enum SpeechBubbleTailPosition: Sendable {
         }
     }
 
+    func showFocusSound(item: FocusSoundItem, animal: AnimalKind, isWorkReminderMode: Bool, relativeTo petFrame: NSRect, in screen: NSScreen?, duration: TimeInterval = 8.0) {
+        autoDismissTimer?.invalidate()
+        autoDismissTimer = nil
+
+        activeFocusSoundItem = item
+        isFocusSoundReminderMode = isWorkReminderMode
+        currentPetFrame = petFrame
+        currentScreen = screen
+
+        emojiLabel.stringValue = item.emoji
+        titleLabel.stringValue = "\(animal.nameWithoutEmoji)"
+        let callToAction = isWorkReminderMode ? "Click me for focus!" : "Click me for love!"
+        messageLabel.stringValue = "\(item.text)\n\(callToAction)"
+
+        guard let window else { return }
+
+        let targetFrame = calculateFrame(relativeTo: petFrame, in: screen)
+        window.setFrame(targetFrame, display: true)
+        window.alphaValue = 0
+        window.orderFront(nil)
+        isVisible = true
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.25
+            window.animator().alphaValue = 1.0
+        }
+
+        if duration > 0 {
+            autoDismissTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.dismiss()
+                }
+            }
+        }
+    }
+
     func updatePosition(relativeTo petFrame: NSRect, in screen: NSScreen?) {
         guard isVisible, let window else { return }
+        currentPetFrame = petFrame
+        currentScreen = screen
         let targetFrame = calculateFrame(relativeTo: petFrame, in: screen)
         window.setFrame(targetFrame, display: true, animate: false)
     }
@@ -248,6 +295,7 @@ public enum SpeechBubbleTailPosition: Sendable {
     func dismiss(animated: Bool = true) {
         autoDismissTimer?.invalidate()
         autoDismissTimer = nil
+        activeFocusSoundItem = nil
         guard isVisible, let window else { return }
         isVisible = false
 
@@ -273,7 +321,36 @@ public enum SpeechBubbleTailPosition: Sendable {
     }
 
     @objc private func bubbleClicked() {
-        dismiss()
+        if let _ = activeFocusSoundItem {
+            let isReminder = isFocusSoundReminderMode
+            activeFocusSoundItem = nil
+            onFocusBubbleClicked?(isReminder)
+
+            autoDismissTimer?.invalidate()
+            autoDismissTimer = nil
+
+            if isReminder {
+                emojiLabel.stringValue = "🎯"
+                titleLabel.stringValue = "Focus Time!"
+                messageLabel.stringValue = FocusReminderCatalog.randomReminder()
+                autoDismissTimer = Timer.scheduledTimer(withTimeInterval: 4.5, repeats: false) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.dismiss()
+                    }
+                }
+            } else {
+                emojiLabel.stringValue = "💖"
+                titleLabel.stringValue = "Cute Companion"
+                messageLabel.stringValue = CuteReactionCatalog.randomReaction()
+                autoDismissTimer = Timer.scheduledTimer(withTimeInterval: 3.5, repeats: false) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.dismiss()
+                    }
+                }
+            }
+        } else {
+            dismiss()
+        }
     }
 
     private func calculateFrame(relativeTo petFrame: NSRect, in screen: NSScreen?) -> NSRect {

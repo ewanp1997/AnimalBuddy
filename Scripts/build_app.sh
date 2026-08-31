@@ -21,6 +21,9 @@ package_app() {
 
     cp "$BIN_PATH" "$target/Contents/MacOS/AnimalBuddy"
     chmod +x "$target/Contents/MacOS/AnimalBuddy"
+    if command -v strip &> /dev/null; then
+        strip -x "$target/Contents/MacOS/AnimalBuddy" 2>/dev/null || true
+    fi
     cp App/Info.plist "$target/Contents/Info.plist"
     cp App/AnimalBuddy.icns "$target/Contents/Resources/AnimalBuddy.icns"
     cp App/AnimalBuddyIcon.png "$target/Contents/Resources/AnimalBuddyIcon.png"

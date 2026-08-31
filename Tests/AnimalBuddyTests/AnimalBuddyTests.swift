@@ -666,5 +666,72 @@ import UniformTypeIdentifiers
         XCTAssertFalse(petView.isDiscoMode)
         XCTAssertEqual(petView.state, .idle)
     }
+
+    func testAppSettingsFocusAndSoundSerializationAndDefaults() throws {
+        var settings = AppSettings()
+        XCTAssertFalse(settings.focusModeEnabled)
+        XCTAssertTrue(settings.focusModeWorkRemindersEnabled)
+        XCTAssertEqual(settings.focusModeIntervalMinutes, 10)
+        XCTAssertTrue(settings.soundEffectsEnabled)
+
+        settings.focusModeEnabled = true
+        settings.focusModeWorkRemindersEnabled = false
+        settings.focusModeIntervalMinutes = 15
+        settings.soundEffectsEnabled = false
+
+        let encoded = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
+
+        XCTAssertTrue(decoded.focusModeEnabled)
+        XCTAssertFalse(decoded.focusModeWorkRemindersEnabled)
+        XCTAssertEqual(decoded.focusModeIntervalMinutes, 15)
+        XCTAssertFalse(decoded.soundEffectsEnabled)
+    }
+
+    func testFocusSoundCatalogReturnsSpeciesSpecificSounds() {
+        for kind in AnimalKind.allCases {
+            let sounds = FocusSoundCatalog.sounds(for: kind)
+            XCTAssertFalse(sounds.isEmpty, "Expected sounds for \(kind.displayName)")
+            for item in sounds {
+                XCTAssertFalse(item.text.isEmpty)
+                XCTAssertFalse(item.systemSoundName.isEmpty)
+                XCTAssertFalse(item.emoji.isEmpty)
+            }
+            let random = FocusSoundCatalog.randomSound(for: kind)
+            XCTAssertFalse(random.text.isEmpty)
+        }
+    }
+
+    func testFocusReminderCatalogReturnsInspiringReminders() {
+        XCTAssertFalse(FocusReminderCatalog.reminders.isEmpty)
+        let sample = FocusReminderCatalog.randomReminder()
+        XCTAssertFalse(sample.isEmpty)
+        XCTAssertTrue(FocusReminderCatalog.reminders.contains(sample))
+    }
+
+    func testCuteReactionCatalogReturnsWarmReactions() {
+        XCTAssertFalse(CuteReactionCatalog.reactions.isEmpty)
+        let sample = CuteReactionCatalog.randomReaction()
+        XCTAssertFalse(sample.isEmpty)
+        XCTAssertTrue(CuteReactionCatalog.reactions.contains(sample))
+    }
+
+    func testSoundEffectsToggleIsIndependentOfFocusMode() {
+        var settings = AppSettings()
+        settings.focusModeEnabled = true
+        settings.focusModeWorkRemindersEnabled = true
+        settings.soundEffectsEnabled = true
+
+        // Sound effects can be muted without altering focus mode state
+        settings.soundEffectsEnabled = false
+        XCTAssertFalse(settings.soundEffectsEnabled)
+        XCTAssertTrue(settings.focusModeEnabled)
+        XCTAssertTrue(settings.focusModeWorkRemindersEnabled)
+
+        // Focus mode can be changed to 'just cute' without affecting sound setting
+        settings.focusModeWorkRemindersEnabled = false
+        XCTAssertFalse(settings.soundEffectsEnabled)
+        XCTAssertFalse(settings.focusModeWorkRemindersEnabled)
+    }
 }
 

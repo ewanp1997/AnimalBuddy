@@ -1472,6 +1472,10 @@ public struct AppSettings: Codable, Sendable {
     public var skippedAppVersion: String? = nil
     public var lastUpdateCheckDate: Date? = nil
     public var helpfulTipsEnabled: Bool = false
+    public var focusModeEnabled: Bool = false
+    public var focusModeWorkRemindersEnabled: Bool = true
+    public var focusModeIntervalMinutes: Int = 10
+    public var soundEffectsEnabled: Bool = true
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1485,7 +1489,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, bindings
     }
 
     public init() {}
@@ -1513,6 +1517,10 @@ public struct AppSettings: Codable, Sendable {
         skippedAppVersion = try values.decodeIfPresent(String.self, forKey: .skippedAppVersion)
         lastUpdateCheckDate = try values.decodeIfPresent(Date.self, forKey: .lastUpdateCheckDate)
         helpfulTipsEnabled = try values.decodeIfPresent(Bool.self, forKey: .helpfulTipsEnabled) ?? false
+        focusModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .focusModeEnabled) ?? false
+        focusModeWorkRemindersEnabled = try values.decodeIfPresent(Bool.self, forKey: .focusModeWorkRemindersEnabled) ?? true
+        focusModeIntervalMinutes = try values.decodeIfPresent(Int.self, forKey: .focusModeIntervalMinutes) ?? 10
+        soundEffectsEnabled = try values.decodeIfPresent(Bool.self, forKey: .soundEffectsEnabled) ?? true
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }
@@ -1624,5 +1632,95 @@ public enum HelpfulTipsCatalog {
     public static func randomTip(excluding currentId: String? = nil) -> AppTip {
         let candidates = allTips.filter { $0.id != currentId }
         return candidates.randomElement() ?? allTips[0]
+    }
+}
+
+public struct FocusSoundItem: Sendable, Equatable {
+    public let text: String
+    public let systemSoundName: String
+    public let emoji: String
+
+    public init(text: String, systemSoundName: String, emoji: String = "🎵") {
+        self.text = text
+        self.systemSoundName = systemSoundName
+        self.emoji = emoji
+    }
+}
+
+public enum FocusSoundCatalog {
+    public static func sounds(for animal: AnimalKind) -> [FocusSoundItem] {
+        switch animal {
+        case .bird:
+            return [
+                FocusSoundItem(text: "*chirp chirp!*", systemSoundName: "Tink", emoji: "🐦"),
+                FocusSoundItem(text: "*tweet tweet!*", systemSoundName: "Ping", emoji: "🎵"),
+                FocusSoundItem(text: "*peep peep!*", systemSoundName: "Tink", emoji: "✨")
+            ]
+        case .dog:
+            return [
+                FocusSoundItem(text: "*playful yip!*", systemSoundName: "Pop", emoji: "🐶"),
+                FocusSoundItem(text: "*happy woof!*", systemSoundName: "Purr", emoji: "🐾"),
+                FocusSoundItem(text: "*pant pant!*", systemSoundName: "Pop", emoji: "❤️")
+            ]
+        case .cat:
+            return [
+                FocusSoundItem(text: "*meow~*", systemSoundName: "Purr", emoji: "🐱"),
+                FocusSoundItem(text: "*soft purrrrr...*", systemSoundName: "Purr", emoji: "🐾"),
+                FocusSoundItem(text: "*mew mew!*", systemSoundName: "Tink", emoji: "💖")
+            ]
+        case .monkey:
+            return [
+                FocusSoundItem(text: "*ooh-ooh!*", systemSoundName: "Bottle", emoji: "🐵"),
+                FocusSoundItem(text: "*playful chatter!*", systemSoundName: "Pop", emoji: "🍌"),
+                FocusSoundItem(text: "*eek eek!*", systemSoundName: "Morse", emoji: "✨")
+            ]
+        case .giraffe:
+            return [
+                FocusSoundItem(text: "*gentle hummm~*", systemSoundName: "Blow", emoji: "🦒"),
+                FocusSoundItem(text: "*munch munch!*", systemSoundName: "Submarine", emoji: "🌿"),
+                FocusSoundItem(text: "*soft squeak*", systemSoundName: "Hero", emoji: "🌟")
+            ]
+        case .slinky:
+            return [
+                FocusSoundItem(text: "*boing!*", systemSoundName: "Basso", emoji: "🌀"),
+                FocusSoundItem(text: "*springgg!*", systemSoundName: "Bottle", emoji: "⚡️"),
+                FocusSoundItem(text: "*twang twang!*", systemSoundName: "Ping", emoji: "🌈")
+            ]
+        }
+    }
+
+    public static func randomSound(for animal: AnimalKind) -> FocusSoundItem {
+        let all = sounds(for: animal)
+        return all.randomElement() ?? all[0]
+    }
+}
+
+public enum FocusReminderCatalog {
+    public static let reminders: [String] = [
+        "Back to work! You've got this! 🎯",
+        "Deep work time! Let's crush this goal! 💻",
+        "Quick stretch over — back into the flow! 🚀",
+        "Stay in the zone! Progress feels great! 🌟",
+        "Gentle nudge: back to what you were doing! ✨",
+        "Refocused & ready to conquer the day! 🔥"
+    ]
+
+    public static func randomReminder() -> String {
+        reminders.randomElement() ?? reminders[0]
+    }
+}
+
+public enum CuteReactionCatalog {
+    public static let reactions: [String] = [
+        "*purrs happily with joy!* 💖",
+        "*bounces excitedly!* ✨",
+        "Just wanted to say hi! 🐾",
+        "Sending you warm buddy vibes! 🎉",
+        "Having a cozy time hanging out with you! 🌸",
+        "*happy companion wiggles!* 💫"
+    ]
+
+    public static func randomReaction() -> String {
+        reactions.randomElement() ?? reactions[0]
     }
 }

@@ -80,11 +80,12 @@ enum MacroExecutor {
         let errorPipe = Pipe()
         process.standardError = errorPipe
         try process.run()
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: errorData, encoding: .utf8) ?? "Macro failed"
-            throw macroError(message)
+            let message = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let errorText = (message?.isEmpty == false) ? message! : "Macro process exited with status \(process.terminationStatus)"
+            throw macroError(errorText)
         }
     }
 

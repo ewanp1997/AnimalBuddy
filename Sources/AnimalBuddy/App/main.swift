@@ -23,12 +23,26 @@ import UniformTypeIdentifiers
         statusBar = StatusBarController()
         statusBar?.onShowPet = { [weak self] in self?.petWindow?.showPet() }
         statusBar?.onHidePet = { [weak self] in self?.petWindow?.minimizePet() }
+        statusBar?.onToggleFocusMode = { [weak self] in
+            guard let self else { return }
+            self.settings.focusModeEnabled.toggle()
+            try? self.settingsStore.save(self.settings)
+            self.petWindow?.update(settings: self.settings)
+            self.updateStatusBar()
+        }
+        statusBar?.onToggleSoundEffects = { [weak self] in
+            guard let self else { return }
+            self.settings.soundEffectsEnabled.toggle()
+            try? self.settingsStore.save(self.settings)
+            self.petWindow?.update(settings: self.settings)
+            self.updateStatusBar()
+        }
         statusBar?.onOpenSettings = { [weak self] in self?.showSettings(initialTab: 0) }
         statusBar?.onOpenWelcome = { [weak self] in self?.showWelcomeFromMenu() }
         statusBar?.onQuit = { NSApp.terminate(nil) }
 
-        petWindow?.onVisibilityChanged = { [weak self] isVisible in
-            self?.statusBar?.update(isPetVisible: isVisible)
+        petWindow?.onVisibilityChanged = { [weak self] _ in
+            self?.updateStatusBar()
         }
         petWindow?.onOpenSettings = { [weak self] tabIndex in
             self?.showSettings(initialTab: tabIndex)
@@ -38,6 +52,7 @@ import UniformTypeIdentifiers
         // Force Quit Applications even when its pet window is minimized.
         NSApp.setActivationPolicy(.regular)
         petWindow?.showPet()
+        updateStatusBar()
 
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
         if let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: currentVersion) {
@@ -56,6 +71,15 @@ import UniformTypeIdentifiers
         return true
     }
 
+    private func updateStatusBar() {
+        let isVisible = petWindow?.window?.isVisible == true
+        statusBar?.update(
+            isPetVisible: isVisible,
+            isFocusModeEnabled: settings.focusModeEnabled,
+            isSoundEffectsEnabled: settings.soundEffectsEnabled
+        )
+    }
+
     private func showSettings(initialTab: Int = 0) {
         if let existing = macroSettingsWindow, existing.window?.isVisible == true {
             existing.selectTab(initialTab)
@@ -66,7 +90,7 @@ import UniformTypeIdentifiers
         }
 
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest, focusMode, focusReminders, focusInterval, soundEffects in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -84,8 +108,13 @@ import UniformTypeIdentifiers
             self.settings.alwaysOnTop = alwaysOnTop
             self.settings.snappingEnabled = snapping
             self.settings.minimizeDestination = minDest
+            self.settings.focusModeEnabled = focusMode
+            self.settings.focusModeWorkRemindersEnabled = focusReminders
+            self.settings.focusModeIntervalMinutes = focusInterval
+            self.settings.soundEffectsEnabled = soundEffects
             try? self.settingsStore.save(self.settings)
             self.petWindow?.update(settings: self.settings)
+            self.updateStatusBar()
         }
         controller.onThemeChanged = { [weak self] animal, themePreset, customPalette, googlyEyes in
             guard let self else { return }
@@ -101,6 +130,9 @@ import UniformTypeIdentifiers
         }
         controller.onShowTipPreview = { [weak self] in
             self?.petWindow?.showTip()
+        }
+        controller.onShowFocusSoundPreview = { [weak self] in
+            self?.petWindow?.showFocusSound()
         }
         macroSettingsWindow = controller
         controller.showWindow(nil)

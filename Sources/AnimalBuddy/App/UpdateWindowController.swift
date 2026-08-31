@@ -152,28 +152,35 @@ import AppKit
             .replacingOccurrences(of: "`", with: "")
     }
 
+    private var hasDismissed = false
+    private func notifyDismissOnce() {
+        guard !hasDismissed else { return }
+        hasDismissed = true
+        onDismiss?()
+    }
+
     @objc private func downloadPressed() {
         if let url = release.primaryDownloadURL {
             NSWorkspace.shared.open(url)
         } else if let fallback = URL(string: release.htmlURL) {
             NSWorkspace.shared.open(fallback)
         }
+        notifyDismissOnce()
         window?.close()
-        onDismiss?()
     }
 
     @objc private func skipVersionPressed() {
         onSkipVersion?(release.tagName)
+        notifyDismissOnce()
         window?.close()
-        onDismiss?()
     }
 
     @objc private func laterPressed() {
+        notifyDismissOnce()
         window?.close()
-        onDismiss?()
     }
 
     func windowWillClose(_ notification: Notification) {
-        onDismiss?()
+        notifyDismissOnce()
     }
 }

@@ -102,10 +102,7 @@ import AppKit
 
         populateFeatures(into: documentStack)
 
-        let clipView = NSClipView()
-        clipView.drawsBackground = false
-        clipView.documentView = documentStack
-        scrollView.contentView = clipView
+        scrollView.documentView = documentStack
 
         rootStack.addArrangedSubview(scrollView)
         NSLayoutConstraint.activate([
@@ -206,13 +203,20 @@ import AppKit
         return row
     }
 
-    @objc private func primaryButtonClicked() {
-        close()
+    private var hasDismissed = false
+    private func notifyDismissOnce() {
+        guard !hasDismissed else { return }
+        hasDismissed = true
         onDismiss?()
     }
 
+    @objc private func primaryButtonClicked() {
+        notifyDismissOnce()
+        close()
+    }
+
     func windowWillClose(_ notification: Notification) {
-        onDismiss?()
+        notifyDismissOnce()
     }
 }
 

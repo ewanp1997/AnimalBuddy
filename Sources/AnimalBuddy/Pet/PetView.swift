@@ -315,13 +315,10 @@ final class PetView: NSView {
         button.isTransparent = true
         button.target = self
         button.action = slot == .left ? #selector(leftBlushPressed) : #selector(rightBlushPressed)
-        button.setAccessibilityLabel("\(slot == .left ? "Left" : "Right") macro trigger")
         button.setAccessibilityLabel("\(slot == .left ? "Left" : "Right") eye macro trigger")
     }
 
     func updateBlushMacroLabels(_ settings: AppSettings) {
-        leftBlushButton.toolTip = settings.leftBlushMacro.isConfigured ? settings.leftBlushMacro.name : "Configure left blush macro"
-        rightBlushButton.toolTip = settings.rightBlushMacro.isConfigured ? settings.rightBlushMacro.name : "Configure right blush macro"
         leftBlushButton.toolTip = settings.leftBlushMacro.isConfigured ? settings.leftBlushMacro.name : "Configure left eye macro"
         rightBlushButton.toolTip = settings.rightBlushMacro.isConfigured ? settings.rightBlushMacro.name : "Configure right eye macro"
     }

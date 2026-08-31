@@ -24,6 +24,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private let actionPopover = DropActionPopoverController()
     private let speechBubble = SpeechBubbleWindowController()
     private var tipTimer: Timer?
+    private var focusTimer: Timer?
     private var lastShownTipId: String?
     private var lastRestingFrame = NSRect(x: 120, y: 120, width: 150, height: 150)
 
@@ -35,6 +36,17 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         super.init(window: window); window.delegate = self; window.contentView = petView; petView.autoresizingMask = [.width, .height]; window.isMovableByWindowBackground = true
         startMouseTracking()
         configureTipTimer()
+        configureFocusTimer()
+        speechBubble.onFocusBubbleClicked = { [weak self] isReminder in
+            guard let self else { return }
+            if isReminder {
+                SoundEffectPlayer.shared.playWorkReminder(enabled: self.settings.soundEffectsEnabled)
+            } else {
+                SoundEffectPlayer.shared.playCuteReaction(enabled: self.settings.soundEffectsEnabled)
+            }
+            self.petView.state = .success
+            self.resetSoon()
+        }
         window.onDragBegan = { [weak self] in
             guard let self else { return }
             self.isPetDragging = false
@@ -97,6 +109,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.updateBlushMacroLabels(settings)
         updateHoverOpacity()
         configureTipTimer()
+        configureFocusTimer()
     }
     func minimizePet() {
         guard let window, !isMinimizing else { return }
@@ -618,7 +631,12 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.updateDragPresentation(nil)
     }
     private func currentModifierFlags() -> Int { let flags = NSEvent.modifierFlags; var value = 0; if flags.contains(.option) { value |= ModifierCombination.option.rawValue }; if flags.contains(.command) { value |= ModifierCombination.command.rawValue }; if flags.contains(.shift) { value |= ModifierCombination.shift.rawValue }; if flags.contains(.control) { value |= ModifierCombination.control.rawValue }; return value }
-    private func resetSoon() { DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { self.petView.state = .idle } }
+    private func resetSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            guard let self, !self.petView.isDiscoMode else { return }
+            self.petView.state = .idle
+        }
+    }
 
     private func startMouseTracking() {
         mouseTrackingTimer?.invalidate()
@@ -634,7 +652,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     }
 
     private func updateMouseTracking() {
-        guard let window else { return }
+        guard let window, window.isVisible, !isMinimizing else { return }
         updateHoverOpacity()
         let mouseLocation = NSEvent.mouseLocation
         let distance = Self.distance(from: mouseLocation, to: window.frame)
@@ -663,6 +681,19 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         speechBubble.show(tip: chosenTip, relativeTo: window.frame, in: window.screen)
     }
 
+    func showFocusSound(_ soundItem: FocusSoundItem? = nil) {
+        guard let window, window.isVisible, !isMinimizing, !isPetDragging else { return }
+        let item = soundItem ?? FocusSoundCatalog.randomSound(for: settings.animalKind)
+        SoundEffectPlayer.shared.playFocusSound(for: item, enabled: settings.soundEffectsEnabled)
+        speechBubble.showFocusSound(
+            item: item,
+            animal: settings.animalKind,
+            isWorkReminderMode: settings.focusModeWorkRemindersEnabled,
+            relativeTo: window.frame,
+            in: window.screen
+        )
+    }
+
     private func configureTipTimer() {
         tipTimer?.invalidate()
         tipTimer = nil
@@ -686,6 +717,34 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
                     self.showTip()
                 }
                 self.scheduleNextTipTimer()
+            }
+        }
+    }
+
+    private func configureFocusTimer() {
+        focusTimer?.invalidate()
+        focusTimer = nil
+
+        guard settings.focusModeEnabled else {
+            return
+        }
+
+        scheduleNextFocusTimer()
+    }
+
+    private func scheduleNextFocusTimer() {
+        focusTimer?.invalidate()
+        let minutes = max(1, settings.focusModeIntervalMinutes)
+        let baseSeconds = Double(minutes * 60)
+        // Add subtle variation +/- 15 seconds so it feels organic
+        let interval = max(15, baseSeconds + Double.random(in: -15...15))
+        focusTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.settings.focusModeEnabled else { return }
+                if !self.isPetDragging && !self.isMinimizing && !self.isExternalDragHovering && !self.isAwaitingActionChoice {
+                    self.showFocusSound()
+                }
+                self.scheduleNextFocusTimer()
             }
         }
     }
