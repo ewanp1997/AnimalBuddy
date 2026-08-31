@@ -350,26 +350,26 @@ import UniformTypeIdentifiers
     func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.43"
+        settings.lastSeenAppVersion = "a0.50"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.50")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.65")
         guard case .whatsNew(let version, let releases)? = presentation else {
             XCTFail("Expected .whatsNew presentation on update")
             return
         }
-        XCTAssertEqual(version, "a0.50")
+        XCTAssertEqual(version, "a0.65")
         XCTAssertEqual(releases.count, 1)
-        XCTAssertEqual(releases.first?.version, "a0.50")
-        XCTAssertEqual(releases.first?.releaseTitle, "HD 3D Sprites & Refined Settings")
-        XCTAssertTrue(releases.first?.features.contains { $0.title == "HD 3D Gradient Sprites" } == true)
+        XCTAssertEqual(releases.first?.version, "a0.65")
+        XCTAssertEqual(releases.first?.releaseTitle, "Help Me Focus Mode & Performance Polish")
+        XCTAssertTrue(releases.first?.features.contains { $0.title == "Help Me Focus & Just Cute Modes" } == true)
     }
 
     func testWelcomeEvaluatorSameVersionReturnsNil() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.50"
+        settings.lastSeenAppVersion = "a0.65"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.50")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.65")
         XCTAssertNil(presentation, "Expected nil when version matches last seen")
     }
 
@@ -378,12 +378,12 @@ import UniformTypeIdentifiers
         settings.hasCompletedWelcome = true
         settings.lastSeenAppVersion = "a0.25"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.50")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.65")
         guard case .whatsNew(_, let releases)? = presentation else {
             XCTFail("Expected .whatsNew for multi-version upgrade")
             return
         }
-        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50"])
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50", "a0.65"])
     }
 
     func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
@@ -513,10 +513,10 @@ import UniformTypeIdentifiers
     }
 
     func testVersionComparisonDetectsUpdate() {
-        XCTAssertTrue(VersionComparator.isVersion("a0.50", greaterThan: "a0.43"))
-        XCTAssertTrue(VersionComparator.isVersion("a0.50", greaterThan: "a0.27"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.50", greaterThan: "a0.50"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.43", greaterThan: "a0.50"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.65", greaterThan: "a0.50"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.65", greaterThan: "a0.43"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.65", greaterThan: "a0.65"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.50", greaterThan: "a0.65"))
     }
 
     func testFileTypeOrganizerSortsKnownFileTypesIntoCorrectSubfolders() {

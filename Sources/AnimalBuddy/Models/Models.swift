@@ -1403,6 +1403,27 @@ public enum AppChangelog {
                     description: "Replaced segmented bars with native vertical dropdown pickers, showing the full names for all pets and themes without truncation."
                 )
             ]
+        ),
+        VersionRelease(
+            version: "a0.65",
+            releaseTitle: "Help Me Focus Mode & Performance Polish",
+            features: [
+                FeatureItem(
+                    iconName: "target",
+                    title: "Help Me Focus & Just Cute Modes",
+                    description: "Periodic cute pet noises and interactive bubbles that transform into encouraging work reminders or loving reactions."
+                ),
+                FeatureItem(
+                    iconName: "speaker.wave.2.fill",
+                    title: "Independent Sound Effects Toggle",
+                    description: "Easily mute or unmute audio sound effects from the menu bar or Settings without disabling visual bubbles."
+                ),
+                FeatureItem(
+                    iconName: "bolt.badge.checkmark",
+                    title: "Pre-Beta Optimization & Bug Fixes",
+                    description: "Reduced app bundle size by ~38%, resolved process deadlocks, hardened URL drag handling, and optimized battery/CPU efficiency."
+                )
+            ]
         )
     ]
 }

@@ -32,7 +32,7 @@ import UniformTypeIdentifiers
     private var alwaysOnTop: Bool
     private var snappingEnabled: Bool
     private var minimizeDestination: MinimizeDestination
-    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.50")
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.65")
     private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
 
     private let focusModeToggle = NSButton(checkboxWithTitle: "Enable Focus Mode & Cute Sounds (off by default)", target: nil, action: nil)

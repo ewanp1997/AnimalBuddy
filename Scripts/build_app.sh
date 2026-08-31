@@ -47,7 +47,7 @@ fi
 
 # Package zip for GitHub release
 APP_VERSION="$(grep -A 1 "CFBundleShortVersionString" App/Info.plist | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')"
-ZIP_NAME="AnimalBuddy-${APP_VERSION:-a0.50}.zip"
+ZIP_NAME="AnimalBuddy-${APP_VERSION:-a0.65}.zip"
 echo "🗜️ Creating release archive $ZIP_NAME..."
 rm -f "$ZIP_NAME" ".build/$ZIP_NAME"
 ditto -c -k --sequesterRsrc --keepParent "$PRIMARY_APP" "$ZIP_NAME"

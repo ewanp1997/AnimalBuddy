@@ -54,7 +54,7 @@ import UniformTypeIdentifiers
         petWindow?.showPet()
         updateStatusBar()
 
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.65"
         if let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: currentVersion) {
             showWelcome(presentation: presentation, currentVersion: currentVersion)
         }
@@ -157,7 +157,7 @@ import UniformTypeIdentifiers
     }
 
     private func showWelcomeFromMenu() {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.65"
         let presentation: WelcomePresentationKind
         if let latestRelease = AppChangelog.releases.last {
             presentation = .whatsNew(currentVersion: currentVersion, unseenReleases: [latestRelease])
@@ -168,7 +168,7 @@ import UniformTypeIdentifiers
     }
 
     private func checkForUpdates(silent: Bool) {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.50"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.65"
         let skipped = settings.skippedAppVersion
 
         Task { @MainActor [weak self] in
