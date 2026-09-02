@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import CoreAudio
 
 @MainActor
 public final class MusicPlaybackWatcher: ObservableObject {
@@ -8,9 +7,9 @@ public final class MusicPlaybackWatcher: ObservableObject {
 
     public var onPlaybackStateChanged: ((Bool) -> Void)?
 
-    private(set) var isSystemAudioPlaying: Bool = false {
+    private(set) var isSystemMediaPlaying: Bool = false {
         didSet {
-            if oldValue != isSystemAudioPlaying {
+            if oldValue != isSystemMediaPlaying {
                 notifyChange()
             }
         }
@@ -33,20 +32,26 @@ public final class MusicPlaybackWatcher: ObservableObject {
     }
 
     public var isEffectivelyPlaying: Bool {
-        isPreviewActive || isSystemAudioPlaying || isMusicAppPlaying
+        if isPreviewActive { return true }
+        return isSystemMediaPlaying || isMusicAppPlaying
     }
 
-    private var currentOutputDeviceID: AudioDeviceID = 0
-    private var isRunningListenerBlock: AudioObjectPropertyListenerBlock?
-    private var defaultDeviceListenerBlock: AudioObjectPropertyListenerBlock?
+    // MediaRemote dynamic function bindings
+    private typealias MRRegisterForNowPlayingNotificationsFn = @convention(c) (DispatchQueue) -> Void
+    private typealias MRGetNowPlayingApplicationIsPlayingFn = @convention(c) (DispatchQueue, @escaping (Bool) -> Void) -> Void
+    private typealias MRGetNowPlayingInfoFn = @convention(c) (DispatchQueue, @escaping (CFDictionary?) -> Void) -> Void
+
+    private var getIsPlaying: MRGetNowPlayingApplicationIsPlayingFn?
+    private var getInfo: MRGetNowPlayingInfoFn?
+
     private var pollTimer: Timer?
-    private var isQuerying = false
+    private var isQueryingAppleScript = false
 
     private init() {
-        registerSystemAudioListener()
+        setupMediaRemote()
         registerDistributedNotifications()
         startPeriodicCheck()
-        checkSystemAudioNow()
+        checkSystemMediaPlaybackNow()
         checkRunningStateNow()
     }
 
@@ -62,106 +67,74 @@ public final class MusicPlaybackWatcher: ObservableObject {
         onPlaybackStateChanged?(isEffectivelyPlaying)
     }
 
-    // MARK: - System-Wide Audio Output Detection (CoreAudio)
+    // MARK: - MediaRemote System-Wide Playback Detection
 
-    private func registerSystemAudioListener() {
-        updateCurrentOutputDevice()
-
-        var defaultDeviceAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        let devBlock: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                self?.updateCurrentOutputDevice()
-                self?.checkSystemAudioNow()
-            }
-        }
-        self.defaultDeviceListenerBlock = devBlock
-        AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &defaultDeviceAddress,
-            DispatchQueue.main,
-            devBlock
-        )
-    }
-
-    private func updateCurrentOutputDevice() {
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var newDeviceID = AudioDeviceID(0)
-        var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            0,
-            nil,
-            &propertySize,
-            &newDeviceID
-        )
-
-        guard status == noErr, newDeviceID != 0 else { return }
-
-        if currentOutputDeviceID != 0, let isRunningListenerBlock {
-            var oldAddress = AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            AudioObjectRemovePropertyListenerBlock(currentOutputDeviceID, &oldAddress, DispatchQueue.main, isRunningListenerBlock)
-        }
-
-        currentOutputDeviceID = newDeviceID
-
-        var isRunningAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        let runBlock: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                self?.checkSystemAudioNow()
-            }
-        }
-        self.isRunningListenerBlock = runBlock
-        AudioObjectAddPropertyListenerBlock(
-            newDeviceID,
-            &isRunningAddress,
-            DispatchQueue.main,
-            runBlock
-        )
-    }
-
-    public func checkSystemAudioNow() {
-        guard currentOutputDeviceID != 0 else {
-            updateCurrentOutputDevice()
+    private func setupMediaRemote() {
+        guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW) else {
             return
         }
 
-        var isRunningAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var isRunning: UInt32 = 0
-        var isRunningSize = UInt32(MemoryLayout<UInt32>.size)
-        let status = AudioObjectGetPropertyData(
-            currentOutputDeviceID,
-            &isRunningAddress,
-            0,
-            nil,
-            &isRunningSize,
-            &isRunning
-        )
+        if let regSym = dlsym(handle, "MRMediaRemoteRegisterForNowPlayingNotifications") {
+            let registerFn = unsafeBitCast(regSym, to: MRRegisterForNowPlayingNotificationsFn.self)
+            registerFn(DispatchQueue.main)
+        }
 
-        if status == noErr {
-            self.isSystemAudioPlaying = (isRunning != 0)
+        if let isPlayingSym = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying") {
+            getIsPlaying = unsafeBitCast(isPlayingSym, to: MRGetNowPlayingApplicationIsPlayingFn.self)
+        }
+
+        if let infoSym = dlsym(handle, "MRMediaRemoteGetNowPlayingInfo") {
+            getInfo = unsafeBitCast(infoSym, to: MRGetNowPlayingInfoFn.self)
+        }
+
+        // Register for system-wide Now Playing notifications
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: NSNotification.Name("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkSystemMediaPlaybackNow()
+            }
+        }
+
+        center.addObserver(
+            forName: NSNotification.Name("kMRMediaRemoteNowPlayingInfoDidChangeNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkSystemMediaPlaybackNow()
+            }
+        }
+    }
+
+    public func checkSystemMediaPlaybackNow() {
+        guard let getIsPlaying else { return }
+
+        getIsPlaying(DispatchQueue.main) { [weak self] isPlaying in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if !isPlaying {
+                    self.isSystemMediaPlaying = false
+                } else if let getInfo = self.getInfo {
+                    // Check playback rate from Now Playing info (rate == 0 means paused)
+                    getInfo(DispatchQueue.main) { [weak self] dict in
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
+                            if let d = dict as? [String: Any],
+                               let rate = (d["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue {
+                                self.isSystemMediaPlaying = (rate > 0)
+                            } else {
+                                self.isSystemMediaPlaying = isPlaying
+                            }
+                        }
+                    }
+                } else {
+                    self.isSystemMediaPlaying = isPlaying
+                }
+            }
         }
     }
 
@@ -211,6 +184,10 @@ public final class MusicPlaybackWatcher: ObservableObject {
         if let state {
             let playing = (state.caseInsensitiveCompare("Playing") == .orderedSame)
             self.isMusicAppPlaying = playing
+            if !playing {
+                // When paused, immediately verify system media state as well
+                checkSystemMediaPlaybackNow()
+            }
         } else {
             checkRunningStateNow()
         }
@@ -218,16 +195,17 @@ public final class MusicPlaybackWatcher: ObservableObject {
 
     private func startPeriodicCheck() {
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // Fast, lightweight polling every 1.5 seconds to promptly catch pause events
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.checkSystemAudioNow()
+                self?.checkSystemMediaPlaybackNow()
                 self?.checkRunningStateNow()
             }
         }
     }
 
     public func checkRunningStateNow() {
-        guard !isQuerying else { return }
+        guard !isQueryingAppleScript else { return }
 
         let musicApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
         let spotifyApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client")
@@ -240,7 +218,7 @@ public final class MusicPlaybackWatcher: ObservableObject {
             return
         }
 
-        isQuerying = true
+        isQueryingAppleScript = true
         Task.detached(priority: .utility) { [isMusicAppRunning, isSpotifyAppRunning] in
             var playing = false
 
@@ -260,7 +238,7 @@ public final class MusicPlaybackWatcher: ObservableObject {
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                self.isQuerying = false
+                self.isQueryingAppleScript = false
                 self.isMusicAppPlaying = playing
             }
         }

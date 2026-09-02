@@ -1432,7 +1432,7 @@ public enum AppChangelog {
                 FeatureItem(
                     iconName: "headphones",
                     title: "Music Companion & DJ Headphones",
-                    description: "Your pet puts on custom DJ headphones whenever you play music or audio system-wide (YouTube, Spotify, Apple Music, podcasts, browsers, or any media)."
+                    description: "Your pet puts on custom DJ headphones whenever you play music in Apple Music or Spotify."
                 ),
                 FeatureItem(
                     iconName: "music.note",
