@@ -350,26 +350,26 @@ import UniformTypeIdentifiers
     func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.50"
+        settings.lastSeenAppVersion = "a0.65"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.65")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.66")
         guard case .whatsNew(let version, let releases)? = presentation else {
             XCTFail("Expected .whatsNew presentation on update")
             return
         }
-        XCTAssertEqual(version, "a0.65")
+        XCTAssertEqual(version, "a0.66")
         XCTAssertEqual(releases.count, 1)
-        XCTAssertEqual(releases.first?.version, "a0.65")
-        XCTAssertEqual(releases.first?.releaseTitle, "Help Me Focus Mode & Performance Polish")
-        XCTAssertTrue(releases.first?.features.contains { $0.title == "Help Me Focus & Just Cute Modes" } == true)
+        XCTAssertEqual(releases.first?.version, "a0.66")
+        XCTAssertEqual(releases.first?.releaseTitle, "Music Companion: Headphones & Dancing")
+        XCTAssertTrue(releases.first?.features.contains { $0.title == "Music Companion & DJ Headphones" } == true)
     }
 
     func testWelcomeEvaluatorSameVersionReturnsNil() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.65"
+        settings.lastSeenAppVersion = "a0.66"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.65")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.66")
         XCTAssertNil(presentation, "Expected nil when version matches last seen")
     }
 
@@ -378,12 +378,12 @@ import UniformTypeIdentifiers
         settings.hasCompletedWelcome = true
         settings.lastSeenAppVersion = "a0.25"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.65")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.66")
         guard case .whatsNew(_, let releases)? = presentation else {
             XCTFail("Expected .whatsNew for multi-version upgrade")
             return
         }
-        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50", "a0.65"])
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50", "a0.65", "a0.66"])
     }
 
     func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
@@ -513,10 +513,10 @@ import UniformTypeIdentifiers
     }
 
     func testVersionComparisonDetectsUpdate() {
-        XCTAssertTrue(VersionComparator.isVersion("a0.65", greaterThan: "a0.50"))
-        XCTAssertTrue(VersionComparator.isVersion("a0.65", greaterThan: "a0.43"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.65", greaterThan: "a0.65"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.50", greaterThan: "a0.65"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.66", greaterThan: "a0.65"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.66", greaterThan: "a0.50"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.66", greaterThan: "a0.66"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.65", greaterThan: "a0.66"))
     }
 
     func testFileTypeOrganizerSortsKnownFileTypesIntoCorrectSubfolders() {
@@ -733,5 +733,42 @@ import UniformTypeIdentifiers
         XCTAssertFalse(settings.soundEffectsEnabled)
         XCTAssertFalse(settings.focusModeWorkRemindersEnabled)
     }
+
+    func testMusicDancingSettingRoundTripsAndDefaultsToTrue() throws {
+        var settings = AppSettings()
+        XCTAssertTrue(settings.musicDancingEnabled, "Default should be true")
+
+        settings.musicDancingEnabled = false
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertFalse(decoded.musicDancingEnabled)
+
+        // Test backward compatibility when musicDancingEnabled key is missing from JSON
+        let legacyJson = """
+        {
+            "alwaysOnTop": true,
+            "petScale": 1.0,
+            "snappingEnabled": false
+        }
+        """.data(using: .utf8)!
+        let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: legacyJson)
+        XCTAssertTrue(legacyDecoded.musicDancingEnabled, "Missing key should fallback to true")
+    }
+
+    @MainActor
+    func testMusicPlaybackWatcherPreviewToggle() {
+        let watcher = MusicPlaybackWatcher.shared
+        let originalPreview = watcher.isPreviewActive
+
+        watcher.setPreview(active: true)
+        XCTAssertTrue(watcher.isPreviewActive)
+        XCTAssertTrue(watcher.isEffectivelyPlaying)
+
+        watcher.setPreview(active: false)
+        XCTAssertFalse(watcher.isPreviewActive)
+
+        watcher.setPreview(active: originalPreview)
+    }
 }
+
 

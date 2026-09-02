@@ -128,6 +128,14 @@ final class PetView: NSView {
     private(set) var isDiscoMode: Bool = false
     private var discoEndsAt: Date = .distantPast
     private var discoPhase: Double = 0
+    var isDancingToMusic: Bool = false {
+        didSet {
+            if oldValue != isDancingToMusic {
+                needsDisplay = true
+            }
+        }
+    }
+    private var musicDancePhase: Double = 0
     override var isFlipped: Bool { true }
 
     func startDiscoMode(duration: TimeInterval = 8.5) {
@@ -405,6 +413,14 @@ final class PetView: NSView {
             leftWingFlap = CGFloat(sin(discoPhase * 2.5)) * 32.0
             rightWingFlap = CGFloat(cos(discoPhase * 2.5)) * 32.0
             flightTiltAngle = CGFloat(sin(discoPhase * 1.2)) * 14.0
+        } else if isDancingToMusic {
+            // Cheerful rhythmic bounce & groove when listening to music!
+            musicDancePhase += dt * 7.2
+            let musicBob = CGFloat(sin(musicDancePhase)) * (animalKind == .slinky ? 5.8 : 3.8)
+            bobOffset = musicBob
+            leftWingFlap = CGFloat(sin(musicDancePhase * 1.5)) * 14.0
+            rightWingFlap = CGFloat(cos(musicDancePhase * 1.5)) * 14.0
+            flightTiltAngle = CGFloat(sin(musicDancePhase * 0.5)) * 5.0
         } else {
             if animalKind == .slinky {
                 bobOffset = CGFloat(sin(bobPhase * 1.4)) * 2.5
@@ -669,6 +685,10 @@ final class PetView: NSView {
         drawRimHighlight()
         if flightIntensity > 0.25 { drawFlightBreeze(intensity: flightIntensity) }
         if isDiscoMode { drawDiscoMode(discoPhase: discoPhase) }
+        if isDancingToMusic {
+            drawHeadphones(for: animalKind, accentColor: accentColor)
+            drawFloatingMusicNotes(phase: musicDancePhase)
+        }
         if let dragPresentation { drawDragPresentation(dragPresentation) }
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
         if state != .idle {
@@ -1740,6 +1760,147 @@ final class PetView: NSView {
         breeze.move(to: NSPoint(x: 136, y: 130))
         breeze.curve(to: NSPoint(x: 122, y: 135), controlPoint1: NSPoint(x: 132, y: 134), controlPoint2: NSPoint(x: 127, y: 135))
         breeze.stroke()
+    }
+
+    private func drawHeadphones(for kind: AnimalKind, accentColor: NSColor) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let (leftCenter, rightCenter, archTopY): (NSPoint, NSPoint, CGFloat) = switch kind {
+        case .bird:
+            (NSPoint(x: 27, y: 55), NSPoint(x: 123, y: 55), 14)
+        case .dog:
+            (NSPoint(x: 28, y: 55), NSPoint(x: 122, y: 55), 14)
+        case .cat:
+            (NSPoint(x: 29, y: 56), NSPoint(x: 121, y: 56), 16)
+        case .monkey:
+            (NSPoint(x: 21, y: 62), NSPoint(x: 129, y: 62), 16)
+        case .giraffe:
+            (NSPoint(x: 30, y: 56), NSPoint(x: 120, y: 56), 20)
+        case .slinky:
+            (NSPoint(x: 28, y: 56), NSPoint(x: 122, y: 56), 14)
+        }
+
+        // 1. Headband Arch (outer chassis)
+        let headband = NSBezierPath()
+        headband.move(to: NSPoint(x: leftCenter.x + 3, y: leftCenter.y - 6))
+        headband.curve(
+            to: NSPoint(x: rightCenter.x - 3, y: rightCenter.y - 6),
+            controlPoint1: NSPoint(x: leftCenter.x + 14, y: archTopY),
+            controlPoint2: NSPoint(x: rightCenter.x - 14, y: archTopY)
+        )
+        headband.lineCapStyle = .round
+
+        // Outer dark chassis
+        NSColor(calibratedWhite: 0.16, alpha: 0.98).setStroke()
+        headband.lineWidth = 6.0
+        headband.stroke()
+
+        // Metallic accent stripe
+        accentColor.withAlphaComponent(0.85).setStroke()
+        headband.lineWidth = 1.8
+        headband.stroke()
+
+        // Soft underside cushion on the crown
+        let innerCushion = NSBezierPath()
+        innerCushion.move(to: NSPoint(x: 52, y: archTopY + 2.5))
+        innerCushion.curve(
+            to: NSPoint(x: 98, y: archTopY + 2.5),
+            controlPoint1: NSPoint(x: 65, y: archTopY + 1.0),
+            controlPoint2: NSPoint(x: 85, y: archTopY + 1.0)
+        )
+        NSColor(calibratedWhite: 0.28, alpha: 0.9).setStroke()
+        innerCushion.lineWidth = 3.2
+        innerCushion.lineCapStyle = .round
+        innerCushion.stroke()
+
+        // 2. Ear Cups (Padded DJ style cups)
+        let cupWidth: CGFloat = 17
+        let cupHeight: CGFloat = 28
+        let leftCupRect = NSRect(x: leftCenter.x - cupWidth / 2, y: leftCenter.y - cupHeight / 2, width: cupWidth, height: cupHeight)
+        let rightCupRect = NSRect(x: rightCenter.x - cupWidth / 2, y: rightCenter.y - cupHeight / 2, width: cupWidth, height: cupHeight)
+
+        drawSingleEarCup(in: leftCupRect, isLeft: true, accentColor: accentColor)
+        drawSingleEarCup(in: rightCupRect, isLeft: false, accentColor: accentColor)
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawSingleEarCup(in rect: NSRect, isLeft: Bool, accentColor: NSColor) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let tilt: CGFloat = isLeft ? 5.0 : -5.0
+        let transform = NSAffineTransform()
+        transform.translateX(by: rect.midX, yBy: rect.midY)
+        transform.rotate(byDegrees: tilt)
+        transform.translateX(by: -rect.midX, yBy: -rect.midY)
+        transform.concat()
+
+        // A. Inner Soft Foam Cushion (contacts the ear)
+        let cushionFrame = isLeft
+            ? NSRect(x: rect.minX + 3, y: rect.minY + 2, width: rect.width - 4, height: rect.height - 4)
+            : NSRect(x: rect.minX + 1, y: rect.minY + 2, width: rect.width - 4, height: rect.height - 4)
+        let cushionPath = NSBezierPath(roundedRect: cushionFrame, xRadius: 7, yRadius: 7)
+        NSColor(calibratedWhite: 0.12, alpha: 0.98).setFill()
+        cushionPath.fill()
+
+        // B. Outer Metallic Cup Shell
+        let shellFrame = isLeft
+            ? NSRect(x: rect.minX - 1, y: rect.minY, width: rect.width - 3, height: rect.height)
+            : NSRect(x: rect.minX + 4, y: rect.minY, width: rect.width - 3, height: rect.height)
+        let shellPath = NSBezierPath(roundedRect: shellFrame, xRadius: 8, yRadius: 8)
+        let shellTop = NSColor(calibratedWhite: 0.36, alpha: 1.0)
+        let shellBottom = NSColor(calibratedWhite: 0.18, alpha: 1.0)
+        drawGradientPath(shellPath, topColor: shellTop, bottomColor: shellBottom, angle: 90)
+
+        // C. Accent Ring on Outer Face
+        accentColor.withAlphaComponent(0.92).setStroke()
+        let ringPath = NSBezierPath(roundedRect: shellFrame.insetBy(dx: 2.2, dy: 3.0), xRadius: 5.5, yRadius: 5.5)
+        ringPath.lineWidth = 1.6
+        ringPath.stroke()
+
+        // D. Aluminum Center Hub / Swivel Disc
+        let hubCenter = NSPoint(x: shellFrame.midX, y: shellFrame.midY)
+        let hubRect = NSRect(x: hubCenter.x - 3.5, y: hubCenter.y - 3.5, width: 7, height: 7)
+        NSColor(calibratedWhite: 0.82, alpha: 1.0).setFill()
+        NSBezierPath(ovalIn: hubRect).fill()
+        NSColor(calibratedWhite: 0.40, alpha: 0.8).setStroke()
+        let hubBorder = NSBezierPath(ovalIn: hubRect)
+        hubBorder.lineWidth = 0.8
+        hubBorder.stroke()
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawFloatingMusicNotes(phase: Double) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let notes: [(symbol: String, baseX: CGFloat, baseY: CGFloat, speed: Double, offset: Double, color: NSColor)] = [
+            ("♪", 16.0, 22.0, 6.0, 0.0, NSColor(calibratedRed: 0.95, green: 0.45, blue: 0.75, alpha: 1.0)),
+            ("♫", 126.0, 20.0, 7.2, 2.4, NSColor(calibratedRed: 0.35, green: 0.75, blue: 1.0, alpha: 1.0)),
+            ("♩", 100.0, 10.0, 5.5, 4.2, NSColor(calibratedRed: 0.98, green: 0.82, blue: 0.25, alpha: 1.0))
+        ]
+
+        for note in notes {
+            let cycle = fmod(phase * note.speed + note.offset, 28.0)
+            let progress = cycle / 28.0
+            let alpha = CGFloat(sin(progress * .pi)) * 0.92
+            guard alpha > 0.05 else { continue }
+
+            let sway = CGFloat(sin(phase * 2.0 + note.offset)) * 3.5
+            let x = note.baseX + sway
+            let y = note.baseY - CGFloat(cycle)
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 13, weight: .bold),
+                .foregroundColor: note.color.withAlphaComponent(alpha)
+            ]
+            (note.symbol as NSString).draw(at: NSPoint(x: x, y: y), withAttributes: attributes)
+        }
+
+        context.restoreGraphicsState()
     }
 
     private func drawSparkle(at point: NSPoint) {

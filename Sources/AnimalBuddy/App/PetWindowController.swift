@@ -97,6 +97,10 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.googlyEyesEnabled = settings.googlyEyesEnabled
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
+        MusicPlaybackWatcher.shared.onPlaybackStateChanged = { [weak self] _ in
+            self?.updateMusicDancing()
+        }
+        updateMusicDancing()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(settings: AppSettings) {
@@ -110,6 +114,17 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         updateHoverOpacity()
         configureTipTimer()
         configureFocusTimer()
+        updateMusicDancing()
+    }
+
+    func updateMusicDancing() {
+        let shouldDance = settings.musicDancingEnabled && MusicPlaybackWatcher.shared.isEffectivelyPlaying
+        petView.isDancingToMusic = shouldDance
+    }
+
+    func toggleMusicDancingPreview() {
+        MusicPlaybackWatcher.shared.togglePreview()
+        updateMusicDancing()
     }
     func minimizePet() {
         guard let window, !isMinimizing else { return }

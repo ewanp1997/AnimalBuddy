@@ -63,14 +63,15 @@ sudo xattr -rd com.apple.quarantine "/Applications/Animal Buddy.app"
 
 ## Current functionality
 
-The `a0.65` release includes:
+The `a0.66` release includes:
 
+- **🎧 Music Companion: System-Wide Headphones & Dancing**: Automatically detects when music or audio is playing system-wide (YouTube, Spotify, Apple Music, podcasts, browsers, or any media output), putting cute DJ headphones on your pet and grooving along with rhythmic dance bounces and floating musical notes! Includes instant preview controls and a settings toggle.
+- **HD 3D Gradient Sprites**: All 6 companions (Bird, Dog, Cat, Monkey, Giraffe, Slinky) upgraded with multi-stop 3D lighting, specular highlights, Disney/anime sparkle eyes, and species-specific physical accents (feather crests, collar pendants, tabby stripes, paw beans, horn spheres, wire reflection highlights).
+- **Full-Name Animal & Theme Selectors**: Native vertical dropdown pickers in Settings that clearly show full animal and theme titles without truncation.
 - **Help Me Focus & Just Cute Modes**: Your pet companion periodically makes adorable noises and presents an interactive floating speech bubble. In *Help Me Focus* mode, clicking the bubble transforms it into an inspiring focus reminder (e.g. *Back to work! 🎯*) with celebratory sparkles. In *Just Cute (For Nothing)* mode, clicking reveals warm, cheerful companion messages without work reminders.
 - **Independent Audio Sound Effects Toggle**: Easily mute or unmute audio sound effects with 1 click directly from the menu bar or Settings checkbox without disabling visual speech bubbles.
 - **Pre-Beta Codebase Audit & Size Reduction**: Binary size reduced by ~43% (symbol stripping and dead code removal) and app bundle footprint reduced by ~38%, with zero waste space.
 - **Process Deadlock Prevention**: Hardened shell process execution to prevent pipe deadlocks on large standard error output.
-- **HD 3D Gradient Sprites**: All 6 companions (Bird, Dog, Cat, Monkey, Giraffe, Slinky) upgraded with multi-stop 3D lighting, specular highlights, Disney/anime sparkle eyes, and species-specific physical accents.
-- **Full-Name Animal & Theme Selectors**: Native vertical dropdown pickers in Settings that clearly show full animal and theme titles without truncation.
 - **Streamlined Menu Bar**: Clean, lightweight status menu with dynamic Show/Hide and direct access to Settings without visual clutter.
 - **General Settings Tab**: Centralized hub for configuring the Desktop Inbox storage directory, window behavior, floating and snapping rules, helpful tips, and software updates.
 - **Custom Desktop Inbox Location**: Choose any directory on your Mac for dropped files and snippets, with instant **Reveal in Finder** and **Reset to Default** actions.

@@ -2,11 +2,12 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool, Bool) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onShowTipPreview: (() -> Void)?
     var onShowFocusSoundPreview: (() -> Void)?
+    var onToggleMusicPreview: (() -> Void)?
 
     private var leftBuilder: MacroBuilderView
     private var rightBuilder: MacroBuilderView
@@ -25,6 +26,7 @@ import UniformTypeIdentifiers
     private var focusModeWorkRemindersEnabled: Bool
     private var focusModeIntervalMinutes: Int
     private var soundEffectsEnabled: Bool
+    private var musicDancingEnabled: Bool
     private var destinationFolderPath: String?
     private var organizeInboxByFileType: Bool
     private var inboxSubfolderRules: [InboxSubfolderRule]
@@ -32,7 +34,7 @@ import UniformTypeIdentifiers
     private var alwaysOnTop: Bool
     private var snappingEnabled: Bool
     private var minimizeDestination: MinimizeDestination
-    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.65")
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.66")
     private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
 
     private let focusModeToggle = NSButton(checkboxWithTitle: "Enable Focus Mode & Cute Sounds (off by default)", target: nil, action: nil)
@@ -40,6 +42,7 @@ import UniformTypeIdentifiers
     private let focusModeDesc = NSTextField(wrappingLabelWithString: "")
     private let soundEffectsToggle = NSButton(checkboxWithTitle: "Play audio sound effects with bubble", target: nil, action: nil)
     private let focusIntervalPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let musicDancingToggle = NSButton(checkboxWithTitle: "Wear headphones & dance when listening to music", target: nil, action: nil)
 
     private let animalPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
@@ -100,6 +103,7 @@ import UniformTypeIdentifiers
         focusModeWorkRemindersEnabled = settings.focusModeWorkRemindersEnabled
         focusModeIntervalMinutes = settings.focusModeIntervalMinutes
         soundEffectsEnabled = settings.soundEffectsEnabled
+        musicDancingEnabled = settings.musicDancingEnabled
         destinationFolderPath = settings.destinationFolderPath
         organizeInboxByFileType = settings.organizeInboxByFileType
         inboxSubfolderRules = settings.inboxSubfolderRules
@@ -227,9 +231,10 @@ import UniformTypeIdentifiers
         let windowCard = makeWindowBehaviorCard()
         let tipsCard = makeHelpfulTipsCard()
         let focusCard = makeFocusModeCard()
+        let musicCard = makeMusicDancingCard()
         let updatesCard = makeSoftwareUpdatesCard()
 
-        let mainStack = NSStackView(views: [heading, note, inboxCard, windowCard, tipsCard, focusCard, updatesCard])
+        let mainStack = NSStackView(views: [heading, note, inboxCard, windowCard, tipsCard, focusCard, musicCard, updatesCard])
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -241,6 +246,7 @@ import UniformTypeIdentifiers
         windowCard.translatesAutoresizingMaskIntoConstraints = false
         tipsCard.translatesAutoresizingMaskIntoConstraints = false
         focusCard.translatesAutoresizingMaskIntoConstraints = false
+        musicCard.translatesAutoresizingMaskIntoConstraints = false
         updatesCard.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -257,6 +263,7 @@ import UniformTypeIdentifiers
             windowCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             tipsCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             focusCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
+            musicCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             updatesCard.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56)
         ])
 
@@ -737,6 +744,41 @@ import UniformTypeIdentifiers
         return stack
     }
 
+    private func makeMusicDancingCard() -> NSView {
+        let title = NSTextField(labelWithString: "🎧 Music Companion & Headphones")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        musicDancingToggle.target = self
+        musicDancingToggle.action = #selector(toggleMusicDancingCheckbox(_:))
+        musicDancingToggle.state = musicDancingEnabled ? .on : .off
+        musicDancingToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let desc = NSTextField(wrappingLabelWithString: "Automatically detects when music or audio is playing system-wide (YouTube, Spotify, Apple Music, podcasts, browsers, or any media), putting cute DJ headphones on your pet and grooving along with a cheerful dance!")
+        desc.font = .systemFont(ofSize: 11)
+        desc.textColor = .secondaryLabelColor
+
+        let previewBtn = NSButton(title: "Preview Headphones & Dance", target: self, action: #selector(previewMusicDancingPressed))
+        previewBtn.bezelStyle = .rounded
+        previewBtn.font = .systemFont(ofSize: 12)
+
+        let stack = NSStackView(views: [title, musicDancingToggle, desc, previewBtn])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        musicDancingToggle.translatesAutoresizingMaskIntoConstraints = false
+        desc.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            musicDancingToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+        return stack
+    }
+
     private func makeSoftwareUpdatesCard() -> NSView {
         let title = NSTextField(labelWithString: "🚀 Software Updates")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -896,6 +938,15 @@ import UniformTypeIdentifiers
 
     @objc private func tryFocusSoundPressed() {
         onShowFocusSoundPreview?()
+    }
+
+    @objc private func toggleMusicDancingCheckbox(_ sender: NSButton) {
+        musicDancingEnabled = (sender.state == .on)
+    }
+
+    @objc private func previewMusicDancingPressed() {
+        previewPetView.isDancingToMusic.toggle()
+        onToggleMusicPreview?()
     }
 
     @objc private func toggleGooglyEyes(_ sender: NSButton) {
@@ -1337,7 +1388,8 @@ import UniformTypeIdentifiers
             focusModeEnabled,
             focusModeWorkRemindersEnabled,
             focusModeIntervalMinutes,
-            soundEffectsEnabled
+            soundEffectsEnabled,
+            musicDancingEnabled
         )
         close()
     }

@@ -54,7 +54,7 @@ import UniformTypeIdentifiers
         petWindow?.showPet()
         updateStatusBar()
 
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.65"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.66"
         if let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: currentVersion) {
             showWelcome(presentation: presentation, currentVersion: currentVersion)
         }
@@ -90,7 +90,7 @@ import UniformTypeIdentifiers
         }
 
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest, focusMode, focusReminders, focusInterval, soundEffects in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest, focusMode, focusReminders, focusInterval, soundEffects, musicDancing in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -112,6 +112,7 @@ import UniformTypeIdentifiers
             self.settings.focusModeWorkRemindersEnabled = focusReminders
             self.settings.focusModeIntervalMinutes = focusInterval
             self.settings.soundEffectsEnabled = soundEffects
+            self.settings.musicDancingEnabled = musicDancing
             try? self.settingsStore.save(self.settings)
             self.petWindow?.update(settings: self.settings)
             self.updateStatusBar()
@@ -133,6 +134,9 @@ import UniformTypeIdentifiers
         }
         controller.onShowFocusSoundPreview = { [weak self] in
             self?.petWindow?.showFocusSound()
+        }
+        controller.onToggleMusicPreview = { [weak self] in
+            self?.petWindow?.toggleMusicDancingPreview()
         }
         macroSettingsWindow = controller
         controller.showWindow(nil)
@@ -157,7 +161,7 @@ import UniformTypeIdentifiers
     }
 
     private func showWelcomeFromMenu() {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.65"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.66"
         let presentation: WelcomePresentationKind
         if let latestRelease = AppChangelog.releases.last {
             presentation = .whatsNew(currentVersion: currentVersion, unseenReleases: [latestRelease])
@@ -168,7 +172,7 @@ import UniformTypeIdentifiers
     }
 
     private func checkForUpdates(silent: Bool) {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.65"
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "a0.66"
         let skipped = settings.skippedAppVersion
 
         Task { @MainActor [weak self] in

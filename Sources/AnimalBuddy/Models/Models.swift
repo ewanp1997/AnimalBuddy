@@ -1424,6 +1424,27 @@ public enum AppChangelog {
                     description: "Reduced app bundle size by ~38%, resolved process deadlocks, hardened URL drag handling, and optimized battery/CPU efficiency."
                 )
             ]
+        ),
+        VersionRelease(
+            version: "a0.66",
+            releaseTitle: "Music Companion: Headphones & Dancing",
+            features: [
+                FeatureItem(
+                    iconName: "headphones",
+                    title: "Music Companion & DJ Headphones",
+                    description: "Your pet puts on custom DJ headphones whenever you play music or audio system-wide (YouTube, Spotify, Apple Music, podcasts, browsers, or any media)."
+                ),
+                FeatureItem(
+                    iconName: "music.note",
+                    title: "Groovy Dance Animations",
+                    description: "Rhythmic head bobbing, groovy tilts, and floating musical notes synced to the beat."
+                ),
+                FeatureItem(
+                    iconName: "play.circle",
+                    title: "Interactive Music Preview",
+                    description: "Instantly test the headphones look and dance moves with the new preview control in Settings."
+                )
+            ]
         )
     ]
 }
@@ -1497,6 +1518,7 @@ public struct AppSettings: Codable, Sendable {
     public var focusModeWorkRemindersEnabled: Bool = true
     public var focusModeIntervalMinutes: Int = 10
     public var soundEffectsEnabled: Bool = true
+    public var musicDancingEnabled: Bool = true
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1510,7 +1532,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, musicDancingEnabled, bindings
     }
 
     public init() {}
@@ -1542,6 +1564,7 @@ public struct AppSettings: Codable, Sendable {
         focusModeWorkRemindersEnabled = try values.decodeIfPresent(Bool.self, forKey: .focusModeWorkRemindersEnabled) ?? true
         focusModeIntervalMinutes = try values.decodeIfPresent(Int.self, forKey: .focusModeIntervalMinutes) ?? 10
         soundEffectsEnabled = try values.decodeIfPresent(Bool.self, forKey: .soundEffectsEnabled) ?? true
+        musicDancingEnabled = try values.decodeIfPresent(Bool.self, forKey: .musicDancingEnabled) ?? true
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }
