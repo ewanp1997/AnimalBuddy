@@ -63,8 +63,12 @@ sudo xattr -rd com.apple.quarantine "/Applications/Animal Buddy.app"
 
 ## Current functionality
 
-The `a0.66` release includes:
+The `a0.70` release includes:
 
+- **🏔️ MacBook Notch & Menu Bar Perch ("Peek-a-Boo Mode")**: Tuck your companion directly behind the MacBook camera notch! Its forehead, alert eyes, and paws clutch the bezel so eye-triggered macros remain fully accessible, while it periodically pokes its head down to greet you.
+- **🌙 Ambient Time-of-Day & Weather Wardrobe**: Automatically dresses your companion in context-aware vector accessories: steaming hot coffee in the morning, sunny polarized sunglasses midday, cozy nightcap snooze with floating Zs late at night, and leafy rain umbrellas.
+- **🪩 Custom App Disco Mode & Instant Pause**: Groovy continuous rainbow disco mode with rotating spotlights and disco ball for custom music apps (like Eclipse), stopping automatically as soon as playback pauses.
+- **🎯 Enhanced Cursor Detection & Minimize Focus**: Generous 50×50 pt hit target, high-contrast circular glass minimize button, and wider 32 pt proximity hover detection.
 - **🎧 Music Companion: System-Wide Headphones & Dancing**: Automatically detects when music or audio is playing system-wide (YouTube, Spotify, Apple Music, podcasts, browsers, or any media output), putting cute DJ headphones on your pet and grooving along with rhythmic dance bounces and floating musical notes! Includes instant preview controls and a settings toggle.
 - **HD 3D Gradient Sprites**: All 6 companions (Bird, Dog, Cat, Monkey, Giraffe, Slinky) upgraded with multi-stop 3D lighting, specular highlights, Disney/anime sparkle eyes, and species-specific physical accents (feather crests, collar pendants, tabby stripes, paw beans, horn spheres, wire reflection highlights).
 - **Full-Name Animal & Theme Selectors**: Native vertical dropdown pickers in Settings that clearly show full animal and theme titles without truncation.

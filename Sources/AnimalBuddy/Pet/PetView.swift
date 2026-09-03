@@ -128,6 +128,7 @@ final class PetView: NSView {
     private(set) var isDiscoMode: Bool = false
     private var discoEndsAt: Date = .distantPast
     private var discoPhase: Double = 0
+    private var isMusicDiscoActive: Bool = false
     var isDancingToMusic: Bool = false {
         didSet {
             if oldValue != isDancingToMusic {
@@ -136,17 +137,75 @@ final class PetView: NSView {
         }
     }
     private var musicDancePhase: Double = 0
+    var isPerched: Bool = false {
+        didSet {
+            if oldValue != isPerched {
+                if isPerched {
+                    perchCyclePhase = 0
+                    perchPeekProgress = 0
+                    minimizeButton.isHidden = true
+                }
+                needsDisplay = true
+            }
+        }
+    }
+    var perchCyclePhase: Double = 0
+    var perchPeekProgress: CGFloat = 0
+    var ambientWardrobeEnabled: Bool = true {
+        didSet {
+            if oldValue != ambientWardrobeEnabled {
+                needsDisplay = true
+            }
+        }
+    }
+    var wardrobeStyleOverride: WardrobeStyle = .auto {
+        didSet {
+            if oldValue != wardrobeStyleOverride {
+                needsDisplay = true
+            }
+        }
+    }
+    var effectiveWardrobeStyle: WardrobeStyle {
+        guard ambientWardrobeEnabled else { return .off }
+        if wardrobeStyleOverride != .auto { return wardrobeStyleOverride }
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour >= 6 && hour < 11 {
+            return .morningCoffee
+        } else if hour >= 11 && hour < 18 {
+            return .sunnySunglasses
+        } else if hour >= 23 || hour < 6 {
+            return .nightcapSleep
+        }
+        return .off
+    }
+    private var steamPhase: Double = 0
+    private var zzzPhase: Double = 0
     override var isFlipped: Bool { true }
 
     func startDiscoMode(duration: TimeInterval = 8.5) {
         isDiscoMode = true
+        isMusicDiscoActive = false
         discoEndsAt = Date().addingTimeInterval(duration)
         state = .disco
         needsDisplay = true
     }
 
+    func startMusicDisco() {
+        isDiscoMode = true
+        isMusicDiscoActive = true
+        discoEndsAt = .distantFuture
+        state = .disco
+        needsDisplay = true
+    }
+
+    func stopMusicDisco() {
+        isMusicDiscoActive = false
+        stopDiscoMode()
+    }
+
     func stopDiscoMode() {
         isDiscoMode = false
+        isMusicDiscoActive = false
         if state == .disco {
             state = .idle
         }
@@ -155,10 +214,20 @@ final class PetView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        minimizeButton.image = NSImage(systemSymbolName: "minus.circle.fill", accessibilityDescription: "Minimize Animal Buddy")
+        minimizeButton.image = NSImage(systemSymbolName: "minus", accessibilityDescription: "Minimize Animal Buddy") ?? NSImage(systemSymbolName: "minus.circle.fill", accessibilityDescription: "Minimize Animal Buddy")
         minimizeButton.imageScaling = .scaleProportionallyUpOrDown
         minimizeButton.isBordered = false
         minimizeButton.contentTintColor = .white
+        minimizeButton.wantsLayer = true
+        minimizeButton.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.60).cgColor
+        minimizeButton.layer?.cornerRadius = 14
+        minimizeButton.layer?.borderWidth = 1.2
+        minimizeButton.layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
+        let minShadow = NSShadow()
+        minShadow.shadowColor = NSColor.black.withAlphaComponent(0.5)
+        minShadow.shadowOffset = NSSize(width: 0, height: -1.5)
+        minShadow.shadowBlurRadius = 4.0
+        minimizeButton.shadow = minShadow
         minimizeButton.target = self
         minimizeButton.action = #selector(minimizeButtonPressed)
         minimizeButton.toolTip = "Minimize Animal Buddy"
@@ -169,6 +238,7 @@ final class PetView: NSView {
         configureBlushButton(rightBlushButton, slot: .right)
         addSubview(leftBlushButton)
         addSubview(rightBlushButton)
+        layout()
         updateTrackingAreas()
         animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tickAnimation() }
@@ -242,10 +312,11 @@ final class PetView: NSView {
 
     override func layout() {
         super.layout()
-        minimizeButton.frame = NSRect(x: bounds.maxX - 34, y: 10, width: 24, height: 24)
+        minimizeButton.frame = NSRect(x: bounds.maxX - 38, y: 8, width: 28, height: 28)
         let eyes = Self.eyeRects(for: animalKind, in: bounds)
-        leftBlushButton.frame = eyes.left
-        rightBlushButton.frame = eyes.right
+        let eyeYOffset: CGFloat = isPerched ? bobOffset : 0
+        leftBlushButton.frame = eyes.left.offsetBy(dx: 0, dy: eyeYOffset)
+        rightBlushButton.frame = eyes.right.offsetBy(dx: 0, dy: eyeYOffset)
         window?.invalidateCursorRects(for: self)
     }
 
@@ -253,7 +324,7 @@ final class PetView: NSView {
         super.resetCursorRects()
         addCursorRect(leftBlushButton.frame, cursor: .pointingHand)
         addCursorRect(rightBlushButton.frame, cursor: .pointingHand)
-        addCursorRect(minimizeButton.frame, cursor: .pointingHand)
+        addCursorRect(minimizeButton.frame.insetBy(dx: -8, dy: -8), cursor: .pointingHand)
     }
 
     override func updateTrackingAreas() {
@@ -275,8 +346,12 @@ final class PetView: NSView {
             localPoint = point
         }
         guard bounds.contains(localPoint) else { return nil }
-        if !minimizeButton.isHidden && minimizeButton.frame.contains(localPoint) {
-            return minimizeButton
+        if !minimizeButton.isHidden && !isPerched {
+            // Generous 50x50 hit target centered on minimize button for effortless focusing
+            let expandedMinFrame = minimizeButton.frame.insetBy(dx: -11, dy: -11)
+            if expandedMinFrame.contains(localPoint) {
+                return minimizeButton
+            }
         }
         if leftBlushButton.frame.contains(localPoint) {
             return leftBlushButton
@@ -288,6 +363,11 @@ final class PetView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        if isPerched {
+            // When perched at the notch, clicks do not move or drag the window.
+            // Eyes trigger macros directly via blush buttons; clicking elsewhere preserves notch location.
+            return
+        }
         if let panel = window as? PetPanel {
             panel.beginWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
         } else {
@@ -296,6 +376,7 @@ final class PetView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if isPerched { return }
         if let panel = window as? PetPanel {
             panel.continueWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
         } else {
@@ -304,6 +385,7 @@ final class PetView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if isPerched { return }
         if let panel = window as? PetPanel {
             panel.endWindowDrag(at: NSEvent.mouseLocation, eventTimestamp: event.timestamp)
         } else {
@@ -311,8 +393,19 @@ final class PetView: NSView {
         }
     }
 
-    override func mouseEntered(with event: NSEvent) { minimizeButton.isHidden = false }
-    override func mouseExited(with event: NSEvent) { minimizeButton.isHidden = true }
+    override func mouseEntered(with event: NSEvent) {
+        if !isPerched { setMinimizeButtonVisible(true) }
+    }
+    override func mouseExited(with event: NSEvent) {
+        if !isPerched { setMinimizeButtonVisible(false) }
+    }
+
+    func setMinimizeButtonVisible(_ visible: Bool) {
+        let shouldShow = visible && !isPerched
+        if minimizeButton.isHidden == shouldShow {
+            minimizeButton.isHidden = !shouldShow
+        }
+    }
 
     @objc private func minimizeButtonPressed() { onMinimizeRequested?() }
     @objc private func leftBlushPressed() { onBlushTapped?(.left) }
@@ -374,9 +467,11 @@ final class PetView: NSView {
         idleLeftWingPhase += dt * 5.1
         idleRightWingPhase += dt * 4.4
         bobPhase += dt * 1.8
+        steamPhase += dt * 3.6
+        zzzPhase += dt * 2.4
         
         if isDiscoMode {
-            if now >= discoEndsAt {
+            if !isMusicDiscoActive && now >= discoEndsAt {
                 isDiscoMode = false
                 if state == .disco { state = .idle }
             } else {
@@ -421,6 +516,46 @@ final class PetView: NSView {
             leftWingFlap = CGFloat(sin(musicDancePhase * 1.5)) * 14.0
             rightWingFlap = CGFloat(cos(musicDancePhase * 1.5)) * 14.0
             flightTiltAngle = CGFloat(sin(musicDancePhase * 0.5)) * 5.0
+        } else if isPerched {
+            // Perched on the notch! Hiding behind and periodically poking head out
+            perchCyclePhase += dt
+            if perchCyclePhase >= 7.8 {
+                perchCyclePhase = 0.0
+            }
+
+            // Periodic peek-a-boo cycle:
+            // 0.0s - 4.2s: Cozy hiding behind notch (eyes peeking out) -> progress = 0.0
+            // 4.2s - 4.9s: Smoothly pokes head out into view -> progress 0.0 -> 1.0
+            // 4.9s - 6.3s: Fully out, curiously looking around -> progress = 1.0
+            // 6.3s - 7.0s: Smoothly ducks back up into hiding -> progress 1.0 -> 0.0
+            // 7.0s - 7.8s: Settles back in hiding -> progress = 0.0
+            let targetProgress: CGFloat
+            if perchCyclePhase < 4.2 {
+                targetProgress = 0.0
+            } else if perchCyclePhase < 4.9 {
+                let t = CGFloat((perchCyclePhase - 4.2) / 0.7)
+                targetProgress = t * t * (3.0 - 2.0 * t)
+            } else if perchCyclePhase < 6.3 {
+                targetProgress = 1.0
+            } else if perchCyclePhase < 7.0 {
+                let t = CGFloat((7.0 - perchCyclePhase) / 0.7)
+                targetProgress = t * t * (3.0 - 2.0 * t)
+            } else {
+                targetProgress = 0.0
+            }
+            perchPeekProgress = targetProgress
+
+            let sway = CGFloat(sin(bobPhase * 1.3)) * (perchPeekProgress > 0.5 ? 1.6 : 0.6)
+            let peekSlideDown: CGFloat = perchPeekProgress * 26.0
+            bobOffset = -14.0 + peekSlideDown + sway
+            leftWingFlap = CGFloat(sin(idleLeftWingPhase * 0.5)) * 3.0
+            rightWingFlap = CGFloat(sin(idleRightWingPhase * 0.5)) * 3.0
+            flightTiltAngle = CGFloat(sin(bobPhase * 0.7)) * (perchPeekProgress * 3.5)
+
+            // Keep macro blush buttons precisely aligned with both eyes in real-time
+            let eyes = Self.eyeRects(for: animalKind, in: bounds)
+            leftBlushButton.frame = eyes.left.offsetBy(dx: 0, dy: bobOffset)
+            rightBlushButton.frame = eyes.right.offsetBy(dx: 0, dy: bobOffset)
         } else {
             if animalKind == .slinky {
                 bobOffset = CGFloat(sin(bobPhase * 1.4)) * 2.5
@@ -648,7 +783,7 @@ final class PetView: NSView {
             transform.translateX(by: -designSize / 2, yBy: -designSize / 2)
         }
         transform.concat()
-        drawCreatureShadow()
+        if !isPerched { drawCreatureShadow() }
         let defaultBodyColor = themePalette.bodyColor.nsColor
         let discoRainbowColor = NSColor(
             calibratedHue: CGFloat(fmod(discoPhase * 0.15, 1.0)),
@@ -666,6 +801,19 @@ final class PetView: NSView {
         }
         let bellyColor = isDiscoMode ? themePalette.bellyColor.nsColor.blended(withFraction: 0.25, of: discoRainbowColor) ?? themePalette.bellyColor.nsColor : themePalette.bellyColor.nsColor
         let accentColor = themePalette.beakColor.nsColor
+
+        let clipContext = NSGraphicsContext.current
+        clipContext?.saveGraphicsState()
+        if isPerched {
+            // Clip to peeking area:
+            // Top: notchBezelY = 20.0 (in transformed space, notchBezelY - bobOffset)
+            // Bottom: expands dynamically as pet pokes its head down to reveal snout & mouth
+            let notchBezelY: CGFloat = 20.0
+            let clipTop = notchBezelY - bobOffset
+            let clipHeight = 54.0 + perchPeekProgress * 38.0
+            let peekClip = NSBezierPath(rect: NSRect(x: 0, y: clipTop, width: designSize, height: clipHeight))
+            peekClip.addClip()
+        }
 
         switch animalKind {
         case .bird:
@@ -688,6 +836,26 @@ final class PetView: NSView {
         if isDancingToMusic {
             drawHeadphones(for: animalKind, accentColor: accentColor)
             drawFloatingMusicNotes(phase: musicDancePhase)
+        }
+        clipContext?.restoreGraphicsState()
+
+        if isPerched {
+            drawNotchPaws(for: animalKind)
+        } else {
+            let wardrobe = effectiveWardrobeStyle
+            switch wardrobe {
+            case .morningCoffee:
+                drawCoffeeMug(for: animalKind, phase: steamPhase)
+            case .sunnySunglasses:
+                drawSunglasses(for: animalKind, accentColor: accentColor)
+            case .nightcapSleep:
+                drawNightcap(for: animalKind, phase: zzzPhase)
+                drawFloatingZZZ(phase: zzzPhase)
+            case .rainyUmbrella:
+                drawRainUmbrella(for: animalKind, phase: steamPhase)
+            case .auto, .off:
+                break
+            }
         }
         if let dragPresentation { drawDragPresentation(dragPresentation) }
         if state == .success { drawSparkle(at: NSPoint(x: 20, y: 30)); drawSparkle(at: NSPoint(x: bounds.maxX - 20, y: 28)) }
@@ -1988,5 +2156,280 @@ final class PetView: NSView {
         NSBezierPath(roundedRect: NSRect(x: 44, y: 112, width: 62, height: 15), xRadius: 7, yRadius: 7).fill()
         let shortTitle = String(title.prefix(11))
         (shortTitle as NSString).draw(at: NSPoint(x: 49, y: 114), withAttributes: [.font: NSFont.systemFont(ofSize: 8, weight: .semibold), .foregroundColor: NSColor.white])
+    }
+
+    // MARK: - Notch Perch Mode
+
+    private func drawNotchPaws(for kind: AnimalKind) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let pawColor = themePalette.bellyColor.nsColor.blended(withFraction: 0.15, of: .white) ?? themePalette.bellyColor.nsColor
+        let beanColor = themePalette.blushColor.nsColor
+        let notchBezelY: CGFloat = 20.0
+        let bezelDesignY = notchBezelY - bobOffset
+
+        // Sleek subtle notch bezel line (anchors notch appearance cleanly on any display)
+        let bezelLine = NSBezierPath()
+        bezelLine.move(to: NSPoint(x: 18, y: bezelDesignY))
+        bezelLine.line(to: NSPoint(x: 132, y: bezelDesignY))
+        bezelLine.lineWidth = 2.0
+        bezelLine.lineCapStyle = .round
+        NSColor.black.withAlphaComponent(0.60).setStroke()
+        bezelLine.stroke()
+
+        // Left and Right paws clutching the notch bezel
+        let pawY = bezelDesignY - 6.0 + perchPeekProgress * 3.0
+        let paws = [
+            NSRect(x: 35, y: pawY, width: 27, height: 14),
+            NSRect(x: 88, y: pawY, width: 27, height: 14)
+        ]
+
+        for rect in paws {
+            // Shadow under paw
+            let shadowRect = rect.offsetBy(dx: 0, dy: 2.5)
+            NSColor.black.withAlphaComponent(0.28).setFill()
+            NSBezierPath(roundedRect: shadowRect, xRadius: 6, yRadius: 6).fill()
+
+            // Main Paw Pad
+            let pawPath = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+            drawGradientPath(pawPath, topColor: pawColor.blended(withFraction: 0.2, of: .white) ?? pawColor, bottomColor: pawColor.blended(withFraction: 0.18, of: .black) ?? pawColor, angle: 90)
+
+            // 3 cute little toe beans / claws grasping the bezel
+            for toe in 0..<3 {
+                let toeX = rect.minX + 3.5 + CGFloat(toe) * 7.5
+                let toeRect = NSRect(x: toeX, y: rect.minY + 1.2, width: 5.2, height: 5.2)
+                beanColor.withAlphaComponent(0.85).setFill()
+                NSBezierPath(ovalIn: toeRect).fill()
+            }
+        }
+
+        context.restoreGraphicsState()
+    }
+
+    // MARK: - Ambient Wardrobe Drawing
+
+    private func drawCoffeeMug(for kind: AnimalKind, phase: Double) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let mugOrigin = NSPoint(x: 22, y: 88)
+        let mugWidth: CGFloat = 24
+        let mugHeight: CGFloat = 24
+
+        // 1. Mug Shadow
+        NSColor.black.withAlphaComponent(0.18).setFill()
+        NSBezierPath(ovalIn: NSRect(x: mugOrigin.x - 2, y: mugOrigin.y + mugHeight - 2, width: mugWidth + 4, height: 6)).fill()
+
+        // 2. Handle on left side
+        let handle = NSBezierPath()
+        handle.move(to: NSPoint(x: mugOrigin.x + 2, y: mugOrigin.y + 5))
+        handle.curve(to: NSPoint(x: mugOrigin.x + 2, y: mugOrigin.y + 19), controlPoint1: NSPoint(x: mugOrigin.x - 8, y: mugOrigin.y + 7), controlPoint2: NSPoint(x: mugOrigin.x - 8, y: mugOrigin.y + 17))
+        handle.lineCapStyle = .round
+        NSColor(calibratedWhite: 0.90, alpha: 1.0).setStroke()
+        handle.lineWidth = 3.2
+        handle.stroke()
+
+        // 3. Mug Body (Ceramic Gradient)
+        let mugBody = NSBezierPath(roundedRect: NSRect(x: mugOrigin.x, y: mugOrigin.y + 3, width: mugWidth, height: mugHeight - 3), xRadius: 4, yRadius: 4)
+        let ceramicTop = NSColor(calibratedRed: 0.98, green: 0.96, blue: 0.92, alpha: 1.0)
+        let ceramicBottom = NSColor(calibratedRed: 0.88, green: 0.84, blue: 0.78, alpha: 1.0)
+        drawGradientPath(mugBody, topColor: ceramicTop, bottomColor: ceramicBottom, angle: 90)
+
+        // 4. Hot Coffee Surface
+        let coffeeRim = NSRect(x: mugOrigin.x + 2, y: mugOrigin.y + 1, width: mugWidth - 4, height: 7)
+        NSColor(calibratedRed: 0.28, green: 0.16, blue: 0.08, alpha: 1.0).setFill()
+        NSBezierPath(ovalIn: coffeeRim).fill()
+
+        // Coffee Crema Foam Swirl
+        NSColor(calibratedRed: 0.85, green: 0.68, blue: 0.48, alpha: 0.9).setFill()
+        NSBezierPath(ovalIn: NSRect(x: mugOrigin.x + 7, y: mugOrigin.y + 2.5, width: 6, height: 3.5)).fill()
+
+        // Cute Mini Coffee Emblem on Mug
+        let coffeeIcon = "☕️" as NSString
+        coffeeIcon.draw(at: NSPoint(x: mugOrigin.x + 4.5, y: mugOrigin.y + 7.5), withAttributes: [.font: NSFont.systemFont(ofSize: 10)])
+
+        // 5. Rising Steam Wisps
+        for idx in 0..<2 {
+            let offsetPhase = phase + Double(idx) * 1.6
+            let steamProgress = fmod(offsetPhase * 0.7, 1.0)
+            let steamAlpha = CGFloat(sin(steamProgress * .pi)) * 0.55
+            let steamY = mugOrigin.y - 2 - CGFloat(steamProgress * 22.0)
+            let steamX = mugOrigin.x + 7 + CGFloat(idx) * 8 + CGFloat(sin(offsetPhase * 2.2)) * 3.5
+
+            let steam = NSBezierPath()
+            steam.move(to: NSPoint(x: steamX, y: steamY))
+            steam.curve(to: NSPoint(x: steamX + 2, y: steamY - 8), controlPoint1: NSPoint(x: steamX - 3, y: steamY - 3), controlPoint2: NSPoint(x: steamX + 4, y: steamY - 6))
+            steam.lineCapStyle = .round
+            NSColor.white.withAlphaComponent(steamAlpha).setStroke()
+            steam.lineWidth = 2.0
+            steam.stroke()
+        }
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawSunglasses(for kind: AnimalKind, accentColor: NSColor) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let leftLensRect = NSRect(x: 27, y: 46, width: 44, height: 29)
+        let rightLensRect = NSRect(x: 79, y: 46, width: 44, height: 29)
+
+        // 1. Frame Bridge across nose/beak
+        let bridge = NSBezierPath()
+        bridge.move(to: NSPoint(x: 69, y: 53))
+        bridge.curve(to: NSPoint(x: 81, y: 53), controlPoint1: NSPoint(x: 72, y: 50), controlPoint2: NSPoint(x: 78, y: 50))
+        bridge.lineCapStyle = .round
+        NSColor(calibratedRed: 0.98, green: 0.82, blue: 0.16, alpha: 1.0).setStroke()
+        bridge.lineWidth = 4.0
+        bridge.stroke()
+
+        // 2. Lenses & Outer Frames
+        let lenses = [leftLensRect, rightLensRect]
+        for lens in lenses {
+            let framePath = NSBezierPath(roundedRect: lens, xRadius: 9, yRadius: 9)
+
+            // Polarized tint gradient
+            let lensTop = NSColor(calibratedRed: 0.10, green: 0.08, blue: 0.22, alpha: 0.96)
+            let lensBottom = NSColor(calibratedRed: 0.32, green: 0.16, blue: 0.45, alpha: 0.96)
+            drawGradientPath(framePath, topColor: lensTop, bottomColor: lensBottom, angle: 90)
+
+            // Gold / Sunset frame rim
+            NSColor(calibratedRed: 0.98, green: 0.82, blue: 0.16, alpha: 1.0).setStroke()
+            framePath.lineWidth = 3.2
+            framePath.stroke()
+
+            // Specular Glare Slash
+            let glare = NSBezierPath()
+            glare.move(to: NSPoint(x: lens.minX + 8, y: lens.maxY - 5))
+            glare.line(to: NSPoint(x: lens.maxX - 10, y: lens.minY + 6))
+            glare.lineCapStyle = .round
+            NSColor.white.withAlphaComponent(0.48).setStroke()
+            glare.lineWidth = 2.4
+            glare.stroke()
+
+            let glare2 = NSBezierPath()
+            glare2.move(to: NSPoint(x: lens.minX + 15, y: lens.maxY - 5))
+            glare2.line(to: NSPoint(x: lens.maxX - 6, y: lens.minY + 11))
+            glare2.lineCapStyle = .round
+            NSColor.white.withAlphaComponent(0.32).setStroke()
+            glare2.lineWidth = 1.4
+            glare2.stroke()
+        }
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawNightcap(for kind: AnimalKind, phase: Double) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let sway = CGFloat(sin(phase * 1.5)) * 3.0
+
+        // 1. Drooping Cone
+        let cone = NSBezierPath()
+        cone.move(to: NSPoint(x: 50, y: 22))
+        cone.curve(to: NSPoint(x: 114 + sway, y: 52), controlPoint1: NSPoint(x: 58, y: -2), controlPoint2: NSPoint(x: 118, y: 24))
+        cone.curve(to: NSPoint(x: 98, y: 22), controlPoint1: NSPoint(x: 106, y: 38), controlPoint2: NSPoint(x: 96, y: 20))
+        cone.close()
+
+        let coneTop = NSColor(calibratedRed: 0.32, green: 0.30, blue: 0.58, alpha: 0.98)
+        let coneBottom = NSColor(calibratedRed: 0.22, green: 0.20, blue: 0.44, alpha: 0.98)
+        drawGradientPath(cone, topColor: coneTop, bottomColor: coneBottom, angle: 90)
+
+        // 2. Fluffy White Brim along head
+        let brimRect = NSRect(x: 48, y: 16, width: 54, height: 12)
+        let brim = NSBezierPath(roundedRect: brimRect, xRadius: 6, yRadius: 6)
+        NSColor(calibratedWhite: 0.98, alpha: 1.0).setFill()
+        brim.fill()
+        NSColor(calibratedWhite: 0.85, alpha: 0.6).setStroke()
+        brim.lineWidth = 1.2
+        brim.stroke()
+
+        // 3. Pompom at tip
+        let pompomCenter = NSPoint(x: 114 + sway, y: 53)
+        let pompomRect = NSRect(x: pompomCenter.x - 7, y: pompomCenter.y - 7, width: 14, height: 14)
+        NSColor(calibratedWhite: 0.98, alpha: 1.0).setFill()
+        NSBezierPath(ovalIn: pompomRect).fill()
+        NSColor(calibratedWhite: 0.88, alpha: 0.8).setStroke()
+        let pompomOutline = NSBezierPath(ovalIn: pompomRect)
+        pompomOutline.lineWidth = 1.2
+        pompomOutline.stroke()
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawFloatingZZZ(phase: Double) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        let items: [(String, CGFloat, Double, CGFloat)] = [
+            ("z", 10.0, 0.0, 102.0),
+            ("z", 13.0, 0.8, 112.0),
+            ("Z", 17.0, 1.6, 122.0)
+        ]
+
+        for (letter, size, delay, baseX) in items {
+            let itemProgress = fmod((phase * 0.5 + delay), 2.2) / 2.2
+            let alpha = CGFloat(sin(itemProgress * .pi)) * 0.85
+            guard alpha > 0.05 else { continue }
+
+            let curY = 48.0 - CGFloat(itemProgress * 42.0)
+            let curX = baseX + CGFloat(sin(phase * 2.0 + delay)) * 4.0
+
+            let font = NSFont.systemFont(ofSize: size, weight: .bold)
+            let color = NSColor(calibratedRed: 0.80, green: 0.80, blue: 1.0, alpha: alpha)
+            (letter as NSString).draw(at: NSPoint(x: curX, y: curY), withAttributes: [.font: font, .foregroundColor: color])
+        }
+
+        context.restoreGraphicsState()
+    }
+
+    private func drawRainUmbrella(for kind: AnimalKind, phase: Double) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+
+        // 1. Umbrella Cane Handle
+        let cane = NSBezierPath()
+        cane.move(to: NSPoint(x: 32, y: 88))
+        cane.curve(to: NSPoint(x: 24, y: 96), controlPoint1: NSPoint(x: 27, y: 88), controlPoint2: NSPoint(x: 24, y: 92))
+        cane.lineCapStyle = .round
+        NSColor(calibratedRed: 0.55, green: 0.35, blue: 0.20, alpha: 1.0).setStroke()
+        cane.lineWidth = 3.0
+        cane.stroke()
+
+        // Shaft to canopy
+        let shaft = NSBezierPath()
+        shaft.move(to: NSPoint(x: 32, y: 88))
+        shaft.line(to: NSPoint(x: 48, y: 26))
+        shaft.lineCapStyle = .round
+        NSColor(calibratedRed: 0.55, green: 0.35, blue: 0.20, alpha: 1.0).setStroke()
+        shaft.lineWidth = 3.0
+        shaft.stroke()
+
+        // 2. Leaf Canopy
+        let canopy = NSBezierPath()
+        canopy.move(to: NSPoint(x: 10, y: 26))
+        canopy.curve(to: NSPoint(x: 88, y: 22), controlPoint1: NSPoint(x: 36, y: -6), controlPoint2: NSPoint(x: 68, y: -4))
+        canopy.curve(to: NSPoint(x: 10, y: 26), controlPoint1: NSPoint(x: 60, y: 28), controlPoint2: NSPoint(x: 36, y: 30))
+        canopy.close()
+
+        let leafTop = NSColor(calibratedRed: 0.40, green: 0.82, blue: 0.38, alpha: 0.96)
+        let leafBottom = NSColor(calibratedRed: 0.22, green: 0.60, blue: 0.24, alpha: 0.96)
+        drawGradientPath(canopy, topColor: leafTop, bottomColor: leafBottom, angle: 75)
+
+        // Leaf veins
+        NSColor.white.withAlphaComponent(0.35).setStroke()
+        let vein = NSBezierPath()
+        vein.move(to: NSPoint(x: 18, y: 24))
+        vein.curve(to: NSPoint(x: 80, y: 20), controlPoint1: NSPoint(x: 42, y: 12), controlPoint2: NSPoint(x: 64, y: 14))
+        vein.lineWidth = 1.4
+        vein.stroke()
+
+        // Water droplet sparkle
+        drawSparkle(at: NSPoint(x: 44, y: 8))
+
+        context.restoreGraphicsState()
     }
 }

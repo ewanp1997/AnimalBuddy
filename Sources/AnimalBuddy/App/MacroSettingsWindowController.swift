@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool, Bool, [CustomMonitoredApp]) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool, Bool, [CustomMonitoredApp], Bool, WardrobeStyle) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onShowTipPreview: (() -> Void)?
@@ -20,6 +20,8 @@ import UniformTypeIdentifiers
     private var customPalette: PetThemePalette
     private var hoverTranslucencyEnabled: Bool
     private var googlyEyesEnabled: Bool
+    private var ambientWardrobeEnabled: Bool
+    private var wardrobeStyleOverride: WardrobeStyle
     private var automaticallyCheckForUpdates: Bool
     private var helpfulTipsEnabled: Bool
     private var focusModeEnabled: Bool
@@ -36,7 +38,7 @@ import UniformTypeIdentifiers
     private var alwaysOnTop: Bool
     private var snappingEnabled: Bool
     private var minimizeDestination: MinimizeDestination
-    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.66")
+    private let updateStatusLabel = NSTextField(labelWithString: "Animal Buddy a0.70")
     private let folderPathLabel = NSTextField(wrappingLabelWithString: "")
 
     private let focusModeToggle = NSButton(checkboxWithTitle: "Enable Focus Mode & Cute Sounds (off by default)", target: nil, action: nil)
@@ -107,6 +109,8 @@ import UniformTypeIdentifiers
         soundEffectsEnabled = settings.soundEffectsEnabled
         musicDancingEnabled = settings.musicDancingEnabled
         customMusicApps = settings.customMusicApps
+        ambientWardrobeEnabled = settings.ambientWardrobeEnabled
+        wardrobeStyleOverride = settings.wardrobeStyleOverride
         destinationFolderPath = settings.destinationFolderPath
         organizeInboxByFileType = settings.organizeInboxByFileType
         inboxSubfolderRules = settings.inboxSubfolderRules
@@ -293,10 +297,11 @@ import UniformTypeIdentifiers
         note.maximumNumberOfLines = 3
 
         let themeCard = makeThemeCard()
+        let wardrobeCard = makeAmbientWardrobeCard()
         let customCard = makePersonalCustomizationCard()
         let previewCard = makePreviewCard()
 
-        let leftCol = NSStackView(views: [themeCard, customCard])
+        let leftCol = NSStackView(views: [themeCard, wardrobeCard, customCard])
         leftCol.orientation = .vertical
         leftCol.spacing = 16
         leftCol.alignment = .leading
@@ -318,6 +323,7 @@ import UniformTypeIdentifiers
         leftCol.translatesAutoresizingMaskIntoConstraints = false
         previewCard.translatesAutoresizingMaskIntoConstraints = false
         themeCard.translatesAutoresizingMaskIntoConstraints = false
+        wardrobeCard.translatesAutoresizingMaskIntoConstraints = false
         customCard.translatesAutoresizingMaskIntoConstraints = false
         row.translatesAutoresizingMaskIntoConstraints = false
 
@@ -334,6 +340,7 @@ import UniformTypeIdentifiers
             row.widthAnchor.constraint(equalTo: mainStack.widthAnchor, constant: -56),
             leftCol.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.62),
             themeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
+            wardrobeCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
             customCard.widthAnchor.constraint(equalTo: leftCol.widthAnchor),
             previewCard.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.35)
         ])
@@ -472,6 +479,64 @@ import UniformTypeIdentifiers
         return row
     }
 
+    private func makeAmbientWardrobeCard() -> NSView {
+        let title = NSTextField(labelWithString: "🌙 Ambient Time-of-Day Wardrobe")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+
+        let desc = NSTextField(wrappingLabelWithString: "Dresses your pet with context-aware accessories based on local time: steaming hot coffee in the morning (6–11 AM), sunny sunglasses midday (11 AM–6 PM), and cozy nightcap snooze late at night (11 PM–6 AM).")
+        desc.font = .systemFont(ofSize: 11)
+        desc.textColor = .secondaryLabelColor
+        desc.maximumNumberOfLines = 3
+
+        let enableToggle = NSButton(checkboxWithTitle: "Enable Ambient Wardrobe", target: self, action: #selector(toggleAmbientWardrobe(_:)))
+        enableToggle.state = ambientWardrobeEnabled ? .on : .off
+        enableToggle.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let styleLabel = NSTextField(labelWithString: "Style / Preview:")
+        styleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+
+        let styleSegment = NSSegmentedControl(
+            labels: ["Auto", "Coffee ☕️", "Shades 🕶️", "Nightcap 🌙", "Umbrella 🍃", "Off"],
+            trackingMode: .selectOne,
+            target: self,
+            action: #selector(wardrobeStyleChanged(_:))
+        )
+        let segIdx: Int = switch wardrobeStyleOverride {
+        case .auto: 0
+        case .morningCoffee: 1
+        case .sunnySunglasses: 2
+        case .nightcapSleep: 3
+        case .rainyUmbrella: 4
+        case .off: 5
+        }
+        styleSegment.selectedSegment = segIdx
+
+        let row = NSStackView(views: [styleLabel, styleSegment])
+        row.orientation = .horizontal
+        row.spacing = 10
+        row.alignment = .centerY
+
+        let stack = NSStackView(views: [title, desc, enableToggle, row])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 18, bottom: 14, right: 18)
+        stack.wantsLayer = true
+        stack.layer?.cornerRadius = 12
+        stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        enableToggle.translatesAutoresizingMaskIntoConstraints = false
+        desc.translatesAutoresizingMaskIntoConstraints = false
+        row.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            enableToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            row.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+        ])
+
+        return stack
+    }
+
     private func makePreviewCard() -> NSView {
         let title = NSTextField(labelWithString: "Live Preview")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -482,15 +547,19 @@ import UniformTypeIdentifiers
         previewPetView.themePreset = selectedTheme
         previewPetView.themePalette = currentPalette
         previewPetView.googlyEyesEnabled = googlyEyesEnabled
+        previewPetView.ambientWardrobeEnabled = ambientWardrobeEnabled
+        previewPetView.wardrobeStyleOverride = wardrobeStyleOverride
 
         let flapBtn = NSButton(title: "Animate Movement", target: self, action: #selector(togglePreviewFlap))
         flapBtn.bezelStyle = .rounded
+        let discoBtn = NSButton(title: "🪩 Disco", target: self, action: #selector(triggerPreviewDisco))
+        discoBtn.bezelStyle = .rounded
         let happyBtn = NSButton(title: "Celebrate 🎉", target: self, action: #selector(triggerPreviewCelebrate))
         happyBtn.bezelStyle = .rounded
 
-        let actions = NSStackView(views: [flapBtn, happyBtn])
+        let actions = NSStackView(views: [flapBtn, discoBtn, happyBtn])
         actions.orientation = .horizontal
-        actions.spacing = 8
+        actions.spacing = 6
         actions.distribution = .fillEqually
 
         let stack = NSStackView(views: [title, previewPetView, actions])
@@ -506,7 +575,7 @@ import UniformTypeIdentifiers
         NSLayoutConstraint.activate([
             previewPetView.widthAnchor.constraint(equalToConstant: 140),
             previewPetView.heightAnchor.constraint(equalToConstant: 140),
-            actions.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20)
+            actions.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -16)
         ])
         return stack
     }
@@ -602,8 +671,8 @@ import UniformTypeIdentifiers
         let minTitle = NSTextField(labelWithString: "Minimize Pet To:")
         minTitle.font = .systemFont(ofSize: 12, weight: .medium)
 
-        let minSegment = NSSegmentedControl(labels: ["Menu Bar", "Dock"], trackingMode: .selectOne, target: self, action: #selector(minimizeDestinationChanged(_:)))
-        minSegment.selectedSegment = (minimizeDestination == .dock ? 1 : 0)
+        let minSegment = NSSegmentedControl(labels: ["Menu Bar", "Dock", "Notch Perch"], trackingMode: .selectOne, target: self, action: #selector(minimizeDestinationChanged(_:)))
+        minSegment.selectedSegment = (minimizeDestination == .notch ? 2 : (minimizeDestination == .dock ? 1 : 0))
 
         let minRow = NSStackView(views: [minTitle, minSegment])
         minRow.orientation = .horizontal
@@ -916,7 +985,36 @@ import UniformTypeIdentifiers
     }
 
     @objc private func minimizeDestinationChanged(_ sender: NSSegmentedControl) {
-        minimizeDestination = (sender.selectedSegment == 1) ? .dock : .menubar
+        switch sender.selectedSegment {
+        case 1: minimizeDestination = .dock
+        case 2: minimizeDestination = .notch
+        default: minimizeDestination = .menubar
+        }
+    }
+
+    @objc private func toggleAmbientWardrobe(_ sender: NSButton) {
+        ambientWardrobeEnabled = (sender.state == .on)
+        previewPetView.ambientWardrobeEnabled = ambientWardrobeEnabled
+    }
+
+    @objc private func wardrobeStyleChanged(_ sender: NSSegmentedControl) {
+        switch sender.selectedSegment {
+        case 1: wardrobeStyleOverride = .morningCoffee
+        case 2: wardrobeStyleOverride = .sunnySunglasses
+        case 3: wardrobeStyleOverride = .nightcapSleep
+        case 4: wardrobeStyleOverride = .rainyUmbrella
+        case 5: wardrobeStyleOverride = .off
+        default: wardrobeStyleOverride = .auto
+        }
+        previewPetView.wardrobeStyleOverride = wardrobeStyleOverride
+    }
+
+    @objc private func triggerPreviewDisco() {
+        if previewPetView.isDiscoMode {
+            previewPetView.stopMusicDisco()
+        } else {
+            previewPetView.startMusicDisco()
+        }
     }
 
     @objc private func toggleAutoUpdates(_ sender: NSButton) {
@@ -1498,7 +1596,9 @@ import UniformTypeIdentifiers
             focusModeIntervalMinutes,
             soundEffectsEnabled,
             musicDancingEnabled,
-            customMusicApps
+            customMusicApps,
+            ambientWardrobeEnabled,
+            wardrobeStyleOverride
         )
         close()
     }

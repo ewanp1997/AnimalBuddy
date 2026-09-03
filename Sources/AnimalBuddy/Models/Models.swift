@@ -541,9 +541,34 @@ public enum PetState: String, Sendable { case idle, sleeping, noticingDrag, drag
 public enum MinimizeDestination: String, Codable, CaseIterable, Sendable {
     case dock
     case menubar
+    case notch
 
     public var displayName: String {
-        switch self { case .dock: "Dock"; case .menubar: "Menu Bar" }
+        switch self {
+        case .dock: return "Dock"
+        case .menubar: return "Menu Bar"
+        case .notch: return "Notch Perch"
+        }
+    }
+}
+
+public enum WardrobeStyle: String, Codable, CaseIterable, Sendable {
+    case auto
+    case morningCoffee
+    case sunnySunglasses
+    case nightcapSleep
+    case rainyUmbrella
+    case off
+
+    public var displayName: String {
+        switch self {
+        case .auto: return "Auto (Time of Day)"
+        case .morningCoffee: return "Morning Coffee ☕️"
+        case .sunnySunglasses: return "Sunny Sunglasses 🕶️"
+        case .nightcapSleep: return "Nightcap Sleep 🌙"
+        case .rainyUmbrella: return "Rainy Umbrella 🍃"
+        case .off: return "None (Standard)"
+        }
     }
 }
 
@@ -1445,6 +1470,32 @@ public enum AppChangelog {
                     description: "Instantly test the headphones look and dance moves with the new preview control in Settings."
                 )
             ]
+        ),
+        VersionRelease(
+            version: "a0.70",
+            releaseTitle: "MacBook Notch Perch & Ambient Wardrobe",
+            features: [
+                FeatureItem(
+                    iconName: "macbook.and.iphone",
+                    title: "MacBook Notch & Menu Bar Perch (\"Peek-a-Boo Mode\")",
+                    description: "Tucks your companion behind the MacBook camera notch, keeping both eyes and paws visible for macros while periodically poking its head down to greet you."
+                ),
+                FeatureItem(
+                    iconName: "sun.max.fill",
+                    title: "Ambient Time-of-Day Wardrobe",
+                    description: "Procedural vector accessories matching your local time: steaming hot coffee in the morning, sunny sunglasses midday, and cozy nightcap snooze late at night."
+                ),
+                FeatureItem(
+                    iconName: "sparkles",
+                    title: "Custom App Disco Mode & Instant Pause",
+                    description: "Groovy continuous rainbow disco mode with rotating spotlights for custom music apps, with immediate pause detection and stops."
+                ),
+                FeatureItem(
+                    iconName: "cursorarrow.rays",
+                    title: "Enhanced Cursor Detection & Minimize Focus",
+                    description: "Generous 50×50 pt hit target, high-contrast circular glass minimize button, and wider 32 pt proximity hover detection."
+                )
+            ]
         )
     ]
 }
@@ -1553,6 +1604,8 @@ public struct AppSettings: Codable, Sendable {
     public var soundEffectsEnabled: Bool = true
     public var musicDancingEnabled: Bool = true
     public var customMusicApps: [CustomMonitoredApp] = []
+    public var ambientWardrobeEnabled: Bool = true
+    public var wardrobeStyleOverride: WardrobeStyle = .auto
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1566,7 +1619,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, musicDancingEnabled, customMusicApps, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, musicDancingEnabled, customMusicApps, ambientWardrobeEnabled, wardrobeStyleOverride, bindings
     }
 
     public init() {}
@@ -1600,6 +1653,8 @@ public struct AppSettings: Codable, Sendable {
         soundEffectsEnabled = try values.decodeIfPresent(Bool.self, forKey: .soundEffectsEnabled) ?? true
         musicDancingEnabled = try values.decodeIfPresent(Bool.self, forKey: .musicDancingEnabled) ?? true
         customMusicApps = try values.decodeIfPresent([CustomMonitoredApp].self, forKey: .customMusicApps) ?? []
+        ambientWardrobeEnabled = try values.decodeIfPresent(Bool.self, forKey: .ambientWardrobeEnabled) ?? true
+        wardrobeStyleOverride = try values.decodeIfPresent(WardrobeStyle.self, forKey: .wardrobeStyleOverride) ?? .auto
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

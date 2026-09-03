@@ -14,7 +14,7 @@ public final class MusicPlaybackWatcher: ObservableObject {
         }
     }
 
-    private(set) var isMonitoredAppPlaying: Bool = false {
+    public private(set) var isMonitoredAppPlaying: Bool = false {
         didSet {
             if oldValue != isMonitoredAppPlaying {
                 notifyChange()
@@ -22,7 +22,15 @@ public final class MusicPlaybackWatcher: ObservableObject {
         }
     }
 
-    private(set) var isPreviewActive: Bool = false {
+    public private(set) var isPlayingFromCustomApp: Bool = false {
+        didSet {
+            if oldValue != isPlayingFromCustomApp {
+                notifyChange()
+            }
+        }
+    }
+
+    public private(set) var isPreviewActive: Bool = false {
         didSet {
             if oldValue != isPreviewActive {
                 notifyChange()
@@ -33,6 +41,12 @@ public final class MusicPlaybackWatcher: ObservableObject {
     public var isEffectivelyPlaying: Bool {
         if isPreviewActive { return true }
         return isMonitoredAppPlaying
+    }
+
+    public var isEffectivelyPlayingCustomApp: Bool {
+        if !isEffectivelyPlaying { return false }
+        if isPreviewActive { return !customMonitoredApps.isEmpty }
+        return isPlayingFromCustomApp
     }
 
     // MediaRemote dynamic function bindings
@@ -46,7 +60,9 @@ public final class MusicPlaybackWatcher: ObservableObject {
     private var getClient: MRGetNowPlayingClientFn?
 
     private var isMusicAppPlaying: Bool = false
+    private var isMusicAppCustomApp: Bool = false
     private var isMediaRemotePlaying: Bool = false
+    private var isMediaRemoteCustomApp: Bool = false
     private var isProcessAudioRunning: Bool = false
 
     private var pollTimer: Timer?
@@ -109,7 +125,21 @@ public final class MusicPlaybackWatcher: ObservableObject {
                 return true
             }
         }
+        return false
+    }
 
+    public func isCustomApp(bundleID: String?, name: String?) -> Bool {
+        let bID = (bundleID ?? "").lowercased()
+        let appName = (name ?? "").lowercased()
+
+        for custom in customMonitoredApps {
+            let cID = custom.bundleIdentifier.lowercased()
+            let cName = custom.name.lowercased()
+            if (!cID.isEmpty && (bID == cID || bID.contains(cID))) ||
+               (!cName.isEmpty && (appName == cName || appName.contains(cName))) {
+                return true
+            }
+        }
         return false
     }
 
@@ -121,8 +151,10 @@ public final class MusicPlaybackWatcher: ObservableObject {
     }
 
     private func updateCombinedState() {
-        let shouldPlay = isProcessAudioRunning || isMediaRemotePlaying || isMusicAppPlaying
+        let shouldPlay = isMediaRemotePlaying || isMusicAppPlaying
+        let shouldBeCustom = shouldPlay && (isMediaRemoteCustomApp || isMusicAppCustomApp)
         self.isMonitoredAppPlaying = shouldPlay
+        self.isPlayingFromCustomApp = shouldBeCustom
     }
 
     // MARK: - CoreAudio Per-Process Audio Output Inspection
@@ -208,23 +240,17 @@ public final class MusicPlaybackWatcher: ObservableObject {
         }
 
         let center = NotificationCenter.default
-        center.addObserver(
-            forName: NSNotification.Name("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkMediaRemotePlaybackNow()
-            }
-        }
-
-        center.addObserver(
-            forName: NSNotification.Name("kMRMediaRemoteNowPlayingInfoDidChangeNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkMediaRemotePlaybackNow()
+        let notifNames = [
+            "kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification",
+            "kMRMediaRemoteNowPlayingInfoDidChangeNotification",
+            "kMRMediaRemoteNowPlayingApplicationPlaybackStateDidChangeNotification",
+            "kMRMediaRemoteNowPlayingApplicationDidChangeNotification"
+        ]
+        for name in notifNames {
+            center.addObserver(forName: NSNotification.Name(name), object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.checkMediaRemotePlaybackNow()
+                }
             }
         }
     }
@@ -237,6 +263,7 @@ public final class MusicPlaybackWatcher: ObservableObject {
                 guard let self else { return }
                 if !isPlaying {
                     self.isMediaRemotePlaying = false
+                    self.isMediaRemoteCustomApp = false
                     self.updateCombinedState()
                     return
                 }
@@ -256,6 +283,7 @@ public final class MusicPlaybackWatcher: ObservableObject {
 
                             if rate <= 0 {
                                 self.isMediaRemotePlaying = false
+                                self.isMediaRemoteCustomApp = false
                                 self.updateCombinedState()
                                 return
                             }
@@ -266,25 +294,31 @@ public final class MusicPlaybackWatcher: ObservableObject {
                                     Task { @MainActor [weak self] in
                                         guard let self else { return }
                                         var clientMatched = true
+                                        var isCustom = false
                                         if let c = client as? NSObject {
                                             let repID = c.value(forKey: "representedBundleID") as? String
                                             let bID = c.value(forKey: "bundleIdentifier") as? String
                                             let parentID = c.value(forKey: "parentApplicationBundleIdentifier") as? String
                                             let dispName = c.value(forKey: "displayName") as? String
-                                            clientMatched = self.isAppMonitored(bundleID: repID ?? parentID ?? bID, name: dispName)
+                                            let effectiveBID = repID ?? parentID ?? bID
+                                            clientMatched = self.isAppMonitored(bundleID: effectiveBID, name: dispName)
+                                            isCustom = self.isCustomApp(bundleID: effectiveBID, name: dispName)
                                         }
                                         self.isMediaRemotePlaying = clientMatched
+                                        self.isMediaRemoteCustomApp = clientMatched && isCustom
                                         self.updateCombinedState()
                                     }
                                 }
                             } else {
                                 self.isMediaRemotePlaying = true
+                                self.isMediaRemoteCustomApp = false
                                 self.updateCombinedState()
                             }
                         }
                     }
                 } else {
                     self.isMediaRemotePlaying = isPlaying
+                    self.isMediaRemoteCustomApp = false
                     self.updateCombinedState()
                 }
             }
@@ -361,6 +395,7 @@ public final class MusicPlaybackWatcher: ObservableObject {
 
         if !isMusicAppRunning && !isSpotifyAppRunning {
             self.isMusicAppPlaying = false
+            self.isMusicAppCustomApp = false
             updateCombinedState()
             return
         }
@@ -368,11 +403,15 @@ public final class MusicPlaybackWatcher: ObservableObject {
         isQueryingAppleScript = true
         Task.detached(priority: .utility) { [isMusicAppRunning, isSpotifyAppRunning] in
             var playing = false
+            var playingAppID = ""
+            var playingAppName = ""
 
             if isMusicAppRunning {
                 let script = "tell application \"Music\" to get (player state as string)"
                 if let output = Self.runAppleScript(script), output.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare("playing") == .orderedSame {
                     playing = true
+                    playingAppID = "com.apple.Music"
+                    playingAppName = "Music"
                 }
             }
 
@@ -380,6 +419,8 @@ public final class MusicPlaybackWatcher: ObservableObject {
                 let script = "tell application \"Spotify\" to get (player state as string)"
                 if let output = Self.runAppleScript(script), output.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare("playing") == .orderedSame {
                     playing = true
+                    playingAppID = "com.spotify.client"
+                    playingAppName = "Spotify"
                 }
             }
 
@@ -387,6 +428,11 @@ public final class MusicPlaybackWatcher: ObservableObject {
                 guard let self else { return }
                 self.isQueryingAppleScript = false
                 self.isMusicAppPlaying = playing
+                if playing {
+                    self.isMusicAppCustomApp = self.isCustomApp(bundleID: playingAppID, name: playingAppName)
+                } else {
+                    self.isMusicAppCustomApp = false
+                }
                 self.updateCombinedState()
             }
         }

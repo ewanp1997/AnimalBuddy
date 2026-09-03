@@ -350,26 +350,26 @@ import UniformTypeIdentifiers
     func testWelcomeEvaluatorAppUpdateReturnsWhatsNewWithDiff() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.65"
+        settings.lastSeenAppVersion = "a0.66"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.66")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.70")
         guard case .whatsNew(let version, let releases)? = presentation else {
             XCTFail("Expected .whatsNew presentation on update")
             return
         }
-        XCTAssertEqual(version, "a0.66")
+        XCTAssertEqual(version, "a0.70")
         XCTAssertEqual(releases.count, 1)
-        XCTAssertEqual(releases.first?.version, "a0.66")
-        XCTAssertEqual(releases.first?.releaseTitle, "Music Companion: Headphones & Dancing")
-        XCTAssertTrue(releases.first?.features.contains { $0.title == "Music Companion & DJ Headphones" } == true)
+        XCTAssertEqual(releases.first?.version, "a0.70")
+        XCTAssertEqual(releases.first?.releaseTitle, "MacBook Notch Perch & Ambient Wardrobe")
+        XCTAssertTrue(releases.first?.features.contains { $0.title.contains("MacBook Notch") } == true)
     }
 
     func testWelcomeEvaluatorSameVersionReturnsNil() {
         var settings = AppSettings()
         settings.hasCompletedWelcome = true
-        settings.lastSeenAppVersion = "a0.66"
+        settings.lastSeenAppVersion = "a0.70"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.66")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.70")
         XCTAssertNil(presentation, "Expected nil when version matches last seen")
     }
 
@@ -378,12 +378,12 @@ import UniformTypeIdentifiers
         settings.hasCompletedWelcome = true
         settings.lastSeenAppVersion = "a0.25"
 
-        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.66")
+        let presentation = WelcomePresentationEvaluator.evaluate(settings: settings, currentVersion: "a0.70")
         guard case .whatsNew(_, let releases)? = presentation else {
             XCTFail("Expected .whatsNew for multi-version upgrade")
             return
         }
-        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50", "a0.65", "a0.66"])
+        XCTAssertEqual(releases.map(\.version), ["a0.26", "a0.27", "a0.41", "a0.42", "a0.43", "a0.50", "a0.65", "a0.66", "a0.70"])
     }
 
     func testAppSettingsPreservesWelcomeKeysOnRoundTrip() throws {
@@ -513,10 +513,10 @@ import UniformTypeIdentifiers
     }
 
     func testVersionComparisonDetectsUpdate() {
-        XCTAssertTrue(VersionComparator.isVersion("a0.66", greaterThan: "a0.65"))
-        XCTAssertTrue(VersionComparator.isVersion("a0.66", greaterThan: "a0.50"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.66", greaterThan: "a0.66"))
-        XCTAssertFalse(VersionComparator.isVersion("a0.65", greaterThan: "a0.66"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.70", greaterThan: "a0.66"))
+        XCTAssertTrue(VersionComparator.isVersion("a0.70", greaterThan: "a0.50"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.70", greaterThan: "a0.70"))
+        XCTAssertFalse(VersionComparator.isVersion("a0.66", greaterThan: "a0.70"))
     }
 
     func testFileTypeOrganizerSortsKnownFileTypesIntoCorrectSubfolders() {
@@ -819,6 +819,144 @@ import UniformTypeIdentifiers
         // Remove custom app
         watcher.updateCustomApps([])
         XCTAssertFalse(watcher.isAppMonitored(bundleID: "com.niche.synth", name: "CustomSynthPlayer"))
+    }
+
+    func testMinimizeDestinationNotchRoundTrip() throws {
+        var settings = AppSettings()
+        settings.minimizeDestination = .notch
+        XCTAssertEqual(settings.minimizeDestination.displayName, "Notch Perch")
+
+        let encoded = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
+        XCTAssertEqual(decoded.minimizeDestination, .notch)
+
+        // Missing field fallback
+        let legacyJson = """
+        {
+            "animalKind": "cat"
+        }
+        """.data(using: .utf8)!
+        let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: legacyJson)
+        XCTAssertEqual(legacyDecoded.minimizeDestination, .menubar)
+    }
+
+    func testWardrobeStyleSettingsRoundTrip() throws {
+        var settings = AppSettings()
+        XCTAssertTrue(settings.ambientWardrobeEnabled)
+        XCTAssertEqual(settings.wardrobeStyleOverride, .auto)
+
+        settings.ambientWardrobeEnabled = true
+        settings.wardrobeStyleOverride = .morningCoffee
+        XCTAssertEqual(settings.wardrobeStyleOverride.displayName, "Morning Coffee ☕️")
+
+        let encoded = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: encoded)
+        XCTAssertTrue(decoded.ambientWardrobeEnabled)
+        XCTAssertEqual(decoded.wardrobeStyleOverride, .morningCoffee)
+
+        for style in WardrobeStyle.allCases {
+            XCTAssertFalse(style.displayName.isEmpty)
+        }
+    }
+
+    @MainActor
+    func testWardrobeEffectiveStyleResolution() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 140, height: 140))
+        petView.ambientWardrobeEnabled = false
+        XCTAssertEqual(petView.effectiveWardrobeStyle, .off)
+
+        petView.ambientWardrobeEnabled = true
+        petView.wardrobeStyleOverride = .sunnySunglasses
+        XCTAssertEqual(petView.effectiveWardrobeStyle, .sunnySunglasses)
+
+        petView.wardrobeStyleOverride = .nightcapSleep
+        XCTAssertEqual(petView.effectiveWardrobeStyle, .nightcapSleep)
+
+        petView.wardrobeStyleOverride = .rainyUmbrella
+        XCTAssertEqual(petView.effectiveWardrobeStyle, .rainyUmbrella)
+
+        petView.wardrobeStyleOverride = .auto
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour >= 6 && hour < 11 {
+            XCTAssertEqual(petView.effectiveWardrobeStyle, .morningCoffee)
+        } else if hour >= 11 && hour < 18 {
+            XCTAssertEqual(petView.effectiveWardrobeStyle, .sunnySunglasses)
+        } else if hour >= 23 || hour < 6 {
+            XCTAssertEqual(petView.effectiveWardrobeStyle, .nightcapSleep)
+        } else {
+            XCTAssertEqual(petView.effectiveWardrobeStyle, .off)
+        }
+    }
+
+    @MainActor
+    func testPerchedModeTransitionsAndNotchGeometry() {
+        let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+        XCTAssertFalse(petView.isPerched)
+        XCTAssertEqual(petView.perchPeekProgress, 0.0)
+
+        // Perch mode activates hiding
+        petView.isPerched = true
+        XCTAssertTrue(petView.isPerched)
+        XCTAssertEqual(petView.perchPeekProgress, 0.0)
+
+        // Minimize button is hidden when perched
+        petView.setMinimizeButtonVisible(true)
+        let hitWhenPerched = petView.hitTest(NSPoint(x: 150 - 24, y: 15))
+        XCTAssertNotEqual(hitWhenPerched?.accessibilityLabel(), "Minimize Animal Buddy")
+
+        // Unperch restores normal mode
+        petView.isPerched = false
+        XCTAssertFalse(petView.isPerched)
+
+        // Minimize button visible and generous hit testing outside perched mode
+        petView.setMinimizeButtonVisible(true)
+        let minHit = petView.hitTest(NSPoint(x: 150 - 24, y: 15))
+        XCTAssertEqual(minHit?.accessibilityLabel(), "Minimize Animal Buddy")
+
+        let settings = AppSettings()
+        let registry = ActionRegistry(settings: settings)
+        let controller = PetWindowController(settings: settings, registry: registry)
+        let perchFrame = controller.notchPerchFrame(for: nil as NSScreen?)
+        XCTAssertGreaterThan(perchFrame.width, 0)
+        XCTAssertGreaterThan(perchFrame.height, 0)
+        XCTAssertGreaterThan(perchFrame.origin.y, 0)
+    }
+
+    @MainActor
+    func testMusicPlaybackStopDetectionAndCustomAppDisco() {
+        let watcher = MusicPlaybackWatcher.shared
+        let custom = CustomMonitoredApp(name: "Eclipse", bundleIdentifier: "com.debridmusic.app")
+        watcher.updateCustomApps([custom])
+
+        XCTAssertTrue(watcher.isCustomApp(bundleID: "com.debridmusic.app", name: "Eclipse"))
+        XCTAssertFalse(watcher.isCustomApp(bundleID: "com.apple.Music", name: "Music"))
+        XCTAssertFalse(watcher.isCustomApp(bundleID: "com.apple.Safari", name: "Safari"))
+
+        var settings = AppSettings()
+        settings.musicDancingEnabled = true
+        settings.customMusicApps = [custom]
+        let reg = ActionRegistry(settings: settings)
+        let controller = PetWindowController(settings: settings, registry: reg)
+
+        // When not playing, pet does not dance and disco is off
+        controller.updateMusicDancing()
+        XCTAssertFalse(controller.petView.isDancingToMusic)
+        XCTAssertFalse(controller.petView.isDiscoMode)
+
+        // Preview with custom apps triggers disco mode
+        watcher.setPreview(active: true)
+        controller.updateMusicDancing()
+        XCTAssertTrue(controller.petView.isDiscoMode)
+        XCTAssertFalse(controller.petView.isDancingToMusic)
+
+        // Stopping playback clears both disco and music dancing
+        watcher.setPreview(active: false)
+        controller.updateMusicDancing()
+        XCTAssertFalse(controller.petView.isDiscoMode)
+        XCTAssertFalse(controller.petView.isDancingToMusic)
+
+        // Reset watcher custom apps
+        watcher.updateCustomApps([])
     }
 }
 

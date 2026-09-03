@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggingDestination {
-    private static let trackingRadius: CGFloat = 300
+    private static let trackingRadius: CGFloat = 380
     private static let dismissRadius: CGFloat = 100
     private static let normalPetSize: CGFloat = 150
     private static let expandedPetSize: CGFloat = 210
@@ -10,7 +10,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     private static let activeAlpha: CGFloat = 1.0
     var onOpenSettings: ((Int) -> Void)?
     var onVisibilityChanged: ((Bool) -> Void)?
-    private let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
+    let petView = PetView(frame: NSRect(x: 0, y: 0, width: 150, height: 150))
     private let registry: ActionRegistry
     private var settings: AppSettings
     private var mouseTrackingTimer: Timer?
@@ -53,7 +53,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
             self.speechBubble.dismiss(animated: false)
         }
         window.onDragChanged = { [weak self] point, velocity, deltaX in
-            guard let self, let draggedWindow = self.window, let screen = draggedWindow.screen ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
+            guard let self, !self.petView.isPerched, let draggedWindow = self.window, let screen = draggedWindow.screen ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
             if !self.isPetDragging {
                 self.isPetDragging = true
                 self.petView.setFlying(true)
@@ -74,9 +74,10 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
             }
         }
         window.onDragEnded = { [weak self] point, startFrame, endFrame, velocity in
-            self?.isPetDragging = false
-            self?.dragTargetOverlay.hide()
-            self?.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame, velocity: velocity)
+            guard let self, !self.petView.isPerched else { return }
+            self.isPetDragging = false
+            self.dragTargetOverlay.hide()
+            self.finishPetDrag(at: point, startFrame: startFrame, endFrame: endFrame, velocity: velocity)
         }
         window.onDraggingEntered = { [weak self] sender in self?.draggingEntered(sender) ?? [] }
         window.onDraggingUpdated = { [weak self] sender in self?.draggingUpdated(sender) ?? [] }
@@ -95,6 +96,8 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.themePreset = settings.themePreset
         petView.themePalette = settings.activePalette
         petView.googlyEyesEnabled = settings.googlyEyesEnabled
+        petView.ambientWardrobeEnabled = settings.ambientWardrobeEnabled
+        petView.wardrobeStyleOverride = settings.wardrobeStyleOverride
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
         MusicPlaybackWatcher.shared.updateCustomApps(settings.customMusicApps)
@@ -111,6 +114,8 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.themePreset = settings.themePreset
         petView.themePalette = settings.activePalette
         petView.googlyEyesEnabled = settings.googlyEyesEnabled
+        petView.ambientWardrobeEnabled = settings.ambientWardrobeEnabled
+        petView.wardrobeStyleOverride = settings.wardrobeStyleOverride
         petView.updateBlushMacroLabels(settings)
         updateHoverOpacity()
         configureTipTimer()
@@ -120,14 +125,57 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     }
 
     func updateMusicDancing() {
-        let shouldDance = settings.musicDancingEnabled && MusicPlaybackWatcher.shared.isEffectivelyPlaying
-        petView.isDancingToMusic = shouldDance
+        let watcher = MusicPlaybackWatcher.shared
+        let shouldDance = settings.musicDancingEnabled && watcher.isEffectivelyPlaying
+        let isCustomMusic = shouldDance && watcher.isEffectivelyPlayingCustomApp
+
+        if shouldDance {
+            if isCustomMusic {
+                petView.isDancingToMusic = false
+                petView.startMusicDisco()
+            } else {
+                petView.stopMusicDisco()
+                petView.isDancingToMusic = true
+            }
+        } else {
+            petView.stopMusicDisco()
+            petView.isDancingToMusic = false
+        }
     }
 
     func toggleMusicDancingPreview() {
         MusicPlaybackWatcher.shared.togglePreview()
         updateMusicDancing()
     }
+
+    func notchPerchFrame(for screen: NSScreen?) -> NSRect {
+        guard let screen = screen ?? window?.screen ?? NSScreen.main else {
+            return NSRect(x: 200, y: 800, width: 150, height: 150)
+        }
+
+        let screenFrame = screen.frame
+        let petWidth = window?.frame.width ?? 150.0
+        let petHeight = window?.frame.height ?? 150.0
+
+        let targetX = screenFrame.midX - petWidth / 2.0
+
+        var notchBottomY: CGFloat = screenFrame.maxY
+        if #available(macOS 12.0, *) {
+            let topInset = screen.safeAreaInsets.top
+            if topInset > 0 {
+                notchBottomY = screenFrame.maxY - topInset
+            } else {
+                notchBottomY = screen.visibleFrame.maxY
+            }
+        } else {
+            notchBottomY = screen.visibleFrame.maxY
+        }
+
+        let notchCutoffY: CGFloat = 20.0
+        let targetY = notchBottomY + notchCutoffY - petHeight
+        return NSRect(x: targetX, y: targetY, width: petWidth, height: petHeight)
+    }
+
     func minimizePet() {
         guard let window, !isMinimizing else { return }
         NSApp.setActivationPolicy(.regular)
@@ -135,9 +183,54 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         speechBubble.dismiss(animated: false)
 
         let originalFrame = window.frame
-        lastRestingFrame = originalFrame
+        if !petView.isPerched {
+            lastRestingFrame = originalFrame
+        }
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? screen?.frame ?? originalFrame
+
+        if settings.minimizeDestination == .notch {
+            let perchFrame = notchPerchFrame(for: screen)
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                window.setFrame(perchFrame, display: true)
+                petView.isPerched = true
+                isMinimizing = false
+                onVisibilityChanged?(true)
+                return
+            }
+
+            petView.setFlying(true)
+            let deltaXToTarget = perchFrame.midX - originalFrame.midX
+            petView.updateFlightMovement(velocity: 0.85, deltaX: deltaXToTarget > 25 ? 8 : (deltaXToTarget < -25 ? -8 : 0))
+
+            let liftFrame = originalFrame.offsetBy(dx: 0, dy: 8)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.28
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                window.animator().setFrame(liftFrame, display: true)
+            } completionHandler: { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, let window = self.window, self.isMinimizing else { return }
+                    self.petView.updateFlightMovement(velocity: 1.0, deltaX: deltaXToTarget > 0 ? 15 : -15)
+
+                    NSAnimationContext.runAnimationGroup { context in
+                        context.duration = 0.46
+                        context.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0)
+                        window.animator().setFrame(perchFrame, display: true)
+                    } completionHandler: { [weak self] in
+                        MainActor.assumeIsolated {
+                            guard let self else { return }
+                            self.petView.setFlying(false)
+                            self.petView.isPerched = true
+                            self.isMinimizing = false
+                            self.onVisibilityChanged?(true)
+                        }
+                    }
+                }
+            }
+            return
+        }
+
         let targetSize = NSSize(width: 14, height: 14)
         let isDock = settings.minimizeDestination == .dock
         let targetY = isDock ? screenFrame.minY - 2 : screenFrame.maxY - targetSize.height + 2
@@ -199,6 +292,11 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         NSApp.setActivationPolicy(.regular)
         guard let window else { return }
 
+        let wasPerched = petView.isPerched
+        if wasPerched {
+            petView.isPerched = false
+        }
+
         let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(lastRestingFrame) }) ?? window.screen ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? screen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
 
@@ -207,13 +305,35 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         destinationFrame.origin.y = min(max(destinationFrame.origin.y, screenFrame.minY), screenFrame.maxY - destinationFrame.height)
         lastRestingFrame = destinationFrame
 
-        if window.isVisible && !isMinimizing && window.alphaValue > 0.8 {
+        if window.isVisible && !isMinimizing && window.alphaValue > 0.8 && !wasPerched {
             window.orderFrontRegardless()
             onVisibilityChanged?(true)
             return
         }
 
         isMinimizing = false
+
+        if wasPerched {
+            let startFrame = window.frame
+            let totalDeltaX = destinationFrame.midX - startFrame.midX
+            let dest = destinationFrame
+
+            petView.setFlying(true)
+            petView.updateFlightMovement(velocity: 0.85, deltaX: totalDeltaX > 0 ? 10 : -10)
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.44
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1.0, 0.3, 1.0)
+                window.animator().setFrame(dest, display: true)
+            } completionHandler: { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.petView.setFlying(false)
+                }
+            }
+            window.orderFrontRegardless()
+            onVisibilityChanged?(true)
+            return
+        }
 
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             window.setFrame(destinationFrame, display: true)
@@ -291,7 +411,9 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         guard let window, window.isVisible, !isMinimizing else { return }
 
         let mouseLocation = NSEvent.mouseLocation
-        let isInteracting = window.frame.contains(mouseLocation) ||
+        let hoverRadius: CGFloat = 32.0
+        let hoverZone = window.frame.insetBy(dx: -hoverRadius, dy: -hoverRadius)
+        let isInteracting = hoverZone.contains(mouseLocation) ||
                             isPetDragging ||
                             isExternalDragHovering ||
                             isAwaitingActionChoice ||
@@ -329,6 +451,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
     }
 
     private func finishPetDrag(at screenPoint: NSPoint, startFrame: NSRect, endFrame: NSRect, velocity: CGVector) {
+        if petView.isPerched { return }
         isPetDragging = false
         dragTargetOverlay.hide()
         guard let window, let screen = window.screen ?? NSScreen.screens.first(where: { $0.frame.contains(screenPoint) }) else {
@@ -672,6 +795,24 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         guard let window, window.isVisible, !isMinimizing else { return }
         updateHoverOpacity()
         let mouseLocation = NSEvent.mouseLocation
+
+        // Expanded hover detection (+32pt around the window) for seamless cursor detection
+        let hoverRadius: CGFloat = 32.0
+        let hoverZone = window.frame.insetBy(dx: -hoverRadius, dy: -hoverRadius)
+        let isCursorNear = hoverZone.contains(mouseLocation)
+
+        if isCursorNear && !petView.isPerched {
+            petView.setMinimizeButtonVisible(true)
+        } else if !petView.isPerched {
+            // Generous grace zone (+48pt) so minimize button doesn't vanish on slight overshoot
+            let graceZone = window.frame.insetBy(dx: -48.0, dy: -48.0)
+            if !graceZone.contains(mouseLocation) {
+                petView.setMinimizeButtonVisible(false)
+            }
+        } else {
+            petView.setMinimizeButtonVisible(false)
+        }
+
         let distance = Self.distance(from: mouseLocation, to: window.frame)
         guard distance <= Self.trackingRadius else {
             petView.setPupilOffset(.zero, animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
