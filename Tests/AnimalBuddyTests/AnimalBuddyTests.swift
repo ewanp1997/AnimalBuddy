@@ -769,6 +769,57 @@ import UniformTypeIdentifiers
 
         watcher.setPreview(active: originalPreview)
     }
+
+    func testCustomMusicAppsSettingsRoundTrip() throws {
+        var settings = AppSettings()
+        XCTAssertTrue(settings.customMusicApps.isEmpty)
+
+        let customApp = CustomMonitoredApp(name: "MyDJApp", bundleIdentifier: "com.custom.dj")
+        settings.customMusicApps = [customApp]
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertEqual(decoded.customMusicApps.count, 1)
+        XCTAssertEqual(decoded.customMusicApps.first?.name, "MyDJApp")
+        XCTAssertEqual(decoded.customMusicApps.first?.bundleIdentifier, "com.custom.dj")
+
+        // Missing customMusicApps key in legacy JSON defaults to empty array
+        let legacyJson = """
+        {
+            "alwaysOnTop": true,
+            "petScale": 1.0
+        }
+        """.data(using: .utf8)!
+        let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: legacyJson)
+        XCTAssertTrue(legacyDecoded.customMusicApps.isEmpty)
+    }
+
+    @MainActor
+    func testMusicPlaybackWatcherAppMonitoring() {
+        let watcher = MusicPlaybackWatcher.shared
+
+        // Test default built-in apps
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "com.apple.Music", name: "Music"))
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "com.spotify.client", name: "Spotify"))
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "com.apple.Safari", name: "Safari"))
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "com.apple.WebKit.GPU", name: "Safari Graphics and Media"))
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "com.google.Chrome", name: "Google Chrome"))
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "org.videolan.vlc", name: "VLC"))
+
+        // Unmonitored app
+        XCTAssertFalse(watcher.isAppMonitored(bundleID: "com.random.calculator", name: "Calculator"))
+        XCTAssertFalse(watcher.isAppMonitored(bundleID: "com.apple.Terminal", name: "Terminal"))
+
+        // Add custom app
+        let customApp = CustomMonitoredApp(name: "CustomSynthPlayer", bundleIdentifier: "com.niche.synth")
+        watcher.updateCustomApps([customApp])
+
+        XCTAssertTrue(watcher.isAppMonitored(bundleID: "com.niche.synth", name: "CustomSynthPlayer"))
+
+        // Remove custom app
+        watcher.updateCustomApps([])
+        XCTAssertFalse(watcher.isAppMonitored(bundleID: "com.niche.synth", name: "CustomSynthPlayer"))
+    }
 }
 
 

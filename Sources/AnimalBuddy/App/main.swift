@@ -90,7 +90,7 @@ import UniformTypeIdentifiers
         }
 
         let controller = MacroSettingsWindowController(settings: settings, initialTab: initialTab)
-        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest, focusMode, focusReminders, focusInterval, soundEffects, musicDancing in
+        controller.onSave = { [weak self] left, right, dragMacros, animal, themePreset, customPalette, hoverTranslucency, googlyEyes, autoUpdates, helpfulTips, destinationFolder, organizeSubfolders, subfolderRules, alwaysOnTop, snapping, minDest, focusMode, focusReminders, focusInterval, soundEffects, musicDancing, customMusicApps in
             guard let self else { return }
             self.settings.leftBlushMacro = left
             self.settings.rightBlushMacro = right
@@ -113,6 +113,7 @@ import UniformTypeIdentifiers
             self.settings.focusModeIntervalMinutes = focusInterval
             self.settings.soundEffectsEnabled = soundEffects
             self.settings.musicDancingEnabled = musicDancing
+            self.settings.customMusicApps = customMusicApps
             try? self.settingsStore.save(self.settings)
             self.petWindow?.update(settings: self.settings)
             self.updateStatusBar()

@@ -1492,7 +1492,40 @@ public enum WelcomePresentationEvaluator {
     }
 }
 
+public struct CustomMonitoredApp: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { bundleIdentifier }
+    public var name: String
+    public var bundleIdentifier: String
+
+    public init(name: String, bundleIdentifier: String) {
+        self.name = name
+        self.bundleIdentifier = bundleIdentifier
+    }
+}
+
 public struct AppSettings: Codable, Sendable {
+    public static let defaultMonitoredAppIdentifiers: [String] = [
+        "com.apple.Music",
+        "com.spotify.client",
+        "com.apple.Safari",
+        "com.google.Chrome",
+        "company.thebrowser.Browser",
+        "com.brave.Browser",
+        "org.mozilla.firefox",
+        "com.microsoft.edgemac",
+        "com.operasoftware.Opera",
+        "com.apple.podcasts",
+        "com.apple.QuickTimePlayerX",
+        "org.videolan.vlc",
+        "com.colliderli.iina",
+        "com.tidal.desktop",
+        "com.amazon.music",
+        "com.github.th-ch.youtube-music",
+        "com.apple.logic10",
+        "com.apple.garageband10",
+        "com.ableton.live"
+    ]
+
     public var alwaysOnTop = true
     public var petScale = 1.0
     public var snappingEnabled = false
@@ -1519,6 +1552,7 @@ public struct AppSettings: Codable, Sendable {
     public var focusModeIntervalMinutes: Int = 10
     public var soundEffectsEnabled: Bool = true
     public var musicDancingEnabled: Bool = true
+    public var customMusicApps: [CustomMonitoredApp] = []
     public var bindings: [ModifierBinding] = [
         .init(category: .file, modifiers: .none, actionID: "store"),
         .init(category: .image, modifiers: .none, actionID: "store"),
@@ -1532,7 +1566,7 @@ public struct AppSettings: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, musicDancingEnabled, bindings
+        case alwaysOnTop, petScale, snappingEnabled, animalKind, leftBlushMacro, rightBlushMacro, dragMacros, destinationFolderPath, organizeInboxByFileType, inboxSubfolderRules, minimizeDestination, themePreset, customPalette, hoverTranslucencyEnabled, googlyEyesEnabled, hasCompletedWelcome, lastSeenAppVersion, automaticallyCheckForUpdates, skippedAppVersion, lastUpdateCheckDate, helpfulTipsEnabled, focusModeEnabled, focusModeWorkRemindersEnabled, focusModeIntervalMinutes, soundEffectsEnabled, musicDancingEnabled, customMusicApps, bindings
     }
 
     public init() {}
@@ -1565,6 +1599,7 @@ public struct AppSettings: Codable, Sendable {
         focusModeIntervalMinutes = try values.decodeIfPresent(Int.self, forKey: .focusModeIntervalMinutes) ?? 10
         soundEffectsEnabled = try values.decodeIfPresent(Bool.self, forKey: .soundEffectsEnabled) ?? true
         musicDancingEnabled = try values.decodeIfPresent(Bool.self, forKey: .musicDancingEnabled) ?? true
+        customMusicApps = try values.decodeIfPresent([CustomMonitoredApp].self, forKey: .customMusicApps) ?? []
         bindings = try values.decodeIfPresent([ModifierBinding].self, forKey: .bindings) ?? []
     }
 }

@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor final class MacroSettingsWindowController: NSWindowController {
-    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool, Bool) -> Void)?
+    var onSave: ((UserMacro, UserMacro, [DragMacroBinding], AnimalKind, PetThemePreset, PetThemePalette, Bool, Bool, Bool, Bool, String?, Bool, [InboxSubfolderRule], Bool, Bool, MinimizeDestination, Bool, Bool, Int, Bool, Bool, [CustomMonitoredApp]) -> Void)?
     var onThemeChanged: ((AnimalKind, PetThemePreset, PetThemePalette, Bool) -> Void)?
     var onCheckForUpdates: (() -> Void)?
     var onShowTipPreview: (() -> Void)?
@@ -27,6 +27,8 @@ import UniformTypeIdentifiers
     private var focusModeIntervalMinutes: Int
     private var soundEffectsEnabled: Bool
     private var musicDancingEnabled: Bool
+    private var customMusicApps: [CustomMonitoredApp]
+    private let customAppsStack = NSStackView()
     private var destinationFolderPath: String?
     private var organizeInboxByFileType: Bool
     private var inboxSubfolderRules: [InboxSubfolderRule]
@@ -104,6 +106,7 @@ import UniformTypeIdentifiers
         focusModeIntervalMinutes = settings.focusModeIntervalMinutes
         soundEffectsEnabled = settings.soundEffectsEnabled
         musicDancingEnabled = settings.musicDancingEnabled
+        customMusicApps = settings.customMusicApps
         destinationFolderPath = settings.destinationFolderPath
         organizeInboxByFileType = settings.organizeInboxByFileType
         inboxSubfolderRules = settings.inboxSubfolderRules
@@ -753,15 +756,36 @@ import UniformTypeIdentifiers
         musicDancingToggle.state = musicDancingEnabled ? .on : .off
         musicDancingToggle.font = .systemFont(ofSize: 13, weight: .medium)
 
-        let desc = NSTextField(wrappingLabelWithString: "Automatically detects when music or audio is playing system-wide (YouTube, Spotify, Apple Music, podcasts, browsers, or any media), putting cute DJ headphones on your pet and grooving along with a cheerful dance!")
+        let desc = NSTextField(wrappingLabelWithString: "Puts headphones on your pet and grooves along when music or audio is playing from your music apps and browsers. When paused, your buddy immediately takes off the headphones.")
         desc.font = .systemFont(ofSize: 11)
         desc.textColor = .secondaryLabelColor
+
+        let appsHeader = NSTextField(labelWithString: "Monitored Music & Media Apps:")
+        appsHeader.font = .systemFont(ofSize: 12, weight: .bold)
+
+        let builtInSummary = NSTextField(wrappingLabelWithString: "Built-in: Apple Music, Spotify, Safari, Chrome, Arc, Brave, Firefox, Edge, VLC, Podcasts, Tidal, and common media players.")
+        builtInSummary.font = .systemFont(ofSize: 11)
+        builtInSummary.textColor = .secondaryLabelColor
+
+        customAppsStack.orientation = .vertical
+        customAppsStack.alignment = .leading
+        customAppsStack.spacing = 6
+        refreshCustomAppsList()
+
+        let addAppBtn = NSButton(title: "+ Add App…", target: self, action: #selector(addCustomAppPressed))
+        addAppBtn.bezelStyle = .rounded
+        addAppBtn.font = .systemFont(ofSize: 12)
 
         let previewBtn = NSButton(title: "Preview Headphones & Dance", target: self, action: #selector(previewMusicDancingPressed))
         previewBtn.bezelStyle = .rounded
         previewBtn.font = .systemFont(ofSize: 12)
 
-        let stack = NSStackView(views: [title, musicDancingToggle, desc, previewBtn])
+        let btnRow = NSStackView(views: [addAppBtn, previewBtn])
+        btnRow.orientation = .horizontal
+        btnRow.alignment = .centerY
+        btnRow.spacing = 10
+
+        let stack = NSStackView(views: [title, musicDancingToggle, desc, appsHeader, builtInSummary, customAppsStack, btnRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -772,9 +796,13 @@ import UniformTypeIdentifiers
 
         musicDancingToggle.translatesAutoresizingMaskIntoConstraints = false
         desc.translatesAutoresizingMaskIntoConstraints = false
+        builtInSummary.translatesAutoresizingMaskIntoConstraints = false
+        customAppsStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             musicDancingToggle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
-            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            builtInSummary.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36),
+            customAppsStack.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -36)
         ])
         return stack
     }
@@ -947,6 +975,86 @@ import UniformTypeIdentifiers
     @objc private func previewMusicDancingPressed() {
         previewPetView.isDancingToMusic.toggle()
         onToggleMusicPreview?()
+    }
+
+    private func refreshCustomAppsList() {
+        for subview in customAppsStack.arrangedSubviews {
+            customAppsStack.removeArrangedSubview(subview)
+            subview.removeFromSuperview()
+        }
+
+        if customMusicApps.isEmpty {
+            let emptyLabel = NSTextField(labelWithString: "No custom apps added yet. Click \"+ Add App…\" to monitor any additional audio player or app.")
+            emptyLabel.font = .systemFont(ofSize: 11)
+            emptyLabel.textColor = .tertiaryLabelColor
+            emptyLabel.maximumNumberOfLines = 2
+            customAppsStack.addArrangedSubview(emptyLabel)
+            return
+        }
+
+        for (index, app) in customMusicApps.enumerated() {
+            let iconView = NSImageView()
+            if let path = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier)?.path {
+                iconView.image = NSWorkspace.shared.icon(forFile: path)
+            } else {
+                iconView.image = NSImage(systemSymbolName: "app.badge", accessibilityDescription: nil)
+            }
+            iconView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                iconView.widthAnchor.constraint(equalToConstant: 16),
+                iconView.heightAnchor.constraint(equalToConstant: 16)
+            ])
+
+            let nameLabel = NSTextField(labelWithString: "\(app.name) (\(app.bundleIdentifier))")
+            nameLabel.font = .systemFont(ofSize: 11, weight: .medium)
+
+            let removeBtn = NSButton(title: "✕", target: self, action: #selector(removeCustomAppPressed(_:)))
+            removeBtn.bezelStyle = .inline
+            removeBtn.tag = index
+            removeBtn.isBordered = false
+            removeBtn.font = .systemFont(ofSize: 11, weight: .bold)
+
+            let row = NSStackView(views: [iconView, nameLabel, removeBtn])
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 6
+            customAppsStack.addArrangedSubview(row)
+        }
+    }
+
+    @objc private func addCustomAppPressed() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Select Application to Monitor"
+        panel.prompt = "Add App"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            let bundle = Bundle(url: url)
+            let name = bundle?.infoDictionary?["CFBundleDisplayName"] as? String
+                ?? bundle?.infoDictionary?["CFBundleName"] as? String
+                ?? url.deletingPathExtension().lastPathComponent
+            let bundleID = bundle?.bundleIdentifier ?? url.lastPathComponent
+
+            if !self.customMusicApps.contains(where: { $0.bundleIdentifier == bundleID }) {
+                self.customMusicApps.append(CustomMonitoredApp(name: name, bundleIdentifier: bundleID))
+                self.refreshCustomAppsList()
+                MusicPlaybackWatcher.shared.updateCustomApps(self.customMusicApps)
+            }
+        }
+    }
+
+    @objc private func removeCustomAppPressed(_ sender: NSButton) {
+        let index = sender.tag
+        if index >= 0 && index < customMusicApps.count {
+            customMusicApps.remove(at: index)
+            refreshCustomAppsList()
+            MusicPlaybackWatcher.shared.updateCustomApps(customMusicApps)
+        }
     }
 
     @objc private func toggleGooglyEyes(_ sender: NSButton) {
@@ -1389,7 +1497,8 @@ import UniformTypeIdentifiers
             focusModeWorkRemindersEnabled,
             focusModeIntervalMinutes,
             soundEffectsEnabled,
-            musicDancingEnabled
+            musicDancingEnabled,
+            customMusicApps
         )
         close()
     }

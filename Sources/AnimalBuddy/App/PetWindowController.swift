@@ -97,6 +97,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         petView.googlyEyesEnabled = settings.googlyEyesEnabled
         window.registerForDraggedTypes([.fileURL, .URL, .string])
         petView.registerForDraggedTypes([.fileURL, .URL, .string])
+        MusicPlaybackWatcher.shared.updateCustomApps(settings.customMusicApps)
         MusicPlaybackWatcher.shared.onPlaybackStateChanged = { [weak self] _ in
             self?.updateMusicDancing()
         }
@@ -114,6 +115,7 @@ final class PetWindowController: NSWindowController, NSWindowDelegate, NSDraggin
         updateHoverOpacity()
         configureTipTimer()
         configureFocusTimer()
+        MusicPlaybackWatcher.shared.updateCustomApps(settings.customMusicApps)
         updateMusicDancing()
     }
 
